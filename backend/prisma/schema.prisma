@@ -14,6 +14,15 @@ datasource db {
 }
 
 // ----------------------------------------------------------------------------
+// Role enum — RBAC roles used inside a project
+// ----------------------------------------------------------------------------
+enum Role {
+  admin
+  tester
+  viewer
+}
+
+// ----------------------------------------------------------------------------
 // User model — owns credentials for the AutoRestTest platform
 // ----------------------------------------------------------------------------
 model User {
@@ -24,5 +33,53 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Projects the user owns
+  ownedProjects Project[] @relation("OwnedProjects")
+
+  // Project memberships for collaboration
+  projectMembers ProjectMember[]
+
   @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// Project model — main workspace container in AutoRestTest.
+// Everything else (API specs, endpoints, test suites, test cases) lives
+// inside a project.
+// ----------------------------------------------------------------------------
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+
+  // Ownership
+  ownerId String
+  owner   User   @relation("OwnedProjects", fields: [ownerId], references: [id])
+
+  // Team collaboration
+  members ProjectMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@map("projects")
+}
+
+// ----------------------------------------------------------------------------
+// ProjectMember model — links a User to a Project with a Role.
+// Cascade-deletes with the parent project so cleanup is automatic.
+// ----------------------------------------------------------------------------
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  role      Role
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
 }
