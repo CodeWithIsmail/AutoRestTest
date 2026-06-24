@@ -1,0 +1,267 @@
+openapi: 3.0.1
+info:
+  title: CareerStory Story API
+  description: API for managing stories.
+  version: '1.0'
+servers:
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Stories
+    description: Operations related to stories
+paths:
+  /stories:
+    post:
+      tags:
+        - Stories
+      summary: Create a new story
+      operationId: createStory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoryDto'
+      responses:
+        '201':
+          description: Story created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Story'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+    get:
+      tags:
+        - Stories
+      summary: Get all stories
+      operationId: getAllStories
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Story'
+  /stories/user/{userId}:
+    get:
+      tags:
+        - Stories
+      summary: Get stories by user
+      operationId: getStoriesByUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Story'
+  /stories/{storyId}:
+    get:
+      tags:
+        - Stories
+      summary: Get story by ID
+      operationId: getStoryById
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The story
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Story'
+        '404':
+          description: Story not found
+    patch:
+      tags:
+        - Stories
+      summary: Update a story
+      operationId: updateStory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStoryDto'
+      responses:
+        '200':
+          description: The updated story
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Story'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Story not found
+    delete:
+      tags:
+        - Stories
+      summary: Delete a story
+      operationId: deleteStory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Story deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Story not found
+components:
+  schemas:
+    Story:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        summary:
+          type: string
+        isPublished:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+    CreateStoryDto:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        isPublished:
+          type: boolean
+        categoryIds:
+          type: array
+          items:
+            type: integer
+        generateSummary:
+          type: boolean
+    UpdateStoryDto:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        isPublished:
+          type: boolean
+        categoryIds:
+          type: array
+          items:
+            type: integer
+        generateSummary:
+          type: boolean
+    User:
+      type: object
+      properties:
+        userId:
+          type: integer
+        userName:
+          type: string
+        name:
+          type: string
+        organization:
+          type: string
+    Category:
+      type: object
+      properties:
+        categoryId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

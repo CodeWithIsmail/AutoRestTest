@@ -1,0 +1,818 @@
+openapi: "3.0.0"
+info:
+  title: SpaceX REST API
+  version: "4.0.0"
+  description: |
+    Open-source SpaceX REST API (v4) — endpoints for launches, rockets, cores,
+    payloads, launchpads, landpads, capsules, ships, dragons, starlink, roadster,
+    company and history. Generated from repository routes and docs for testing.
+servers:
+  - url: https://api.spacexdata.com
+    description: Official public API
+components:
+  securitySchemes:
+    spacexKey:
+      type: apiKey
+      in: header
+      name: spacex-key
+  schemas:
+    PaginationResult:
+      type: object
+      properties:
+        totalDocs:
+          type: integer
+        limit:
+          type: integer
+        page:
+          type: integer
+        totalPages:
+          type: integer
+        docs:
+          type: array
+          items:
+            type: object
+    GenericItem:
+      type: object
+      description: Generic resource object
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+paths:
+  /v4/launches:
+    get:
+      summary: Get all launches (v4)
+      tags: [Launches]
+      responses:
+        "200":
+          description: A list of launches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginationResult"
+    post:
+      summary: Create a launch
+      tags: [Launches]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "201":
+          description: Created
+  /v5/launches:
+    get:
+      summary: Get all launches (v5)
+      tags: [Launches]
+      responses:
+        "200":
+          description: A list of launches (v5)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginationResult"
+
+  /v4/launches/past:
+    get:
+      summary: Get past launches
+      tags: [Launches]
+      responses:
+        "200":
+          description: Past launches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/launches/upcoming:
+    get:
+      summary: Get upcoming launches
+      tags: [Launches]
+      responses:
+        "200":
+          description: Upcoming launches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/launches/latest:
+    get:
+      summary: Get latest launch
+      tags: [Launches]
+      responses:
+        "200":
+          description: Latest launch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+  /v4/launches/next:
+    get:
+      summary: Get next launch
+      tags: [Launches]
+      responses:
+        "200":
+          description: Next launch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+  /v4/launches/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get one launch
+      tags: [Launches]
+      responses:
+        "200":
+          description: Launch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+    patch:
+      summary: Update a launch
+      tags: [Launches]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete a launch
+      tags: [Launches]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: Deleted
+
+  /v4/launches/query:
+    post:
+      summary: Query launches (supports pagination)
+      tags: [Launches]
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginationResult"
+
+  /v4/capsules:
+    get:
+      summary: Get all capsules
+      tags: [Capsules]
+      responses:
+        "200":
+          description: Capsules list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+    post:
+      summary: Create a capsule
+      tags: [Capsules]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "201":
+          description: Created
+  /v4/capsules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get capsule by id
+      tags: [Capsules]
+      responses:
+        "200":
+          description: Capsule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+    patch:
+      summary: Update capsule
+      tags: [Capsules]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete capsule
+      tags: [Capsules]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: Deleted
+  /v4/capsules/query:
+    post:
+      summary: Query capsules (pagination)
+      tags: [Capsules]
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginationResult"
+
+  /v4/cores:
+    get:
+      summary: Get all cores
+      tags: [Cores]
+      responses:
+        "200":
+          description: Cores list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+    post:
+      summary: Create a core
+      tags: [Cores]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "201":
+          description: Created
+  /v4/cores/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get core by id
+      tags: [Cores]
+      responses:
+        "200":
+          description: Core
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+    patch:
+      summary: Update core
+      tags: [Cores]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete core
+      tags: [Cores]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: Deleted
+
+  /v4/crew:
+    get:
+      summary: Get all crew members
+      tags: [Crew]
+      responses:
+        "200":
+          description: Crew list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/crew/{id}:
+    get:
+      summary: Get crew member by id
+      tags: [Crew]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Crew member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/dragons:
+    get:
+      summary: Get all dragons
+      tags: [Dragons]
+      responses:
+        "200":
+          description: Dragons list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/dragons/{id}:
+    get:
+      summary: Get dragon by id
+      tags: [Dragons]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dragon
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/landpads:
+    get:
+      summary: Get all landpads
+      tags: [Landpads]
+      responses:
+        "200":
+          description: Landpads list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/landpads/{id}:
+    get:
+      summary: Get landpad by id
+      tags: [Landpads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Landpad
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/launchpads:
+    get:
+      summary: Get all launchpads
+      tags: [Launchpads]
+      responses:
+        "200":
+          description: Launchpads list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/launchpads/{id}:
+    get:
+      summary: Get launchpad by id
+      tags: [Launchpads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Launchpad
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/payloads:
+    get:
+      summary: Get all payloads
+      tags: [Payloads]
+      responses:
+        "200":
+          description: Payloads list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+    post:
+      summary: Create a payload
+      tags: [Payloads]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "201":
+          description: Created
+  /v4/payloads/{id}:
+    get:
+      summary: Get payload by id
+      tags: [Payloads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+    patch:
+      summary: Update payload
+      tags: [Payloads]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete payload
+      tags: [Payloads]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: Deleted
+
+  /v4/rockets:
+    get:
+      summary: Get all rockets
+      tags: [Rockets]
+      responses:
+        "200":
+          description: Rockets list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/rockets/{id}:
+    get:
+      summary: Get rocket by id
+      tags: [Rockets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rocket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/ships:
+    get:
+      summary: Get all ships
+      tags: [Ships]
+      responses:
+        "200":
+          description: Ships list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/ships/{id}:
+    get:
+      summary: Get ship by id
+      tags: [Ships]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ship
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/starlink:
+    get:
+      summary: Get all starlink satellites
+      tags: [Starlink]
+      responses:
+        "200":
+          description: Starlink list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/starlink/{id}:
+    get:
+      summary: Get starlink satellite by id
+      tags: [Starlink]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Starlink item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/roadster:
+    get:
+      summary: Get roadster current data
+      tags: [Roadster]
+      responses:
+        "200":
+          description: Roadster data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+
+  /v4/company:
+    get:
+      summary: Get company information
+      tags: [Company]
+      responses:
+        "200":
+          description: Company info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+
+  /v4/history:
+    get:
+      summary: Get historical events
+      tags: [History]
+      responses:
+        "200":
+          description: History list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+  /v4/history/{id}:
+    get:
+      summary: Get history event by id
+      tags: [History]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: History item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+
+  /v4/users:
+    get:
+      summary: Get all users
+      tags: [Users]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GenericItem"
+    post:
+      summary: Create a user
+      tags: [Users]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "201":
+          description: Created
+  /v4/users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get user by id
+      tags: [Users]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenericItem"
+        "404":
+          description: Not found
+    patch:
+      summary: Update user
+      tags: [Users]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete user
+      tags: [Users]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: Deleted
+
+  /v4/users/query:
+    post:
+      summary: Query users (pagination)
+      tags: [Users]
+      security:
+        - spacexKey: []
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginationResult"
+
+  /v4/admin/cache:
+    delete:
+      summary: Clear server cache
+      tags: [Admin]
+      security:
+        - spacexKey: []
+      responses:
+        "200":
+          description: Cache cleared
+  /v4/admin/health:
+    get:
+      summary: Health check
+      tags: [Admin]
+      responses:
+        "200":
+          description: OK
+
+security: []
+
+tags:
+  - name: Launches
+    description: Launch data endpoints
+  - name: Capsules
+    description: Capsule endpoints
+  - name: Cores
+    description: Core endpoints
+  - name: Crew
+    description: Crew endpoints
+  - name: Dragons
+    description: Dragon endpoints
+  - name: Landpads
+    description: Landpad endpoints
+  - name: Launchpads
+    description: Launchpad endpoints
+  - name: Payloads
+    description: Payload endpoints
+  - name: Rockets
+    description: Rocket endpoints
+  - name: Ships
+    description: Ship endpoints
+  - name: Starlink
+    description: Starlink endpoints
+  - name: Roadster
+    description: Roadster endpoint
+  - name: Company
+    description: Company information
+  - name: History
+    description: Historical events
+  - name: Users
+    description: User management (admin)
+  - name: Admin
+    description: Admin actions (cache, health)

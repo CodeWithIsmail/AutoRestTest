@@ -1,0 +1,680 @@
+openapi: 3.0.1
+info:
+  title: CareerStory API (Combined)
+  description: Combined API for managing users, stories, categories, and authentication.
+  version: '1.0'
+servers:
+  - url: http://host.docker.internal:3000/api/v1
+tags:
+  - name: Users
+    description: Operations related to users
+  - name: Categories
+    description: Operations related to categories
+  - name: Stories
+    description: Operations related to stories
+  - name: Auth
+    description: Operations related to user authentication
+paths:
+  /auth/signup:
+    post:
+      tags:
+        - Auth
+      summary: Register a new user
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupDto'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Bad request
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login a user
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDto'
+      responses:
+        '200':
+          description: User logged in successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponseDto'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+  /users:
+    get:
+      tags:
+        - Users
+      summary: Get all users
+      operationId: getAllUsers
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+  /users/profile:
+    get:
+      tags:
+        - Users
+      summary: Get current user profile
+      operationId: getCurrentUserProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+    patch:
+      tags:
+        - Users
+      summary: Update user profile
+      operationId: updateUserProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserProfileDto'
+      responses:
+        '200':
+          description: The updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+  /users/change-role/{userId}:
+    patch:
+      tags:
+        - Users
+      summary: Update user role
+      operationId: updateUserRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRoleDto'
+      responses:
+        '200':
+          description: The updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /users/{userId}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      operationId: getUserById
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+    delete:
+      tags:
+        - Users
+      summary: Delete a user
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: User deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: Get all categories
+      operationId: getAllCategories
+      responses:
+        '200':
+          description: A list of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+    post:
+      tags:
+        - Categories
+      summary: Create a new category
+      operationId: createCategory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryDto'
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /categories/{categoryId}:
+    patch:
+      tags:
+        - Categories
+      summary: Update a category
+      operationId: updateCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoryDto'
+      responses:
+        '200':
+          description: The updated category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Category not found
+    delete:
+      tags:
+        - Categories
+      summary: Delete a category
+      operationId: deleteCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Category deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Category not found
+  /stories:
+    post:
+      tags:
+        - Stories
+      summary: Create a new story
+      operationId: createStory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoryDto'
+      responses:
+        '201':
+          description: Story created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Story'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+    get:
+      tags:
+        - Stories
+      summary: Get all stories
+      operationId: getAllStories
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Story'
+  /stories/user/{userId}:
+    get:
+      tags:
+        - Stories
+      summary: Get stories by user
+      operationId: getStoriesByUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Story'
+  /stories/{storyId}:
+    get:
+      tags:
+        - Stories
+      summary: Get story by ID
+      operationId: getStoryById
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The story
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Story'
+        '404':
+          description: Story not found
+    patch:
+      tags:
+        - Stories
+      summary: Update a story
+      operationId: updateStory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStoryDto'
+      responses:
+        '200':
+          description: The updated story
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Story'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Story not found
+    delete:
+      tags:
+        - Stories
+      summary: Delete a story
+      operationId: deleteStory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Story deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Story not found
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        userName:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: ['USER', 'ADMIN']
+        isEmailVerified:
+          type: boolean
+        bio:
+          type: string
+        organization:
+          type: string
+        linkedInUrl:
+          type: string
+        githubUrl:
+          type: string
+        portfolioUrl:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UpdateUserProfileDto:
+      type: object
+      properties:
+        name:
+          type: string
+        bio:
+          type: string
+        organization:
+          type: string
+        linkedInUrl:
+          type: string
+        githubUrl:
+          type: string
+        portfolioUrl:
+          type: string
+    UpdateUserRoleDto:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: ['USER', 'ADMIN']
+    Category:
+      type: object
+      properties:
+        categoryId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CreateCategoryDto:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    UpdateCategoryDto:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    Story:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        summary:
+          type: string
+        isPublished:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+    CreateStoryDto:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        summary:
+          type: string
+        isPublished:
+          type: boolean
+        categoryIds:
+          type: array
+          items:
+            type: integer
+    UpdateStoryDto:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        summary:
+          type: string
+        isPublished:
+          type: boolean
+        categoryIds:
+          type: array
+          items:
+            type: integer
+    SignupDto:
+      type: object
+      properties:
+        userName:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        password:
+          type: string
+        confirmPassword:
+          type: string
+    LoginDto:
+      type: object
+      properties:
+        userName:
+          type: string
+        password:
+          type: string
+    AuthResponseDto:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        expiresIn:
+          type: number
+        user:
+          $ref: '#/components/schemas/User'
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        userName:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: ['USER', 'ADMIN']
+        isEmailVerified:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
