@@ -14,12 +14,40 @@ datasource db {
 }
 
 // ----------------------------------------------------------------------------
-// Role enum — RBAC roles used inside a project
+// Enums
 // ----------------------------------------------------------------------------
+
+// RBAC roles used inside a project
 enum Role {
   admin
   tester
   viewer
+}
+
+// HTTP methods supported for endpoints / test cases
+enum HttpMethod {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
+}
+
+// Lifecycle of a test run. TestSuite IS the run record, so this tracks the
+// async job from creation through completion.
+enum SuiteStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+// Lifecycle of an email invitation to join a project.
+enum InvitationStatus {
+  pending
+  accepted
+  declined
+  expired
 }
 
 // ----------------------------------------------------------------------------
@@ -39,16 +67,22 @@ model User {
   // Project memberships for collaboration
   projectMembers ProjectMember[]
 
+  // Test runs the user has triggered
+  triggeredSuites TestSuite[] @relation("TriggeredSuites")
+
+  // Invitations this user has sent to others
+  sentInvitations ProjectInvitation[] @relation("SentInvitations")
+
   @@map("users")
 }
 
 // ----------------------------------------------------------------------------
 // Project model — main workspace container in AutoRestTest.
-// Everything else (API specs, endpoints, test suites, test cases) lives
+// Everything else (API spec, endpoints, test suites, test cases) lives
 // inside a project.
 // ----------------------------------------------------------------------------
 model Project {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
 
@@ -57,7 +91,13 @@ model Project {
   owner   User   @relation("OwnedProjects", fields: [ownerId], references: [id])
 
   // Team collaboration
-  members ProjectMember[]
+  members     ProjectMember[]
+  invitations ProjectInvitation[]
+
+  // Testing artifacts
+  spec       ApiSpecification?
+  endpoints  Endpoint[]
+  testSuites TestSuite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -82,4 +122,138 @@ model ProjectMember {
   @@unique([projectId, userId])
   @@index([userId])
   @@map("project_members")
+}
+
+// ----------------------------------------------------------------------------
+// ProjectInvitation model — pending email invite to join a project.
+// The invitee may not have an account yet, so the invite is keyed by email
+// and carries a unique token used in the accept link. Becomes a
+// ProjectMember once accepted.
+// ----------------------------------------------------------------------------
+model ProjectInvitation {
+  id        String           @id @default(uuid())
+  projectId String
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  email     String
+  role      Role
+  token     String           @unique
+  status    InvitationStatus @default(pending)
+
+  invitedById String
+  invitedBy   User   @relation("SentInvitations", fields: [invitedById], references: [id])
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Only one outstanding invite per email per project.
+  @@unique([projectId, email])
+  @@index([email])
+  @@map("project_invitations")
+}
+
+// ----------------------------------------------------------------------------
+// ApiSpecification model — the OpenAPI 3.0 spec for a project (one per
+// project). Raw YAML is stored as text; this is what gets handed to the
+// testing engine. generatedByAI flags specs produced from source code.
+// ----------------------------------------------------------------------------
+model ApiSpecification {
+  id            String   @id @default(uuid())
+  projectId     String   @unique
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName      String
+  fileContent   String // raw OAS 3.0 YAML
+  generatedByAI Boolean  @default(false)
+  uploadedAt    DateTime @default(now())
+
+  @@map("api_specifications")
+}
+
+// ----------------------------------------------------------------------------
+// Endpoint model — a single path+method extracted from the spec (or added
+// manually). Stored so the UI can list detected endpoints, filter results,
+// and support manual additions.
+// ----------------------------------------------------------------------------
+model Endpoint {
+  id            String     @id @default(uuid())
+  projectId     String
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  path          String // e.g. /users/{id}
+  method        HttpMethod
+  description   String?
+  addedManually Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+
+  testCases TestCase[]
+
+  @@unique([projectId, method, path])
+  @@index([projectId])
+  @@map("endpoints")
+}
+
+// ----------------------------------------------------------------------------
+// TestSuite model — IS the test run record (one row per execution). The run
+// configuration (targetUrl / timeBudget / mutationRate) mirrors the engine
+// inputs; the count fields are populated from the engine's report on
+// completion. jobId links to the async Flask job for polling.
+// ----------------------------------------------------------------------------
+model TestSuite {
+  id        String      @id @default(uuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String?
+  status    SuiteStatus @default(pending)
+  jobId     String? // Flask async job id
+
+  // Run configuration — passed to the engine
+  targetUrl    String
+  timeBudget   Int // engine time_duration, in seconds
+  mutationRate Float  @default(0.2)
+
+  // Results summary — filled from the engine report
+  totalEndpoints   Int @default(0)
+  coveredEndpoints Int @default(0)
+  totalTestCases   Int @default(0)
+  passedTestCases  Int @default(0)
+  failedTestCases  Int @default(0)
+
+  triggeredById String
+  triggeredBy   User   @relation("TriggeredSuites", fields: [triggeredById], references: [id])
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  testCases TestCase[]
+
+  @@index([projectId])
+  @@map("test_suites")
+}
+
+// ----------------------------------------------------------------------------
+// TestCase model — one request/response record produced during a run,
+// derived from the engine's output JSON. Stores the request that was sent
+// and the response received, plus an optional plain-language failure note.
+// ----------------------------------------------------------------------------
+model TestCase {
+  id          String    @id @default(uuid())
+  testSuiteId String
+  testSuite   TestSuite @relation(fields: [testSuiteId], references: [id], onDelete: Cascade)
+  endpointId  String
+  endpoint    Endpoint  @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  requestBody    Json?
+  requestHeaders Json?
+  statusCode     Int?
+  responseBody   Json?
+  responseTimeMs Int?
+  passed         Boolean @default(false)
+
+  // LLM-generated plain-language explanation for failures (exciting req)
+  failureExplanation String?
+
+  createdAt DateTime @default(now())
+
+  @@index([testSuiteId])
+  @@index([endpointId])
+  @@map("test_cases")
 }

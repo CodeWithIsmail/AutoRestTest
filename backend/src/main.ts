@@ -19,7 +19,10 @@ async function bootstrap(): Promise<void> {
 
   const port = process.env['PORT'] ?? 3000;
   await app.listen(port);
-  Logger.log(`AutoRestTest API listening on http://localhost:${port}`, 'Bootstrap');
+  Logger.log(
+    `AutoRestTest API listening on http://localhost:${port}`,
+    'Bootstrap',
+  );
 }
 
 void bootstrap();

@@ -53,10 +53,7 @@ export class ProjectsService {
   // --------------------------------------------------------------------------
   // create — POST /projects
   // --------------------------------------------------------------------------
-  async create(
-    ownerId: string,
-    dto: CreateProjectDto,
-  ): Promise<ProjectDetail> {
+  async create(ownerId: string, dto: CreateProjectDto): Promise<ProjectDetail> {
     const name = dto.name.trim();
 
     if (!name) {
@@ -102,10 +99,7 @@ export class ProjectsService {
     // Find every project the user can see (owner OR member).
     const projects = await this.prisma.project.findMany({
       where: {
-        OR: [
-          { ownerId: userId },
-          { members: { some: { userId } } },
-        ],
+        OR: [{ ownerId: userId }, { members: { some: { userId } } }],
       },
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -180,9 +174,7 @@ export class ProjectsService {
     const isOwner = project.ownerId === userId;
     const isMember = project.members.some((m) => m.userId === userId);
     if (!isOwner && !isMember) {
-      throw new ForbiddenException(
-        'You do not have access to this project',
-      );
+      throw new ForbiddenException('You do not have access to this project');
     }
 
     return {
@@ -211,10 +203,7 @@ export class ProjectsService {
     userId: string,
     dto: UpdateProjectDto,
   ): Promise<ProjectDetail> {
-    if (
-      dto.name === undefined &&
-      dto.description === undefined
-    ) {
+    if (dto.name === undefined && dto.description === undefined) {
       throw new BadRequestException(
         'Provide at least one field to update (name or description)',
       );
@@ -232,8 +221,7 @@ export class ProjectsService {
 
     if (dto.description !== undefined) {
       // Allow explicit null to clear the description.
-      data.description =
-        dto.description === null ? null : dto.description;
+      data.description = dto.description === null ? null : dto.description;
     }
 
     try {
