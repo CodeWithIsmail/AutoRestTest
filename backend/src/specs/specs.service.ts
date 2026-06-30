@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +7,8 @@ import SwaggerParser from '@apidevtools/swagger-parser';
 import * as yaml from 'js-yaml';
 import { Prisma, Role } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectAccessService } from '../common/project-access.service';
+import { extractEndpoints } from '../endpoints/endpoint-extractor';
 
 /** Max accepted upload size for a spec file (5 MB). */
 const MAX_SPEC_BYTES = 5 * 1024 * 1024;
@@ -44,7 +45,10 @@ interface ParsedOpenApi {
 
 @Injectable()
 export class SpecsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: ProjectAccessService,
+  ) {}
 
   // --------------------------------------------------------------------------
   // upload — POST /projects/:projectId/spec
@@ -55,7 +59,7 @@ export class SpecsService {
     userId: string,
     file: Express.Multer.File | undefined,
   ): Promise<SpecSummary> {
-    await this.assertProjectAccess(projectId, userId, [Role.admin]);
+    await this.access.assertAccess(projectId, userId, [Role.admin]);
 
     if (!file) {
       throw new BadRequestException('No spec file was uploaded (field "file")');
@@ -75,34 +79,55 @@ export class SpecsService {
     const raw = file.buffer.toString('utf-8');
     const parsed = this.parse(raw);
     const meta = await this.validateOpenApi3(parsed);
+    const endpoints = extractEndpoints(parsed);
 
-    const saved = await this.prisma.apiSpecification.upsert({
-      where: { projectId },
-      create: {
-        projectId,
-        fileName: file.originalname,
-        fileContent: raw,
-        generatedByAI: false,
-      },
-      update: {
-        fileName: file.originalname,
-        fileContent: raw,
-        generatedByAI: false,
-        uploadedAt: new Date(),
-      },
-      select: {
-        id: true,
-        fileName: true,
-        generatedByAI: true,
-        uploadedAt: true,
-      },
+    // Persist the spec and re-sync its endpoints atomically: a project must
+    // never end up with a new spec but stale endpoints (or vice-versa).
+    // Re-upload replaces ALL endpoints for the project (manual ones included).
+    const saved = await this.prisma.$transaction(async (tx) => {
+      const spec = await tx.apiSpecification.upsert({
+        where: { projectId },
+        create: {
+          projectId,
+          fileName: file.originalname,
+          fileContent: raw,
+          generatedByAI: false,
+        },
+        update: {
+          fileName: file.originalname,
+          fileContent: raw,
+          generatedByAI: false,
+          uploadedAt: new Date(),
+        },
+        select: {
+          id: true,
+          fileName: true,
+          generatedByAI: true,
+          uploadedAt: true,
+        },
+      });
+
+      await tx.endpoint.deleteMany({ where: { projectId } });
+      if (endpoints.length > 0) {
+        await tx.endpoint.createMany({
+          data: endpoints.map((e) => ({
+            projectId,
+            method: e.method,
+            path: e.path,
+            description: e.description,
+            addedManually: false,
+          })),
+        });
+      }
+
+      return spec;
     });
 
     return {
       ...saved,
       openapiVersion: meta.version,
       title: meta.title,
-      endpointCount: meta.endpointCount,
+      endpointCount: endpoints.length,
     };
   }
 
@@ -111,7 +136,7 @@ export class SpecsService {
   // Any project member (incl. viewer) may read.
   // --------------------------------------------------------------------------
   async findForProject(projectId: string, userId: string): Promise<SpecDetail> {
-    await this.assertProjectAccess(projectId, userId);
+    await this.access.assertAccess(projectId, userId);
 
     const spec = await this.prisma.apiSpecification.findUnique({
       where: { projectId },
@@ -132,8 +157,13 @@ export class SpecsService {
 
     // Re-derive display metadata from the stored content. Parsing here keeps a
     // single source of truth (the file) without storing duplicated columns.
+    // endpointCount comes from the Endpoint table — the authoritative count of
+    // operations that were extracted (and may include manual additions).
     const parsed = this.parse(spec.fileContent);
     const meta = this.summarize(parsed);
+    const endpointCount = await this.prisma.endpoint.count({
+      where: { projectId },
+    });
 
     return {
       id: spec.id,
@@ -143,7 +173,7 @@ export class SpecsService {
       uploadedAt: spec.uploadedAt,
       openapiVersion: meta.version,
       title: meta.title,
-      endpointCount: meta.endpointCount,
+      endpointCount,
     };
   }
 
@@ -155,7 +185,7 @@ export class SpecsService {
     projectId: string,
     userId: string,
   ): Promise<{ message: string }> {
-    await this.assertProjectAccess(projectId, userId, [Role.admin]);
+    await this.access.assertAccess(projectId, userId, [Role.admin]);
 
     try {
       await this.prisma.apiSpecification.delete({
@@ -179,48 +209,6 @@ export class SpecsService {
   // --------------------------------------------------------------------------
   // private helpers
   // --------------------------------------------------------------------------
-
-  /**
-   * Ensure the user can act on the project. When `mutatingRoles` is provided,
-   * the caller must be the owner OR a member holding one of those roles;
-   * otherwise any owner/member (incl. viewer) passes. Throws 404 if the
-   * project is missing, 403 if access is denied.
-   */
-  private async assertProjectAccess(
-    projectId: string,
-    userId: string,
-    mutatingRoles?: Role[],
-  ): Promise<void> {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: {
-        ownerId: true,
-        members: {
-          where: { userId },
-          select: { role: true },
-        },
-      },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    const isOwner = project.ownerId === userId;
-    const membership = project.members[0];
-
-    if (!isOwner && !membership) {
-      throw new ForbiddenException('You do not have access to this project');
-    }
-
-    if (mutatingRoles && !isOwner) {
-      if (!membership || !mutatingRoles.includes(membership.role)) {
-        throw new ForbiddenException(
-          'You do not have permission to manage the specification for this project',
-        );
-      }
-    }
-  }
 
   /** Lowercased file extension including the dot, e.g. ".yaml". */
   private extensionOf(fileName: string): string {

@@ -18,6 +18,7 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 1 | Authentication | `/auth` | ✅ |
 | 2 | Projects | `/projects` | ✅ |
 | 3 | API Specification | `/projects/:projectId/spec` | ✅ |
+| 4 | Endpoints | `/projects/:projectId/endpoints` | ✅ |
 
 ---
 
@@ -33,9 +34,12 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 6 | `GET` | `/projects/:id` | 🔒 | Owner / member | Get one project with owner + members |
 | 7 | `PATCH` | `/projects/:id` | 🔒 | Owner | Update name and/or description |
 | 8 | `DELETE` | `/projects/:id` | 🔒 | Owner | Delete a project (cascades members) |
-| 9 | `POST` | `/projects/:projectId/spec` | 🔒 | Owner / admin | Upload or replace the OpenAPI spec |
+| 9 | `POST` | `/projects/:projectId/spec` | 🔒 | Owner / admin | Upload or replace the OpenAPI spec (auto-extracts endpoints) |
 | 10 | `GET` | `/projects/:projectId/spec` | 🔒 | Any member | Get the stored spec (metadata + content) |
 | 11 | `DELETE` | `/projects/:projectId/spec` | 🔒 | Owner / admin | Delete the stored spec |
+| 12 | `GET` | `/projects/:projectId/endpoints` | 🔒 | Any member | List the project's endpoints |
+| 13 | `POST` | `/projects/:projectId/endpoints` | 🔒 | Owner / admin | Manually add an endpoint |
+| 14 | `DELETE` | `/projects/:projectId/endpoints/:endpointId` | 🔒 | Owner / admin | Delete an endpoint |
 
 ---
 
@@ -207,12 +211,69 @@ At least one field must be provided.
 
 ---
 
+## Module 4 — Endpoints
+
+> All routes require `Authorization: Bearer <access_token>`.
+> `:projectId` and `:endpointId` must be valid **UUIDs**.
+
+**Auto-extraction:** every time a spec is uploaded (route 9), the project's
+endpoints are re-synced from the spec's `paths` — one entry per path × method
+(GET/POST/PUT/PATCH/DELETE; `head`/`options`/`trace` are ignored).
+**Re-uploading a spec replaces all endpoints for the project**, including any
+that were added manually.
+
+### 12. List endpoints — `GET /projects/:projectId/endpoints`
+
+**Response `200 OK`** — array ordered by path then method:
+
+```json
+[
+  {
+    "id": "…",
+    "method": "GET",
+    "path": "/users/{id}",
+    "description": "Get a user by id",
+    "addedManually": false,
+    "createdAt": "2026-06-26T12:00:00.000Z"
+  }
+]
+```
+**Errors:** `403` not a member.
+
+### 13. Add endpoint manually — `POST /projects/:projectId/endpoints`
+
+**Body (JSON)**
+
+| Field | Type | Required | Rules |
+|-------|------|:--------:|-------|
+| `method` | string | ✅ | One of `GET`, `POST`, `PUT`, `PATCH`, `DELETE` |
+| `path` | string | ✅ | Must start with `/` (e.g. `/orders`) |
+| `description` | string | ❌ | Up to 500 characters |
+
+```json
+{
+  "method": "POST",
+  "path": "/orders",
+  "description": "Create an order"
+}
+```
+
+**Response `201 Created`** — the created endpoint (`addedManually: true`).
+**Errors:** `400` invalid body · `403` not owner/admin · `409` an endpoint with that path+method already exists.
+
+### 14. Delete endpoint — `DELETE /projects/:projectId/endpoints/:endpointId`
+
+**Response `200 OK`** — `{ "message": "Endpoint deleted successfully" }`.
+**Errors:** `403` not owner/admin · `404` endpoint not found in this project.
+
+---
+
 ## Roles (RBAC)
 
 A project member holds one role. The owner implicitly has full access.
 
-| Role | Manage spec (upload/delete) | Read project & spec | Notes |
-|------|:--------------------------:|:-------------------:|-------|
+| Role | Manage spec & endpoints (write/delete) | Read project, spec & endpoints | Notes |
+|------|:--------------------------------------:|:------------------------------:|-------|
 | **owner** | ✅ | ✅ | Creator of the project; only one |
 | **admin** | ✅ | ✅ | Full management within the project |
 | **tester** | ❌ | ✅ | Will run tests (future modules) |
