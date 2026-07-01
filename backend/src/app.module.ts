@@ -8,6 +8,7 @@ import { EndpointsModule } from './endpoints/endpoints.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { SpecsModule } from './specs/specs.module';
+import { TestSuitesModule } from './test-suites/test-suites.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { SpecsModule } from './specs/specs.module';
     ProjectsModule,
     SpecsModule,
     EndpointsModule,
+    TestSuitesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

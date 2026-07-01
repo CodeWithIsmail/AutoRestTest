@@ -19,6 +19,7 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 2 | Projects | `/projects` | ✅ |
 | 3 | API Specification | `/projects/:projectId/spec` | ✅ |
 | 4 | Endpoints | `/projects/:projectId/endpoints` | ✅ |
+| 5 | Test Suites | `/projects/:projectId/test-suites` | ✅ |
 
 ---
 
@@ -40,6 +41,10 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 12 | `GET` | `/projects/:projectId/endpoints` | 🔒 | Any member | List the project's endpoints |
 | 13 | `POST` | `/projects/:projectId/endpoints` | 🔒 | Owner / admin | Manually add an endpoint |
 | 14 | `DELETE` | `/projects/:projectId/endpoints/:endpointId` | 🔒 | Owner / admin | Delete an endpoint |
+| 15 | `POST` | `/projects/:projectId/test-suites` | 🔒 | Owner / admin / tester | Configure a test run |
+| 16 | `GET` | `/projects/:projectId/test-suites` | 🔒 | Any member | List test runs (newest first) |
+| 17 | `GET` | `/projects/:projectId/test-suites/:suiteId` | 🔒 | Any member | Get one test run (config + results) |
+| 18 | `DELETE` | `/projects/:projectId/test-suites/:suiteId` | 🔒 | Owner / admin | Delete a test run |
 
 ---
 
@@ -83,7 +88,16 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 }
 ```
 
-**Response `200 OK`** — `{ access_token, user }`. Save `access_token` for protected routes.
+**Response `200 OK`**
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+  "user": { "id": "…", "username": "ismail", "email": "ismail@example.com" }
+}
+```
+
+Save `accessToken` and send it as `Authorization: Bearer <accessToken>` on protected routes.
 
 ---
 
@@ -268,16 +282,70 @@ that were added manually.
 
 ---
 
+## Module 5 — Test Suites
+
+> All routes require `Authorization: Bearer <access_token>`.
+> `:projectId` and `:suiteId` must be valid **UUIDs**.
+
+A **test suite is a test run record** — one row per run. This module *configures
+and manages* runs; actual execution against the engine comes in a later module.
+A newly created suite has `status: "pending"`, and the result counters
+(`coveredEndpoints`, `passedTestCases`, …) plus `jobId`/`startedAt`/`completedAt`
+stay at their defaults until a run is executed.
+
+### 15. Create test run — `POST /projects/:projectId/test-suites`
+
+**Body (JSON)**
+
+| Field | Type | Required | Rules |
+|-------|------|:--------:|-------|
+| `name` | string | ❌ | Up to 100 characters |
+| `targetUrl` | string | ✅ | Valid URL incl. `http(s)://` (e.g. `http://localhost:8080`) |
+| `timeBudget` | integer | ✅ | Seconds the engine may run; `1`–`3600` |
+| `mutationRate` | number | ❌ | Fault-injection rate `0`–`1` (defaults to `0.2`) |
+
+```json
+{
+  "name": "Nightly smoke run",
+  "targetUrl": "http://localhost:8080",
+  "timeBudget": 300,
+  "mutationRate": 0.3
+}
+```
+
+**Response `201 Created`** — the created run (`status: "pending"`, zeroed result counters).
+**Errors:** `400` invalid body **or the project has no endpoints yet** · `403` not owner/admin/tester · `404` project not found.
+
+### 16. List test runs — `GET /projects/:projectId/test-suites`
+
+**Response `200 OK`** — array of runs ordered newest first, each with its config and results summary.
+**Errors:** `403` not a member.
+
+### 17. Get one test run — `GET /projects/:projectId/test-suites/:suiteId`
+
+**Response `200 OK`** — full run detail (config, results summary, `jobId`, `triggeredById`).
+**Errors:** `403` not a member · `404` run not found in this project.
+
+### 18. Delete test run — `DELETE /projects/:projectId/test-suites/:suiteId`
+
+**Response `200 OK`** — `{ "message": "Test suite deleted successfully" }`. Cascades the run's test cases.
+**Errors:** `403` not owner/admin · `404` run not found in this project.
+
+---
+
 ## Roles (RBAC)
 
 A project member holds one role. The owner implicitly has full access.
 
-| Role | Manage spec & endpoints (write/delete) | Read project, spec & endpoints | Notes |
-|------|:--------------------------------------:|:------------------------------:|-------|
-| **owner** | ✅ | ✅ | Creator of the project; only one |
-| **admin** | ✅ | ✅ | Full management within the project |
-| **tester** | ❌ | ✅ | Will run tests (future modules) |
-| **viewer** | ❌ | ✅ | Read-only |
+| Role | Manage spec & endpoints (write/delete) | Create test runs | Delete test runs | Read everything |
+|------|:--------------------------------------:|:----------------:|:----------------:|:---------------:|
+| **owner** | ✅ | ✅ | ✅ | ✅ |
+| **admin** | ✅ | ✅ | ✅ | ✅ |
+| **tester** | ❌ | ✅ | ❌ | ✅ |
+| **viewer** | ❌ | ❌ | ❌ | ✅ |
+
+> The owner is the project creator (only one) and implicitly has full access.
+> Testers can configure and (in a later module) trigger runs, but not manage the spec/endpoints or delete runs.
 
 ---
 
@@ -295,7 +363,7 @@ A project member holds one role. The owner implicitly has full access.
 
 ## Suggested Postman flow
 
-1. `POST /auth/register` → `POST /auth/login`, copy `access_token`.
+1. `POST /auth/register` → `POST /auth/login`, copy `accessToken`.
 2. Set a collection variable `{{token}}` and add header `Authorization: Bearer {{token}}` at the collection level.
 3. `POST /projects` → copy the returned `id` into `{{projectId}}`.
 4. `POST /projects/{{projectId}}/spec` with a `form-data` file (the Swagger Petstore OpenAPI 3.0 YAML works well).
