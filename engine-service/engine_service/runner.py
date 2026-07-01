@@ -14,17 +14,22 @@ The engine (autoresttest-core) is treated as a black box:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import tomlkit
 import yaml
 
 from .config import Config
+
+# HTTP methods the platform models as Endpoint rows (mirrors the Prisma
+# HttpMethod enum). Other verbs the engine may touch are ignored for mapping.
+_MAPPED_METHODS = ("get", "post", "put", "patch", "delete")
 
 
 # --------------------------------------------------------------------------- #
@@ -140,6 +145,70 @@ def normalize_report(
     }
 
 
+def normalize_endpoint_path(path: str) -> str:
+    """Replicates the engine's fallback-operationId path normalization so we can
+    reconstruct synthesized ids for operations that lack an operationId."""
+    normalized = path.replace("{", "").replace("}", "")
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", normalized).strip("_")
+    return normalized or "root"
+
+
+def build_operation_index(spec_text: str) -> Dict[str, Dict[str, str]]:
+    """Map each engine operationId -> {method, path} by parsing the spec the
+    same way the engine does (operationId when present, else
+    `<method>_<normalized-path>`, with duplicate suffixing)."""
+    spec = yaml.safe_load(spec_text) or {}
+    paths = spec.get("paths", {}) if isinstance(spec, dict) else {}
+    index: Dict[str, Dict[str, str]] = {}
+    seen: set[str] = set()
+    for path, item in paths.items():
+        if not isinstance(item, dict):
+            continue
+        for method, op in item.items():
+            ml = method.lower()
+            if ml not in _MAPPED_METHODS:
+                continue
+            provided = op.get("operationId") if isinstance(op, dict) else None
+            candidate = provided or f"{ml}_{normalize_endpoint_path(path)}"
+            base = candidate
+            suffix = 1
+            while candidate in seen:
+                candidate = f"{base}_{suffix}"
+                suffix += 1
+            seen.add(candidate)
+            index[candidate] = {"method": ml.upper(), "path": path}
+    return index
+
+
+def build_operations(
+    operation_status_codes: Any,
+    index: Dict[str, Dict[str, str]],
+    server_errors: Any,
+) -> List[Dict[str, Any]]:
+    """Join per-operation status-code counts with method/path so the backend can
+    match each to an Endpoint row. `passed` = the operation saw any 2xx."""
+    ops: List[Dict[str, Any]] = []
+    status_map = operation_status_codes if isinstance(operation_status_codes, dict) else {}
+    errors_map = server_errors if isinstance(server_errors, dict) else {}
+    for op_id, codes in status_map.items():
+        codes = {str(k): v for k, v in codes.items()} if isinstance(codes, dict) else {}
+        total = sum(codes.values())
+        passed = any(int(c) // 100 == 2 for c in codes)
+        meta = index.get(op_id, {})
+        ops.append(
+            {
+                "operationId": op_id,
+                "method": meta.get("method"),
+                "path": meta.get("path"),
+                "statusCodes": codes,
+                "totalRequests": total,
+                "passed": passed,
+                "serverErrors": errors_map.get(op_id, []),
+            }
+        )
+    return ops
+
+
 def _read_json(path: Path, default: Any) -> Any:
     if path.exists():
         with path.open(encoding="utf-8") as f:
@@ -147,12 +216,16 @@ def _read_json(path: Path, default: Any) -> Any:
     return default
 
 
-def collect_outputs(output_dir: Path) -> Dict[str, Any]:
-    """Read the engine's output files from data/<spec-stem>/ and normalize."""
+def collect_outputs(output_dir: Path, spec_text: str) -> Dict[str, Any]:
+    """Read the engine's output files from data/<spec-stem>/, normalize, and add
+    a per-operation list joined with method/path from the spec."""
     report = _read_json(output_dir / "report.json", {})
     op_status = _read_json(output_dir / "operation_status_codes.json", {})
-    server_errors = _read_json(output_dir / "server_errors.json", [])
-    return normalize_report(report, op_status, server_errors)
+    server_errors = _read_json(output_dir / "server_errors.json", {})
+    result = normalize_report(report, op_status, server_errors)
+    index = build_operation_index(spec_text)
+    result["operations"] = build_operations(op_status, index, server_errors)
+    return result
 
 
 # --------------------------------------------------------------------------- #
@@ -193,12 +266,25 @@ def _mock_report(spec_text: str, time_duration: int) -> Dict[str, Any]:
 def run_mock(output_dir: Path, spec_text: str, time_duration: int) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     time.sleep(0.2)  # simulate a brief run so status transitions are observable
+
+    index = build_operation_index(spec_text)
+    op_ids = list(index)
+    # Most operations get 2xx traffic (pass); the first one gets only 5xx (no
+    # 2xx) so the failure + server-error path is exercised end-to-end.
+    op_status = {op_id: {"200": 7, "404": 2} for op_id in op_ids}
+    server_errors: Dict[str, Any] = {}
+    if op_ids:
+        op_status[op_ids[0]] = {"500": 3}
+        server_errors[op_ids[0]] = [
+            {"status_code": 500, "message": "mock server error"}
+        ]
+
     with (output_dir / "report.json").open("w", encoding="utf-8") as f:
         json.dump(_mock_report(spec_text, time_duration), f, indent=2)
     with (output_dir / "operation_status_codes.json").open("w", encoding="utf-8") as f:
-        json.dump({}, f)
+        json.dump(op_status, f)
     with (output_dir / "server_errors.json").open("w", encoding="utf-8") as f:
-        json.dump([], f)
+        json.dump(server_errors, f)
 
 
 def run_real(

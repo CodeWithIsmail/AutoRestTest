@@ -95,9 +95,17 @@ def test_full_lifecycle_mock(client):
 
     result = client.get(f"/runs/{job_id}/result")
     assert result.status_code == 200
-    summary = result.get_json()["summary"]
+    payload = result.get_json()
+    summary = payload["summary"]
     assert summary["totalOperations"] == 2  # get + post
     assert "statusCodeDistribution" in summary
+    # per-operation records carry method+path for Endpoint matching
+    ops = payload["operations"]
+    assert len(ops) == 2
+    assert {(o["method"], o["path"]) for o in ops} == {
+        ("GET", "/pets"),
+        ("POST", "/pets"),
+    }
 
     # delete cleans up
     assert client.delete(f"/runs/{job_id}").status_code == 200

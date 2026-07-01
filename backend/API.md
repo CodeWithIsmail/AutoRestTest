@@ -19,7 +19,8 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 2 | Projects | `/projects` | ✅ |
 | 3 | API Specification | `/projects/:projectId/spec` | ✅ |
 | 4 | Endpoints | `/projects/:projectId/endpoints` | ✅ |
-| 5 | Test Suites | `/projects/:projectId/test-suites` | ✅ |
+| 5 | Test Suites + Execution | `/projects/:projectId/test-suites` | ✅ |
+| 6 | Results / Reports | `/projects/:projectId/test-suites/:suiteId/report` | ✅ |
 
 ---
 
@@ -45,6 +46,11 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 16 | `GET` | `/projects/:projectId/test-suites` | 🔒 | Any member | List test runs (newest first) |
 | 17 | `GET` | `/projects/:projectId/test-suites/:suiteId` | 🔒 | Any member | Get one test run (config + results) |
 | 18 | `DELETE` | `/projects/:projectId/test-suites/:suiteId` | 🔒 | Owner / admin | Delete a test run |
+| 19 | `POST` | `/projects/:projectId/test-suites/:suiteId/run` | 🔒 | Owner / admin / tester | Execute a run via the engine (async) |
+| 20 | `GET` | `/projects/:projectId/test-suites/:suiteId/test-cases` | 🔒 | Any member | Per-endpoint results of a run |
+| 21 | `GET` | `/projects/:projectId/test-suites/:suiteId/report` | 🔒 | Any member | Computed results report (JSON) |
+| 22 | `GET` | `/projects/:projectId/test-suites/:suiteId/report/export?format=csv\|pdf` | 🔒 | Any member | Download report as CSV or PDF |
+| 23 | `POST` | `/projects/:projectId/test-suites/:suiteId/explain` | 🔒 | Owner / admin / tester | Generate LLM failure explanations |
 
 ---
 
@@ -330,6 +336,102 @@ stay at their defaults until a run is executed.
 
 **Response `200 OK`** — `{ "message": "Test suite deleted successfully" }`. Cascades the run's test cases.
 **Errors:** `403` not owner/admin · `404` run not found in this project.
+
+### 19. Execute a run — `POST /projects/:projectId/test-suites/:suiteId/run`
+
+Hands the run to the Python **engine-service** and returns immediately while the
+engine works. NestJS polls the engine in the background and syncs the suite's
+`status` + result counters; the frontend just re-fetches route 17.
+
+**Preconditions:** the project must have a stored spec (`400` otherwise); the
+suite must not already be `running` (`409`).
+
+**Response `202 Accepted`** — the suite with `status: "running"`, a `jobId`, and
+`startedAt` set. Re-running resets the counters and clears prior test cases.
+**Errors:** `400` no spec uploaded · `403` not owner/admin/tester · `404` run not found · `409` already running · `503` engine-service unreachable.
+
+Poll route 17 until `status` is `completed` or `failed`; on completion the
+counters (`totalEndpoints`, `coveredEndpoints`, `totalTestCases`,
+`passedTestCases`, `failedTestCases`) are populated.
+
+### 20. Run results — `GET /projects/:projectId/test-suites/:suiteId/test-cases`
+
+**Response `200 OK`** — one row per tested endpoint:
+
+```json
+[
+  {
+    "id": "…",
+    "endpointId": "…",
+    "method": "GET",
+    "path": "/pets",
+    "statusCode": 200,
+    "passed": true,
+    "responseBody": { "200": 20, "404": 2 },
+    "failureExplanation": null,
+    "createdAt": "2026-07-01T12:00:00.000Z"
+  }
+]
+```
+`responseBody` holds the per-operation status-code distribution; `passed` is true
+if the endpoint saw any 2xx. **Errors:** `403` not a member · `404` run not found.
+
+---
+
+## Module 6 — Results / Reports
+
+> All routes require `Authorization: Bearer <accessToken>`. `:projectId` and
+> `:suiteId` must be valid **UUIDs**. Reports are available only once the run's
+> `status` is `completed`.
+
+### 21. Report — `GET …/test-suites/:suiteId/report`
+
+**Response `200 OK`** — a computed report:
+
+```json
+{
+  "overview": {
+    "status": "completed", "targetUrl": "http://localhost:8080",
+    "durationSeconds": 120,
+    "totalEndpoints": 4, "coveredEndpoints": 3, "coveragePct": 75,
+    "totalTestCases": 40, "passedTestCases": 28, "failedTestCases": 12,
+    "passRatePct": 70
+  },
+  "statusCodeDistribution": { "200": 28, "404": 8, "500": 3 },
+  "endpoints": [
+    { "method": "GET", "path": "/pets", "passed": false,
+      "statusCodes": { "500": 3 }, "hasServerErrors": true,
+      "failureExplanation": null }
+  ],
+  "failures": [ /* the subset of endpoints where passed=false */ ]
+}
+```
+**Errors:** `403` not a member · `404` run not found · `409` run not completed yet.
+
+### 22. Export — `GET …/test-suites/:suiteId/report/export?format=csv|pdf`
+
+Streams a downloadable file (`Content-Disposition: attachment`).
+- `format=csv` → `text/csv`, one row per endpoint.
+- `format=pdf` → `application/pdf`, a formatted summary + per-endpoint list + failures section.
+
+**Errors:** `400` bad format · `403` not a member · `404`/`409` as above.
+
+### 23. Explain failures — `POST …/test-suites/:suiteId/explain`
+
+Runs an LLM over each failed endpoint (using its status codes + server errors)
+and **caches** a plain-language explanation onto each failed test case.
+
+**Response `200 OK`** — the failed endpoints with populated `failureExplanation`.
+Requires `LLM_MODE=mock` (offline canned text) or a real `LLM_API_KEY`.
+**Errors:** `403` not owner/admin/tester · `404`/`409` as above · `503` LLM not configured.
+
+---
+
+## Running the platform (local)
+
+Two services must be up:
+1. **engine-service** (Python) — `cd engine-service && python wsgi.py` (default `:5000`, set `ENGINE_MODE=mock` for offline dev).
+2. **backend** (NestJS) — `cd backend && npm run start:dev` (`:3000`), with `ENGINE_SERVICE_URL=http://127.0.0.1:5000` in `.env`.
 
 ---
 

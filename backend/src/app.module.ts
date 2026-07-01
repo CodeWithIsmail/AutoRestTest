@@ -5,8 +5,10 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { EndpointsModule } from './endpoints/endpoints.module';
+import { EngineModule } from './engine/engine.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
+import { ReportsModule } from './reports/reports.module';
 import { SpecsModule } from './specs/specs.module';
 import { TestSuitesModule } from './test-suites/test-suites.module';
 
@@ -25,12 +27,16 @@ import { TestSuitesModule } from './test-suites/test-suites.module';
     // are injectable in every feature module without re-importing.
     CommonModule,
 
+    // EngineModule is @Global so the engine-service client is injectable anywhere.
+    EngineModule,
+
     // Feature modules
     AuthModule,
     ProjectsModule,
     SpecsModule,
     EndpointsModule,
     TestSuitesModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

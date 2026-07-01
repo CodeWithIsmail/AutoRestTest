@@ -104,3 +104,45 @@ def test_mock_report_counts_operations():
     # get + post + delete = 3 operations
     assert rep["Number of Total Operations"] == 3
     assert rep["Duration"] == "300 seconds"
+
+
+def test_normalize_endpoint_path():
+    assert runner.normalize_endpoint_path("/pets/{id}") == "pets_id"
+    assert runner.normalize_endpoint_path("/") == "root"
+
+
+def test_build_operation_index_uses_operation_id_then_fallback():
+    spec = """openapi: 3.0.0
+info: {title: T, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses: {'200': {description: OK}}
+  /pets/{id}:
+    delete:
+      responses: {'204': {description: No content}}
+"""
+    index = runner.build_operation_index(spec)
+    assert index["listPets"] == {"method": "GET", "path": "/pets"}
+    # no operationId -> synthesized "<method>_<normalized-path>"
+    assert index["delete_pets_id"] == {"method": "DELETE", "path": "/pets/{id}"}
+
+
+def test_build_operations_joins_and_flags_passed():
+    index = {
+        "listPets": {"method": "GET", "path": "/pets"},
+        "delete_pets_id": {"method": "DELETE", "path": "/pets/{id}"},
+    }
+    op_status = {
+        "listPets": {"200": 5, "404": 1},
+        "delete_pets_id": {"500": 2},
+    }
+    errors = {"delete_pets_id": [{"status_code": 500}]}
+    ops = {o["operationId"]: o for o in runner.build_operations(op_status, index, errors)}
+    assert ops["listPets"]["method"] == "GET"
+    assert ops["listPets"]["path"] == "/pets"
+    assert ops["listPets"]["passed"] is True
+    assert ops["listPets"]["totalRequests"] == 6
+    assert ops["delete_pets_id"]["passed"] is False
+    assert ops["delete_pets_id"]["serverErrors"] == [{"status_code": 500}]

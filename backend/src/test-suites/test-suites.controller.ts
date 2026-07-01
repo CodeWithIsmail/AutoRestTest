@@ -65,6 +65,37 @@ export class TestSuitesController {
   }
 
   /**
+   * POST /projects/:projectId/test-suites/:suiteId/run
+   * Triggers execution via the engine-service. Owner/admin/tester.
+   */
+  @Post(':suiteId/run')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async run(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('suiteId', new ParseUUIDPipe()) suiteId: string,
+  ) {
+    return this.testSuitesService.run(projectId, suiteId, req.user.id);
+  }
+
+  /**
+   * GET /projects/:projectId/test-suites/:suiteId/test-cases
+   * Per-endpoint results for a run. Any project member.
+   */
+  @Get(':suiteId/test-cases')
+  async findTestCases(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('suiteId', new ParseUUIDPipe()) suiteId: string,
+  ) {
+    return this.testSuitesService.findTestCases(
+      projectId,
+      suiteId,
+      req.user.id,
+    );
+  }
+
+  /**
    * DELETE /projects/:projectId/test-suites/:suiteId
    * Deletes a test run (cascades its test cases). Owner/admin only.
    */

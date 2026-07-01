@@ -139,7 +139,7 @@ class JobManager:
             )
             runner.run_real(self.cfg, spec_path, time_budget, toml_text)
 
-        result = runner.collect_outputs(output_dir)
+        result = runner.collect_outputs(output_dir, spec_text)
         with (job_dir / "result.json").open("w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
 

@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { Role, SuiteStatus } from '../../generated/prisma/client';
+import { HttpMethod, Role, SuiteStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectAccessService } from '../common/project-access.service';
+import { EngineService } from '../engine/engine.service';
 import { TestSuitesService } from './test-suites.service';
 
 const PROJECT_ID = 'project-1';
@@ -15,30 +17,57 @@ const SUITE_ID = 'suite-1';
 describe('TestSuitesService', () => {
   let service: TestSuitesService;
   let prisma: {
-    endpoint: { count: jest.Mock };
+    endpoint: { count: jest.Mock; findMany: jest.Mock };
+    apiSpecification: { findUnique: jest.Mock };
     testSuite: {
       create: jest.Mock;
       findMany: jest.Mock;
       findFirst: jest.Mock;
       deleteMany: jest.Mock;
+      update: jest.Mock;
     };
+    testCase: {
+      findMany: jest.Mock;
+      deleteMany: jest.Mock;
+      createMany: jest.Mock;
+    };
+    $transaction: jest.Mock;
   };
   let access: { assertAccess: jest.Mock };
+  let engine: {
+    startRun: jest.Mock;
+    getStatus: jest.Mock;
+    getResult: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
-      endpoint: { count: jest.fn() },
+      endpoint: { count: jest.fn(), findMany: jest.fn() },
+      apiSpecification: { findUnique: jest.fn() },
       testSuite: {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
         deleteMany: jest.fn(),
+        update: jest.fn(),
       },
+      testCase: {
+        findMany: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      $transaction: jest.fn((cb: (tx: typeof prisma) => unknown) => cb(prisma)),
     };
     access = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    engine = {
+      startRun: jest.fn(),
+      getStatus: jest.fn(),
+      getResult: jest.fn(),
+    };
     service = new TestSuitesService(
       prisma as unknown as PrismaService,
       access as unknown as ProjectAccessService,
+      engine as unknown as EngineService,
     );
   });
 
@@ -201,6 +230,230 @@ describe('TestSuitesService', () => {
       await expect(
         service.remove(PROJECT_ID, SUITE_ID, USER_ID),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('run', () => {
+    beforeEach(() => {
+      // Prevent the real background timer from firing during unit tests.
+      jest
+        .spyOn(
+          service as unknown as { beginPolling: () => void },
+          'beginPolling',
+        )
+        .mockImplementation(() => {});
+    });
+
+    function stubRunnableSuite() {
+      prisma.testSuite.findFirst.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.pending,
+        targetUrl: 'http://localhost:8080',
+        timeBudget: 300,
+        mutationRate: 0.2,
+      });
+      prisma.apiSpecification.findUnique.mockResolvedValue({
+        fileContent: 'openapi: 3.0.0',
+      });
+      engine.startRun.mockResolvedValue({
+        jobId: 'job-1',
+        status: 'pending',
+        error: null,
+      });
+      prisma.testSuite.update.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.running,
+        jobId: 'job-1',
+      });
+    }
+
+    it('starts a run: calls the engine and moves the suite to running', async () => {
+      stubRunnableSuite();
+
+      const result = await service.run(PROJECT_ID, SUITE_ID, USER_ID);
+
+      expect(access.assertAccess).toHaveBeenCalledWith(PROJECT_ID, USER_ID, [
+        Role.admin,
+        Role.tester,
+      ]);
+      expect(engine.startRun).toHaveBeenCalledWith({
+        spec: 'openapi: 3.0.0',
+        targetUrl: 'http://localhost:8080',
+        timeBudget: 300,
+        mutationRate: 0.2,
+      });
+      const updateCalls = prisma.testSuite.update.mock.calls as Array<
+        [{ data: { status: SuiteStatus; jobId: string } }]
+      >;
+      expect(updateCalls[0][0].data.status).toBe(SuiteStatus.running);
+      expect(updateCalls[0][0].data.jobId).toBe('job-1');
+      expect(result.status).toBe(SuiteStatus.running);
+    });
+
+    it('404s when the suite is not in the project', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue(null);
+
+      await expect(service.run(PROJECT_ID, SUITE_ID, USER_ID)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(engine.startRun).not.toHaveBeenCalled();
+    });
+
+    it('409s when the suite is already running', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.running,
+        targetUrl: 'http://x',
+        timeBudget: 60,
+        mutationRate: 0.2,
+      });
+
+      await expect(service.run(PROJECT_ID, SUITE_ID, USER_ID)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(engine.startRun).not.toHaveBeenCalled();
+    });
+
+    it('400s when the project has no spec', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.pending,
+        targetUrl: 'http://x',
+        timeBudget: 60,
+        mutationRate: 0.2,
+      });
+      prisma.apiSpecification.findUnique.mockResolvedValue(null);
+
+      await expect(service.run(PROJECT_ID, SUITE_ID, USER_ID)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(engine.startRun).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('persistResults', () => {
+    const result = {
+      summary: {
+        totalOperations: 2,
+        successfullyProcessed: 1,
+        coveragePct: 50,
+        totalRequests: 30,
+        statusCodeDistribution: { '200': 21, '404': 6, '500': 3 },
+        uniqueServerErrors: 3,
+        operationsWithServerErrors: 1,
+      },
+      operations: [
+        {
+          operationId: 'listPets',
+          method: 'GET',
+          path: '/pets',
+          statusCodes: { '200': 20 },
+          totalRequests: 20,
+          passed: true,
+          serverErrors: [],
+        },
+        {
+          operationId: 'delPet',
+          method: 'DELETE',
+          path: '/pets/{id}',
+          statusCodes: { '500': 3 },
+          totalRequests: 3,
+          passed: false,
+          serverErrors: [{ status_code: 500 }],
+        },
+        {
+          operationId: 'ghost',
+          method: 'PUT',
+          path: '/not-in-project',
+          statusCodes: { '200': 1 },
+          totalRequests: 1,
+          passed: true,
+          serverErrors: [],
+        },
+      ],
+      operationStatusCodes: {},
+      serverErrors: {},
+      rawReport: {},
+    };
+
+    it('computes counters and creates a TestCase per matched endpoint', async () => {
+      prisma.endpoint.findMany.mockResolvedValue([
+        { id: 'ep-get', method: HttpMethod.GET, path: '/pets' },
+        { id: 'ep-del', method: HttpMethod.DELETE, path: '/pets/{id}' },
+      ]);
+
+      await (
+        service as unknown as {
+          persistResults: (p: string, s: string, r: unknown) => Promise<void>;
+        }
+      ).persistResults(PROJECT_ID, SUITE_ID, result);
+
+      // Only the two matched operations become rows; "ghost" is skipped.
+      const createCalls = prisma.testCase.createMany.mock.calls as Array<
+        [{ data: Array<{ endpointId: string; passed: boolean }> }]
+      >;
+      const rows = createCalls[0][0].data;
+      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.endpointId).sort()).toEqual([
+        'ep-del',
+        'ep-get',
+      ]);
+
+      const updateCalls = prisma.testSuite.update.mock.calls as Array<
+        [
+          {
+            data: {
+              status: SuiteStatus;
+              passedTestCases: number;
+              failedTestCases: number;
+              totalTestCases: number;
+              coveredEndpoints: number;
+            };
+          },
+        ]
+      >;
+      const data = updateCalls[0][0].data;
+      expect(data.status).toBe(SuiteStatus.completed);
+      expect(data.totalTestCases).toBe(30);
+      expect(data.passedTestCases).toBe(21); // only 2xx
+      expect(data.failedTestCases).toBe(9);
+      expect(data.coveredEndpoints).toBe(1);
+    });
+  });
+
+  describe('findTestCases', () => {
+    it('returns flattened per-endpoint rows for a member', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue({ id: SUITE_ID });
+      prisma.testCase.findMany.mockResolvedValue([
+        {
+          id: 'tc-1',
+          endpointId: 'ep-1',
+          statusCode: 200,
+          passed: true,
+          responseBody: { '200': 20 },
+          failureExplanation: null,
+          createdAt: new Date(),
+          endpoint: { method: HttpMethod.GET, path: '/pets' },
+        },
+      ]);
+
+      const rows = await service.findTestCases(PROJECT_ID, SUITE_ID, USER_ID);
+
+      expect(access.assertAccess).toHaveBeenCalledWith(PROJECT_ID, USER_ID);
+      expect(rows[0]).toMatchObject({
+        endpointId: 'ep-1',
+        method: HttpMethod.GET,
+        path: '/pets',
+        passed: true,
+      });
+    });
+
+    it('404s when the suite is not in the project', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findTestCases(PROJECT_ID, SUITE_ID, USER_ID),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });
