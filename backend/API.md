@@ -21,6 +21,7 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 4 | Endpoints | `/projects/:projectId/endpoints` | ✅ |
 | 5 | Test Suites + Execution | `/projects/:projectId/test-suites` | ✅ |
 | 6 | Results / Reports | `/projects/:projectId/test-suites/:suiteId/report` | ✅ |
+| 7 | Team Collaboration | `/projects/:projectId/{invitations,members}` · `/invitations` | ✅ |
 
 ---
 
@@ -51,6 +52,16 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 21 | `GET` | `/projects/:projectId/test-suites/:suiteId/report` | 🔒 | Any member | Computed results report (JSON) |
 | 22 | `GET` | `/projects/:projectId/test-suites/:suiteId/report/export?format=csv\|pdf` | 🔒 | Any member | Download report as CSV or PDF |
 | 23 | `POST` | `/projects/:projectId/test-suites/:suiteId/explain` | 🔒 | Owner / admin / tester | Generate LLM failure explanations |
+| 24 | `POST` | `/projects/:projectId/invitations` | 🔒 | Owner / admin | Invite a user by email |
+| 25 | `GET` | `/projects/:projectId/invitations` | 🔒 | Owner / admin | List a project's invitations |
+| 26 | `DELETE` | `/projects/:projectId/invitations/:invitationId` | 🔒 | Owner / admin | Revoke a pending invitation |
+| 27 | `GET` | `/projects/:projectId/members` | 🔒 | Any member | List owner + members |
+| 28 | `PATCH` | `/projects/:projectId/members/:userId` | 🔒 | Owner / admin | Change a member's role |
+| 29 | `DELETE` | `/projects/:projectId/members/:userId` | 🔒 | Owner / admin | Remove a member |
+| 30 | `DELETE` | `/projects/:projectId/members/me` | 🔒 | Any member | Leave the project |
+| 31 | `GET` | `/invitations` | 🔒 | Logged-in user | My pending invitations |
+| 32 | `POST` | `/invitations/:token/accept` | 🔒 | Invited user | Accept an invitation |
+| 33 | `POST` | `/invitations/:token/decline` | 🔒 | Invited user | Decline an invitation |
 
 ---
 
@@ -424,6 +435,62 @@ and **caches** a plain-language explanation onto each failed test case.
 **Response `200 OK`** — the failed endpoints with populated `failureExplanation`.
 Requires `LLM_MODE=mock` (offline canned text) or a real `LLM_API_KEY`.
 **Errors:** `403` not owner/admin/tester · `404`/`409` as above · `503` LLM not configured.
+
+---
+
+## Module 7 — Team Collaboration
+
+> Project-scoped routes require `Authorization: Bearer <accessToken>`; `:projectId`,
+> `:invitationId`, `:userId` must be valid **UUIDs**. The `/invitations` routes are
+> for the *invitee* (they may not be a project member yet), so they're not
+> project-scoped. **No email is sent** — the invite response returns the shareable
+> `token` + `acceptUrl`.
+
+### 24. Invite by email — `POST /projects/:projectId/invitations`  (owner/admin)
+
+**Body:** `{ "email": "bob@example.com", "role": "tester" }` (`role` ∈ `admin|tester|viewer`).
+
+**Response `201 Created`**
+
+```json
+{
+  "id": "…", "email": "bob@example.com", "role": "tester",
+  "status": "pending", "token": "8900fff2…",
+  "acceptUrl": "/invitations/8900fff2…/accept",
+  "expiresAt": "2026-07-08T…", "createdAt": "2026-07-01T…"
+}
+```
+Share `token`/`acceptUrl` with the invitee. **Errors:** `400` email is the owner · `403` not owner/admin · `409` already a member **or** a pending invite already exists.
+
+### 25–26. List / revoke invitations  (owner/admin)
+`GET …/invitations` → all invitations (any status) with their links.
+`DELETE …/invitations/:invitationId` → `{ "message": "Invitation revoked" }` (`404` if not found).
+
+### 27. List members — `GET /projects/:projectId/members`  (any member)
+
+```json
+{
+  "owner": { "userId": "…", "username": "alice", "email": "a@x.com" },
+  "members": [
+    { "userId": "…", "username": "bob", "email": "b@x.com", "role": "tester", "joinedAt": "…" }
+  ]
+}
+```
+
+### 28–30. Manage members
+- `PATCH …/members/:userId` `{ "role": "admin" }` (owner/admin) → updated member; `404` if not a member.
+- `DELETE …/members/:userId` (owner/admin) → `{ "message": "Member removed" }`.
+- `DELETE …/members/me` (any member) → leave; `400` if you're the owner.
+
+### 31. My invitations — `GET /invitations`
+
+**Response `200 OK`** — the caller's **pending, non-expired** invitations (matched to their account email), each with `projectName`, `role`, `token`, `invitedBy`.
+
+### 32–33. Accept / decline — `POST /invitations/:token/accept|decline`
+
+Accept creates the membership and marks the invite `accepted`. **The caller's account
+email must equal the invited email** (`403` otherwise). **Errors:** `404` unknown token ·
+`403` wrong email · `409` already accepted/declined · `410` expired.
 
 ---
 
