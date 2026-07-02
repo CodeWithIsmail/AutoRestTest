@@ -59,6 +59,29 @@ export function methodTone(method: string): Tone {
   }
 }
 
+/** Maps a test-suite status to a badge tone. */
+export function statusTone(status: string): Tone {
+  switch (status) {
+    case "completed":
+      return "emerald";
+    case "running":
+      return "blue";
+    case "failed":
+      return "red";
+    default:
+      return "zinc"; // pending
+  }
+}
+
+/** A capitalized status badge for test-suite runs. */
+export function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge tone={statusTone(status)}>
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </Badge>
+  );
+}
+
 /** A fixed-width, monospace HTTP-method badge for endpoint tables. */
 export function MethodBadge({ method }: { method: string }) {
   return (

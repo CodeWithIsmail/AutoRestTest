@@ -111,3 +111,48 @@ export async function apiFetch<T>(
 
   return data as T;
 }
+
+/**
+ * Fetches a file behind auth (e.g. a report export) as a blob and triggers a
+ * browser download. Kept here so the base URL + token stay encapsulated.
+ */
+export async function apiDownload(
+  path: string,
+  filename: string,
+): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { headers });
+  } catch {
+    throw new ApiError(0, "Cannot reach the server. Is the backend running?");
+  }
+
+  if (!res.ok) {
+    // Error responses are JSON, not a file — surface the backend message.
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(
+      res.status,
+      extractMessage(data, `Download failed (${res.status})`),
+    );
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

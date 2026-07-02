@@ -12,6 +12,11 @@ interface ProjectContextValue {
    * true for the owner or any admin member.
    */
   canManage: boolean;
+  /**
+   * Whether the current user can configure and trigger test runs:
+   * true for the owner, admins, or testers.
+   */
+  canRun: boolean;
   /** Refetch the project (e.g. after an edit or membership change). */
   reload: () => void;
 }

@@ -6,8 +6,13 @@ import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toast";
 import { Spinner } from "@/components/ui/Spinner";
+import { listMyInvitations } from "@/lib/collaboration";
+import { useApi } from "@/lib/useApi";
 
-const NAV = [{ href: "/projects", label: "Projects" }];
+const NAV = [
+  { href: "/projects", label: "Projects" },
+  { href: "/invitations", label: "Invitations" },
+];
 
 export default function AppLayout({
   children,
@@ -18,6 +23,9 @@ export default function AppLayout({
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
   const toast = useToast();
+  // Pending-invite count powers the sidebar badge (the invitee's notification).
+  const { data: myInvites } = useApi(listMyInvitations, []);
+  const pendingInvites = myInvites?.length ?? 0;
 
   // Guard: once the initial auth check is done, redirect out if not signed in.
   useEffect(() => {
@@ -54,17 +62,24 @@ export default function AppLayout({
           {NAV.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const showBadge =
+              item.href === "/invitations" && pendingInvites > 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   active
                     ? "bg-emerald-500/10 text-emerald-400"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                 }`}
               >
-                {item.label}
+                <span>{item.label}</span>
+                {showBadge && (
+                  <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-xs font-semibold text-white">
+                    {pendingInvites}
+                  </span>
+                )}
               </Link>
             );
           })}

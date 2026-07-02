@@ -99,3 +99,129 @@ export interface CreateEndpointInput {
   path: string;
   description?: string;
 }
+
+// --- test suites + execution ------------------------------------------------
+
+export type SuiteStatus = "pending" | "running" | "completed" | "failed";
+
+export interface TestSuiteSummary {
+  id: string;
+  name: string | null;
+  status: SuiteStatus;
+  targetUrl: string;
+  timeBudget: number;
+  mutationRate: number;
+  totalEndpoints: number;
+  coveredEndpoints: number;
+  totalTestCases: number;
+  passedTestCases: number;
+  failedTestCases: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface TestSuiteDetail extends TestSuiteSummary {
+  jobId: string | null;
+  triggeredById: string;
+}
+
+export interface TestCaseItem {
+  id: string;
+  endpointId: string;
+  method: HttpMethod;
+  path: string;
+  statusCode: number | null;
+  passed: boolean;
+  responseBody: unknown;
+  failureExplanation: string | null;
+  createdAt: string;
+}
+
+export interface CreateTestSuiteInput {
+  name?: string;
+  targetUrl: string;
+  timeBudget: number;
+  mutationRate?: number;
+}
+
+// --- reports ----------------------------------------------------------------
+
+export interface ReportEndpoint {
+  endpointId: string;
+  method: HttpMethod;
+  path: string;
+  passed: boolean;
+  statusCodes: Record<string, number>;
+  hasServerErrors: boolean;
+  failureExplanation: string | null;
+}
+
+export interface SuiteReport {
+  overview: {
+    suiteId: string;
+    name: string | null;
+    status: SuiteStatus;
+    targetUrl: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    durationSeconds: number | null;
+    totalEndpoints: number;
+    coveredEndpoints: number;
+    coveragePct: number;
+    totalTestCases: number;
+    passedTestCases: number;
+    failedTestCases: number;
+    passRatePct: number;
+  };
+  statusCodeDistribution: Record<string, number>;
+  endpoints: ReportEndpoint[];
+  failures: ReportEndpoint[];
+}
+
+// --- collaboration ----------------------------------------------------------
+
+export type InvitationStatus = "pending" | "accepted" | "declined" | "expired";
+
+export interface MemberItem {
+  userId: string;
+  username: string;
+  email: string;
+  role: Role;
+  joinedAt: string;
+}
+
+export interface MemberList {
+  owner: { userId: string; username: string; email: string };
+  members: MemberItem[];
+}
+
+/** An invitation as seen by a project owner/admin. */
+export interface InvitationItem {
+  id: string;
+  email: string;
+  role: Role;
+  status: InvitationStatus;
+  token: string;
+  acceptUrl: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** An invitation as seen by the invitee. */
+export interface MyInvitationItem {
+  id: string;
+  projectId: string;
+  projectName: string;
+  role: Role;
+  token: string;
+  acceptUrl: string;
+  invitedBy: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface CreateInvitationInput {
+  email: string;
+  role: Role;
+}

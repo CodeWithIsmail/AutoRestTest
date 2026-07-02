@@ -14,11 +14,12 @@ import { ApiError } from "@/lib/api";
 import { deleteProject, getProject } from "@/lib/projects";
 import { useApi } from "@/lib/useApi";
 
-// Tabs grow as later slices add sections (Test Suites, Team).
 const TABS = [
   { label: "Overview", segment: "" },
   { label: "API Spec", segment: "spec" },
   { label: "Endpoints", segment: "endpoints" },
+  { label: "Test Suites", segment: "test-suites" },
+  { label: "Team", segment: "team" },
 ];
 
 export default function ProjectLayout({
@@ -66,9 +67,11 @@ export default function ProjectLayout({
   }
 
   const isOwner = project.ownerId === user?.id;
-  // Owner or an admin member can manage project content (spec, endpoints).
   const myRole = project.members.find((m) => m.userId === user?.id)?.role;
+  // Owner or admin can manage project content (spec, endpoints).
   const canManage = isOwner || myRole === "admin";
+  // Owner, admin, or tester can configure and trigger test runs.
+  const canRun = canManage || myRole === "tester";
   const base = `/projects/${project.id}`;
 
   async function onConfirmDelete() {
@@ -86,7 +89,9 @@ export default function ProjectLayout({
   }
 
   return (
-    <ProjectContext.Provider value={{ project, isOwner, canManage, reload }}>
+    <ProjectContext.Provider
+      value={{ project, isOwner, canManage, canRun, reload }}
+    >
       <div className="mx-auto max-w-5xl">
         {/* Breadcrumb */}
         <nav className="text-sm text-zinc-500">
@@ -132,7 +137,11 @@ export default function ProjectLayout({
           <div className="flex gap-6">
             {TABS.map((tab) => {
               const href = `${base}${tab.segment ? `/${tab.segment}` : ""}`;
-              const active = pathname === href;
+              // Overview matches exactly; other tabs also match their sub-routes
+              // (e.g. a suite detail keeps the "Test Suites" tab highlighted).
+              const active = tab.segment
+                ? pathname === href || pathname.startsWith(`${href}/`)
+                : pathname === href;
               return (
                 <Link
                   key={tab.label}
