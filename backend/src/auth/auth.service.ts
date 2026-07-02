@@ -107,12 +107,12 @@ export class AuthService {
     // Same error message whether the user does not exist or the password
     // is wrong — prevents user-enumeration attacks.
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password.');
     }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.password);
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password.');
     }
 
     const accessToken = await this.signAccessToken({
