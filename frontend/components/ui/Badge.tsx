@@ -40,3 +40,33 @@ export function roleTone(role: string): Tone {
       return "zinc";
   }
 }
+
+/** Maps an HTTP method to a badge tone (KushoAI-style colouring). */
+export function methodTone(method: string): Tone {
+  switch (method.toUpperCase()) {
+    case "GET":
+      return "emerald";
+    case "POST":
+      return "amber";
+    case "PUT":
+      return "blue";
+    case "PATCH":
+      return "purple";
+    case "DELETE":
+      return "red";
+    default:
+      return "zinc";
+  }
+}
+
+/** A fixed-width, monospace HTTP-method badge for endpoint tables. */
+export function MethodBadge({ method }: { method: string }) {
+  return (
+    <Badge
+      tone={methodTone(method)}
+      className="w-16 justify-center font-mono tracking-wide"
+    >
+      {method.toUpperCase()}
+    </Badge>
+  );
+}

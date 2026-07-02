@@ -67,3 +67,35 @@ export interface UpdateProjectInput {
   name?: string;
   description?: string;
 }
+
+// --- API spec + endpoints ---------------------------------------------------
+
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/** Full spec view (GET /projects/:id/spec). */
+export interface SpecDetail {
+  id: string;
+  fileName: string;
+  generatedByAI: boolean;
+  uploadedAt: string;
+  openapiVersion: string;
+  title: string;
+  endpointCount: number;
+  fileContent: string;
+}
+
+/** A single endpoint (GET /projects/:id/endpoints). */
+export interface EndpointItem {
+  id: string;
+  method: HttpMethod;
+  path: string;
+  description: string | null;
+  addedManually: boolean;
+  createdAt: string;
+}
+
+export interface CreateEndpointInput {
+  method: HttpMethod;
+  path: string;
+  description?: string;
+}

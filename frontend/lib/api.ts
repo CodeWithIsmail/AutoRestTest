@@ -68,8 +68,15 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const { method = "GET", body, auth = true } = opts;
 
+  // FormData (file uploads) must be sent as-is: let the browser set the
+  // multipart Content-Type + boundary, and don't JSON-stringify.
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (body !== undefined && !isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
   if (auth) {
     const token = getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -80,7 +87,12 @@ export async function apiFetch<T>(
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : isFormData
+            ? (body as FormData)
+            : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, "Cannot reach the server. Is the backend running?");

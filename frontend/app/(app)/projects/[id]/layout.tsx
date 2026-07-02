@@ -14,8 +14,12 @@ import { ApiError } from "@/lib/api";
 import { deleteProject, getProject } from "@/lib/projects";
 import { useApi } from "@/lib/useApi";
 
-// Tabs grow as later slices add sections (Spec, Endpoints, Test Suites, Team).
-const TABS = [{ label: "Overview", segment: "" }];
+// Tabs grow as later slices add sections (Test Suites, Team).
+const TABS = [
+  { label: "Overview", segment: "" },
+  { label: "API Spec", segment: "spec" },
+  { label: "Endpoints", segment: "endpoints" },
+];
 
 export default function ProjectLayout({
   children,
@@ -62,6 +66,9 @@ export default function ProjectLayout({
   }
 
   const isOwner = project.ownerId === user?.id;
+  // Owner or an admin member can manage project content (spec, endpoints).
+  const myRole = project.members.find((m) => m.userId === user?.id)?.role;
+  const canManage = isOwner || myRole === "admin";
   const base = `/projects/${project.id}`;
 
   async function onConfirmDelete() {
@@ -79,7 +86,7 @@ export default function ProjectLayout({
   }
 
   return (
-    <ProjectContext.Provider value={{ project, isOwner, reload }}>
+    <ProjectContext.Provider value={{ project, isOwner, canManage, reload }}>
       <div className="mx-auto max-w-5xl">
         {/* Breadcrumb */}
         <nav className="text-sm text-zinc-500">
