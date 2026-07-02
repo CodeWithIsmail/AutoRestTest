@@ -70,7 +70,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <div
               key={t.id}
               role="status"
-              className={`pointer-events-auto flex items-start gap-3 rounded-lg border border-l-4 border-zinc-200 bg-white px-4 py-3 shadow-lg ${style.bar}`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-lg border border-l-4 border-zinc-700 bg-zinc-900 px-4 py-3 shadow-lg shadow-black/40 ${style.bar}`}
             >
               <svg
                 className={`mt-0.5 h-5 w-5 shrink-0 ${style.icon}`}
@@ -86,11 +86,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   d={ICONS[t.variant]}
                 />
               </svg>
-              <p className="flex-1 text-sm text-zinc-800">{t.message}</p>
+              <p className="flex-1 text-sm text-zinc-100">{t.message}</p>
               <button
                 onClick={() => dismiss(t.id)}
                 aria-label="Dismiss"
-                className="shrink-0 rounded p-0.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600"
+                className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
               >
                 <svg
                   className="h-4 w-4"
