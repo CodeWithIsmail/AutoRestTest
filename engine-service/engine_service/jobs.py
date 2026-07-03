@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .config import Config
-from . import runner
+from . import proxy, runner
 
 
 def _now() -> str:
@@ -53,6 +53,10 @@ class JobManager:
         self.cfg = cfg
         self._jobs: Dict[str, Job] = {}
         self._params: Dict[str, Dict[str, Any]] = {}
+        # Per-job capture context for the recording proxy, keyed by job id:
+        # {target, matcher, seq, lock, dir}. Present only while a real run is
+        # in flight (the proxy is only reachable during that window).
+        self._proxy: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._queue: "queue.Queue[str]" = queue.Queue()
         cfg.jobs_dir.mkdir(parents=True, exist_ok=True)
@@ -90,10 +94,62 @@ class JobManager:
         with self._lock:
             existed = self._jobs.pop(job_id, None) is not None
             self._params.pop(job_id, None)
+            self._proxy.pop(job_id, None)
         job_dir = self._job_dir(job_id)
         if job_dir.exists():
             shutil.rmtree(job_dir, ignore_errors=True)
         return existed
+
+    # -- recording proxy ---------------------------------------------------- #
+    def _register_proxy(
+        self, job_id: str, target: str, spec_text: str, job_dir: Path
+    ) -> None:
+        ctx = {
+            "target": target,
+            "matcher": proxy.PathMatcher(spec_text),
+            "seq": [0],
+            "lock": threading.Lock(),
+            "file": job_dir / "requests.jsonl",
+        }
+        # Start each run with a clean capture file.
+        try:
+            (job_dir / "requests.jsonl").unlink()
+        except FileNotFoundError:
+            pass
+        with self._lock:
+            self._proxy[job_id] = ctx
+
+    def get_proxy(self, job_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            return self._proxy.get(job_id)
+
+    def record_request(self, job_id: str, record: Dict[str, Any]) -> Optional[int]:
+        """Append one captured request/response to the job's capture file.
+        Returns the assigned sequence number, or None if the job isn't
+        capturing (e.g. it finished)."""
+        ctx = self.get_proxy(job_id)
+        if ctx is None:
+            return None
+        with ctx["lock"]:
+            seq = ctx["seq"][0]
+            ctx["seq"][0] += 1
+            record = {"seq": seq, "timestamp": _now(), **record}
+            with ctx["file"].open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        return seq
+
+    def read_requests(self, job_id: str) -> list[Dict[str, Any]]:
+        """Read all captured request records for a completed job."""
+        path = self._job_dir(job_id) / "requests.jsonl"
+        if not path.exists():
+            return []
+        records: list[Dict[str, Any]] = []
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+        return records
 
     # -- worker ------------------------------------------------------------- #
     def _run_worker(self) -> None:
@@ -119,30 +175,48 @@ class JobManager:
         job_dir = self._job_dir(job_id)
         job_dir.mkdir(parents=True, exist_ok=True)
 
-        runner.validate_target_url(params["targetUrl"])
-        spec_text = runner.inject_target_url(params["spec"], params["targetUrl"])
-        spec_path = job_dir / f"{spec_name}.yaml"
-        spec_path.write_text(spec_text, encoding="utf-8")
+        real_target = params["targetUrl"]
+        runner.validate_target_url(real_target)
 
         time_budget = int(params["timeBudget"])
         output_dir = self.cfg.core_dir / "data" / spec_name
 
-        if self.cfg.is_mock:
-            runner.run_mock(output_dir, spec_text, time_budget)
-        else:
-            toml_text = runner.render_config_toml(
-                spec_location=str(spec_path),
-                time_duration=time_budget,
-                mutation_rate=float(params.get("mutationRate", 0.2)),
-                llm_engine=params.get("llmEngine") or self.cfg.llm_engine,
-                llm_api_base=self.cfg.llm_api_base,
-                # Per-run authHeader wins; otherwise fall back to a service-wide
-                # TEST_AUTH_HEADER env var (temporary shortcut for testing auth'd
-                # endpoints before the per-suite auth field is built).
-                auth_header=params.get("authHeader") or os.getenv("TEST_AUTH_HEADER"),
-            )
-            runner.run_real(self.cfg, spec_path, time_budget, toml_text)
+        try:
+            if self.cfg.is_mock:
+                # Mock never sends real requests, so no proxy/capture is needed.
+                spec_text = runner.inject_target_url(params["spec"], real_target)
+                spec_path = job_dir / f"{spec_name}.yaml"
+                spec_path.write_text(spec_text, encoding="utf-8")
+                runner.run_mock(output_dir, spec_text, time_budget)
+            else:
+                # Point the engine at our recording proxy; it forwards to the
+                # real target and logs every request/response for this job.
+                proxy_base = f"http://127.0.0.1:{self.cfg.port}/proxy/{job_id}"
+                self._register_proxy(job_id, real_target, params["spec"], job_dir)
+                spec_text = runner.inject_target_url(params["spec"], proxy_base)
+                spec_path = job_dir / f"{spec_name}.yaml"
+                spec_path.write_text(spec_text, encoding="utf-8")
 
+                toml_text = runner.render_config_toml(
+                    spec_location=str(spec_path),
+                    time_duration=time_budget,
+                    mutation_rate=float(params.get("mutationRate", 0.2)),
+                    llm_engine=params.get("llmEngine") or self.cfg.llm_engine,
+                    llm_api_base=self.cfg.llm_api_base,
+                    # Per-run authHeader wins; otherwise fall back to a service-wide
+                    # TEST_AUTH_HEADER env var (temporary shortcut for testing auth'd
+                    # endpoints before the per-suite auth field is built).
+                    auth_header=params.get("authHeader")
+                    or os.getenv("TEST_AUTH_HEADER"),
+                )
+                runner.run_real(self.cfg, spec_path, time_budget, toml_text)
+        finally:
+            # Stop accepting proxy traffic for this job once the engine exits.
+            with self._lock:
+                self._proxy.pop(job_id, None)
+
+        # collect_outputs only reads paths from the spec, so the proxy-injected
+        # servers URL is irrelevant here.
         result = runner.collect_outputs(output_dir, spec_text)
         with (job_dir / "result.json").open("w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)

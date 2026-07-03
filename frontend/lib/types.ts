@@ -145,6 +145,55 @@ export interface CreateTestSuiteInput {
   mutationRate?: number;
 }
 
+// --- captured requests (recording proxy) ------------------------------------
+
+/** Per-endpoint rollup of captured requests for a run. */
+export interface RequestLogEndpointSummary {
+  endpointId: string | null;
+  method: string | null;
+  path: string | null;
+  total: number;
+  passed: number;
+  failed: number;
+  statusClasses: Record<string, number>;
+}
+
+/** Lightweight row in the paginated captured-request list. */
+export interface RequestLogListItem {
+  id: string;
+  seq: number;
+  method: string;
+  path: string;
+  statusCode: number | null;
+  durationMs: number | null;
+}
+
+export interface RequestLogPage {
+  items: RequestLogListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Full captured request/response for the expandable detail row. */
+export interface RequestLogDetail {
+  id: string;
+  seq: number;
+  endpointId: string | null;
+  method: string;
+  path: string;
+  url: string;
+  statusCode: number | null;
+  durationMs: number | null;
+  requestHeaders: Record<string, string> | null;
+  requestBody: string | null;
+  requestTruncated: boolean;
+  responseHeaders: Record<string, string> | null;
+  responseBody: string | null;
+  responseTruncated: boolean;
+  createdAt: string;
+}
+
 // --- reports ----------------------------------------------------------------
 
 export interface ReportEndpoint {

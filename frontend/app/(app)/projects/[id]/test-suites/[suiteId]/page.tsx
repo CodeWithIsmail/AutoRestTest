@@ -347,10 +347,16 @@ export default function SuiteDetailPage() {
 
             {/* Per-endpoint results */}
             <Card className="overflow-hidden">
-              <div className="border-b border-zinc-800 px-5 py-3">
+              <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-5 py-3">
                 <h3 className="text-sm font-semibold text-zinc-200">
                   Per-endpoint results
                 </h3>
+                <Link
+                  href={`${backLink}/${suite.id}/requests/all`}
+                  className="shrink-0 text-xs font-medium text-emerald-500 hover:text-emerald-400"
+                >
+                  View all captured requests →
+                </Link>
               </div>
               {report.endpoints.length === 0 ? (
                 <p className="px-5 py-10 text-center text-sm text-zinc-500">
@@ -365,6 +371,7 @@ export default function SuiteDetailPage() {
                       <th className="px-5 py-3 font-medium">Result</th>
                       <th className="px-5 py-3 font-medium">Status codes</th>
                       <th className="px-5 py-3 font-medium">Notes</th>
+                      <th className="px-5 py-3 font-medium">Requests</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -411,6 +418,14 @@ export default function SuiteDetailPage() {
                             <span className="text-xs text-zinc-500">
                               {e.failureExplanation || "—"}
                             </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <Link
+                              href={`${backLink}/${suite.id}/requests/${e.endpointId}`}
+                              className="text-xs font-medium text-emerald-500 hover:text-emerald-400"
+                            >
+                              View →
+                            </Link>
                           </td>
                         </tr>
                       );

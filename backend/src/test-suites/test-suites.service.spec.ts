@@ -38,6 +38,7 @@ describe('TestSuitesService', () => {
     startRun: jest.Mock;
     getStatus: jest.Mock;
     getResult: jest.Mock;
+    getRequests: jest.Mock;
   };
 
   beforeEach(() => {
@@ -56,6 +57,13 @@ describe('TestSuitesService', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      requestLog: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn(),
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+      },
       $transaction: jest.fn((cb: (tx: typeof prisma) => unknown) => cb(prisma)),
     };
     access = { assertAccess: jest.fn().mockResolvedValue(undefined) };
@@ -63,6 +71,7 @@ describe('TestSuitesService', () => {
       startRun: jest.fn(),
       getStatus: jest.fn(),
       getResult: jest.fn(),
+      getRequests: jest.fn().mockResolvedValue([]),
     };
     service = new TestSuitesService(
       prisma as unknown as PrismaService,
@@ -384,9 +393,14 @@ describe('TestSuitesService', () => {
 
       await (
         service as unknown as {
-          persistResults: (p: string, s: string, r: unknown) => Promise<void>;
+          persistResults: (
+            p: string,
+            s: string,
+            j: string,
+            r: unknown,
+          ) => Promise<void>;
         }
-      ).persistResults(PROJECT_ID, SUITE_ID, result);
+      ).persistResults(PROJECT_ID, SUITE_ID, 'job-1', result);
 
       // Only the two matched operations become rows; "ghost" is skipped.
       const createCalls = prisma.testCase.createMany.mock.calls as Array<

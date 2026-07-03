@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
+from . import proxy
 from .config import Config
 from .jobs import JobManager
 
 bp = Blueprint("engine", __name__)
 
 _REQUIRED_FIELDS = ("spec", "targetUrl", "timeBudget")
+
+# Methods the recording proxy accepts and forwards.
+_PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
 def _cfg() -> Config:
@@ -24,7 +28,9 @@ def _manager() -> JobManager:
 
 @bp.before_request
 def _check_token():
-    if request.path == "/health":
+    # /health and the internal recording proxy (called by the engine subprocess,
+    # which has no service token) are exempt from token auth.
+    if request.path == "/health" or request.path.startswith("/proxy/"):
         return None
     token = _cfg().service_token
     if token and request.headers.get("X-Service-Token") != token:
@@ -97,8 +103,52 @@ def get_result(job_id: str):
     return jsonify(result)
 
 
+@bp.get("/runs/<job_id>/requests")
+def get_requests(job_id: str):
+    manager = _manager()
+    if manager.get(job_id) is None:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify({"requests": manager.read_requests(job_id)})
+
+
 @bp.delete("/runs/<job_id>")
 def delete_run(job_id: str):
     if not _manager().delete(job_id):
         return jsonify({"error": "Job not found"}), 404
     return jsonify({"message": "Job deleted"})
+
+
+# --------------------------------------------------------------------------- #
+# Recording proxy — the engine sends its requests here; we forward to the real
+# target and capture every request/response for the job.
+# --------------------------------------------------------------------------- #
+@bp.route("/proxy/<job_id>", defaults={"subpath": ""}, methods=_PROXY_METHODS)
+@bp.route("/proxy/<job_id>/<path:subpath>", methods=_PROXY_METHODS)
+def proxy_forward(job_id: str, subpath: str):
+    manager = _manager()
+    ctx = manager.get_proxy(job_id)
+    if ctx is None:
+        # Job isn't capturing (finished/unknown) — the engine shouldn't be
+        # hitting us; report a gateway error rather than forwarding blindly.
+        return jsonify({"error": "No active capture for this job"}), 502
+
+    record = proxy.forward(
+        target=ctx["target"],
+        subpath=subpath,
+        query_string=request.query_string,
+        method=request.method,
+        headers=dict(request.headers),
+        body=request.get_data(),
+    )
+
+    raw_path = "/" + subpath.strip("/") if subpath.strip("/") else "/"
+    record["path"] = raw_path
+    record["endpointPath"] = ctx["matcher"].match(request.method, raw_path)
+
+    # Split the internal return-only fields from the persisted record.
+    return_headers = record.pop("_returnHeaders")
+    return_body = record.pop("_returnBody")
+    return_status = record.pop("_returnStatus")
+    manager.record_request(job_id, record)
+
+    return Response(return_body, status=return_status, headers=return_headers)

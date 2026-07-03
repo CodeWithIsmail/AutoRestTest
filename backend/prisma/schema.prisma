@@ -183,7 +183,8 @@ model Endpoint {
   addedManually Boolean    @default(false)
   createdAt     DateTime   @default(now())
 
-  testCases TestCase[]
+  testCases   TestCase[]
+  requestLogs RequestLog[]
 
   @@unique([projectId, method, path])
   @@index([projectId])
@@ -223,7 +224,8 @@ model TestSuite {
   completedAt DateTime?
   createdAt   DateTime  @default(now())
 
-  testCases TestCase[]
+  testCases   TestCase[]
+  requestLogs RequestLog[]
 
   @@index([projectId])
   @@map("test_suites")
@@ -256,4 +258,39 @@ model TestCase {
   @@index([testSuiteId])
   @@index([endpointId])
   @@map("test_cases")
+}
+
+// ----------------------------------------------------------------------------
+// RequestLog model — one captured request/response from the recording proxy.
+// Unlike TestCase (a per-endpoint aggregate), this stores EVERY individual
+// request the engine sent during a run, with the full request and response, so
+// the user can inspect exactly what was sent and what came back. Endpoint is
+// optional because a captured request may not map to a known spec path.
+// ----------------------------------------------------------------------------
+model RequestLog {
+  id          String    @id @default(uuid())
+  testSuiteId String
+  testSuite   TestSuite @relation(fields: [testSuiteId], references: [id], onDelete: Cascade)
+  endpointId  String?
+  endpoint    Endpoint? @relation(fields: [endpointId], references: [id], onDelete: SetNull)
+
+  seq        Int // order the request was sent within the run
+  method     String
+  path       String // concrete path the engine hit, e.g. /users/42
+  url        String // full forwarded URL
+  statusCode Int?
+  durationMs Int?
+
+  requestHeaders    Json?
+  requestBody       String?
+  requestTruncated  Boolean @default(false)
+  responseHeaders   Json?
+  responseBody      String?
+  responseTruncated Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([testSuiteId, endpointId])
+  @@index([testSuiteId, statusCode])
+  @@map("request_logs")
 }

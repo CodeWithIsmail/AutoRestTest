@@ -13,7 +13,11 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectAccessService } from '../common/project-access.service';
-import { EngineResult, EngineService } from '../engine/engine.service';
+import {
+  EngineRequestRecord,
+  EngineResult,
+  EngineService,
+} from '../engine/engine.service';
 import { CreateTestSuiteDto } from './dto/create-test-suite.dto';
 
 /** Run configuration + results summary as returned in list views. */
@@ -51,6 +55,70 @@ export interface TestCaseItem {
   responseBody: unknown;
   failureExplanation: string | null;
   createdAt: Date;
+}
+
+/** Per-endpoint rollup of captured requests for a run. */
+export interface RequestLogEndpointSummary {
+  endpointId: string | null;
+  method: string | null;
+  path: string | null;
+  total: number;
+  passed: number; // 2xx responses
+  failed: number; // non-2xx responses
+  statusClasses: Record<string, number>; // '2xx' | '3xx' | '4xx' | '5xx' | 'other'
+}
+
+/** Lightweight row for the paginated per-endpoint request list. */
+export interface RequestLogListItem {
+  id: string;
+  seq: number;
+  method: string;
+  path: string;
+  statusCode: number | null;
+  durationMs: number | null;
+}
+
+export interface RequestLogPage {
+  items: RequestLogListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Full captured request/response for the expandable detail view. */
+export interface RequestLogDetail {
+  id: string;
+  seq: number;
+  endpointId: string | null;
+  method: string;
+  path: string;
+  url: string;
+  statusCode: number | null;
+  durationMs: number | null;
+  requestHeaders: unknown;
+  requestBody: string | null;
+  requestTruncated: boolean;
+  responseHeaders: unknown;
+  responseBody: string | null;
+  responseTruncated: boolean;
+  createdAt: Date;
+}
+
+function statusClassRange(
+  cls?: string,
+): { gte: number; lt: number } | undefined {
+  switch (cls) {
+    case '2xx':
+      return { gte: 200, lt: 300 };
+    case '3xx':
+      return { gte: 300, lt: 400 };
+    case '4xx':
+      return { gte: 400, lt: 500 };
+    case '5xx':
+      return { gte: 500, lt: 600 };
+    default:
+      return undefined;
+  }
 }
 
 // select projection shared by the two read shapes.
@@ -257,6 +325,7 @@ export class TestSuitesService {
         passedTestCases: 0,
         failedTestCases: 0,
         testCases: { deleteMany: {} },
+        requestLogs: { deleteMany: {} },
       },
       select: DETAIL_SELECT,
     });
@@ -313,6 +382,196 @@ export class TestSuitesService {
   }
 
   // --------------------------------------------------------------------------
+  // getRequestLogSummary — GET .../test-suites/:suiteId/request-logs/summary
+  // Per-endpoint counts of captured requests. Any project member.
+  // --------------------------------------------------------------------------
+  async getRequestLogSummary(
+    projectId: string,
+    suiteId: string,
+    userId: string,
+  ): Promise<RequestLogEndpointSummary[]> {
+    await this.access.assertAccess(projectId, userId);
+    await this.assertSuiteInProject(projectId, suiteId);
+
+    const logs = await this.prisma.requestLog.findMany({
+      where: { testSuiteId: suiteId },
+      select: { endpointId: true, statusCode: true },
+    });
+
+    // Aggregate per endpoint (null endpointId = unmatched bucket).
+    const acc = new Map<
+      string,
+      { endpointId: string | null; total: number; classes: Map<string, number> }
+    >();
+    for (const l of logs) {
+      const key = l.endpointId ?? '__unmatched__';
+      let entry = acc.get(key);
+      if (!entry) {
+        entry = { endpointId: l.endpointId, total: 0, classes: new Map() };
+        acc.set(key, entry);
+      }
+      entry.total += 1;
+      const cls =
+        l.statusCode == null
+          ? 'other'
+          : l.statusCode >= 200 && l.statusCode < 300
+            ? '2xx'
+            : l.statusCode >= 300 && l.statusCode < 400
+              ? '3xx'
+              : l.statusCode >= 400 && l.statusCode < 500
+                ? '4xx'
+                : l.statusCode >= 500
+                  ? '5xx'
+                  : 'other';
+      entry.classes.set(cls, (entry.classes.get(cls) ?? 0) + 1);
+    }
+
+    // Resolve method/path for matched endpoints.
+    const ids = [...acc.values()]
+      .map((e) => e.endpointId)
+      .filter((id): id is string => id !== null);
+    const endpoints = ids.length
+      ? await this.prisma.endpoint.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, method: true, path: true },
+        })
+      : [];
+    const meta = new Map(endpoints.map((e) => [e.id, e]));
+
+    const result: RequestLogEndpointSummary[] = [...acc.values()].map((e) => {
+      const classes = Object.fromEntries(e.classes);
+      const passed = e.classes.get('2xx') ?? 0;
+      const m = e.endpointId ? meta.get(e.endpointId) : undefined;
+      return {
+        endpointId: e.endpointId,
+        method: m?.method ?? null,
+        path: m?.path ?? null,
+        total: e.total,
+        passed,
+        failed: e.total - passed,
+        statusClasses: classes,
+      };
+    });
+
+    // Matched endpoints first (by path), unmatched bucket last.
+    result.sort((a, b) => {
+      if (a.endpointId === null) return 1;
+      if (b.endpointId === null) return -1;
+      return (a.path ?? '').localeCompare(b.path ?? '');
+    });
+    return result;
+  }
+
+  // --------------------------------------------------------------------------
+  // listRequestLogs — GET .../test-suites/:suiteId/request-logs
+  // Paginated captured requests, optionally filtered by endpoint + status class.
+  // --------------------------------------------------------------------------
+  async listRequestLogs(
+    projectId: string,
+    suiteId: string,
+    userId: string,
+    opts: {
+      endpointId?: string;
+      status?: string;
+      page?: number;
+      pageSize?: number;
+    },
+  ): Promise<RequestLogPage> {
+    await this.access.assertAccess(projectId, userId);
+    await this.assertSuiteInProject(projectId, suiteId);
+
+    const page = Math.max(1, Math.floor(Number(opts.page)) || 1);
+    const pageSize = Math.min(
+      200,
+      Math.max(1, Math.floor(Number(opts.pageSize)) || 50),
+    );
+
+    const where: Prisma.RequestLogWhereInput = { testSuiteId: suiteId };
+    if (opts.endpointId === 'unmatched') {
+      where.endpointId = null;
+    } else if (opts.endpointId) {
+      where.endpointId = opts.endpointId;
+    }
+    const range = statusClassRange(opts.status);
+    if (range) where.statusCode = range;
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.requestLog.count({ where }),
+      this.prisma.requestLog.findMany({
+        where,
+        orderBy: { seq: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          seq: true,
+          method: true,
+          path: true,
+          statusCode: true,
+          durationMs: true,
+        },
+      }),
+    ]);
+
+    return { items, total, page, pageSize };
+  }
+
+  // --------------------------------------------------------------------------
+  // getRequestLog — GET .../test-suites/:suiteId/request-logs/:logId
+  // Full captured request/response for one record. Any project member.
+  // --------------------------------------------------------------------------
+  async getRequestLog(
+    projectId: string,
+    suiteId: string,
+    logId: string,
+    userId: string,
+  ): Promise<RequestLogDetail> {
+    await this.access.assertAccess(projectId, userId);
+
+    const log = await this.prisma.requestLog.findFirst({
+      where: {
+        id: logId,
+        testSuiteId: suiteId,
+        testSuite: { projectId },
+      },
+      select: {
+        id: true,
+        seq: true,
+        endpointId: true,
+        method: true,
+        path: true,
+        url: true,
+        statusCode: true,
+        durationMs: true,
+        requestHeaders: true,
+        requestBody: true,
+        requestTruncated: true,
+        responseHeaders: true,
+        responseBody: true,
+        responseTruncated: true,
+        createdAt: true,
+      },
+    });
+    if (!log) {
+      throw new NotFoundException('Request log not found');
+    }
+    return log;
+  }
+
+  private async assertSuiteInProject(
+    projectId: string,
+    suiteId: string,
+  ): Promise<void> {
+    const suite = await this.prisma.testSuite.findFirst({
+      where: { id: suiteId, projectId },
+      select: { id: true },
+    });
+    if (!suite) {
+      throw new NotFoundException('Test suite not found');
+    }
+  }
+
+  // --------------------------------------------------------------------------
   // Background polling — in-process. Not awaited by the request.
   // --------------------------------------------------------------------------
   private beginPolling(
@@ -339,7 +598,7 @@ export class TestSuitesService {
       const status = await this.engine.getStatus(jobId);
       if (status.status === 'completed') {
         const result = await this.engine.getResult(jobId);
-        await this.persistResults(projectId, suiteId, result);
+        await this.persistResults(projectId, suiteId, jobId, result);
         return;
       }
       if (status.status === 'failed') {
@@ -362,6 +621,7 @@ export class TestSuitesService {
   private async persistResults(
     projectId: string,
     suiteId: string,
+    jobId: string,
     result: EngineResult,
   ): Promise<void> {
     const summary = result.summary ?? {
@@ -432,8 +692,69 @@ export class TestSuitesService {
       });
     });
 
+    // Persist every captured request/response (best-effort; not fatal to the run).
+    await this.persistRequestLogs(suiteId, jobId, endpointByKey);
+
     this.logger.log(
       `Suite ${suiteId} completed: ${passed}/${totalTestCases} requests passed, ${rows.length} endpoint results.`,
+    );
+  }
+
+  /**
+   * Fetch the run's captured requests from the engine-service and store them.
+   * Each record is matched to an Endpoint by (method, templated path). Inserted
+   * in chunks since a real run can produce many thousands of requests.
+   */
+  private async persistRequestLogs(
+    suiteId: string,
+    jobId: string,
+    endpointByKey: Map<string, string>,
+  ): Promise<void> {
+    let records: EngineRequestRecord[];
+    try {
+      records = await this.engine.getRequests(jobId);
+    } catch (err) {
+      this.logger.warn(
+        `Could not fetch captured requests for suite ${suiteId}: ${String(err)}`,
+      );
+      return;
+    }
+
+    await this.prisma.requestLog.deleteMany({
+      where: { testSuiteId: suiteId },
+    });
+    if (records.length === 0) return;
+
+    const rows: Prisma.RequestLogCreateManyInput[] = records.map((r) => ({
+      testSuiteId: suiteId,
+      endpointId: r.endpointPath
+        ? (endpointByKey.get(`${r.method.toUpperCase()}:${r.endpointPath}`) ??
+          null)
+        : null,
+      seq: r.seq,
+      method: r.method,
+      path: r.path,
+      url: r.url,
+      statusCode: r.statusCode ?? null,
+      durationMs: r.durationMs ?? null,
+      requestHeaders: (r.requestHeaders ??
+        Prisma.JsonNull) as Prisma.InputJsonValue,
+      requestBody: r.requestBody ?? null,
+      requestTruncated: r.requestTruncated ?? false,
+      responseHeaders: (r.responseHeaders ??
+        Prisma.JsonNull) as Prisma.InputJsonValue,
+      responseBody: r.responseBody ?? null,
+      responseTruncated: r.responseTruncated ?? false,
+    }));
+
+    const CHUNK = 500;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      await this.prisma.requestLog.createMany({
+        data: rows.slice(i, i + CHUNK),
+      });
+    }
+    this.logger.log(
+      `Suite ${suiteId}: stored ${rows.length} captured requests.`,
     );
   }
 

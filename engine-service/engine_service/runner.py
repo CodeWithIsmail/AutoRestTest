@@ -63,13 +63,17 @@ def render_config_toml(
     llm_engine: str,
     llm_api_base: str,
     auth_header: Optional[str],
+    recursion_limit: int = 50,
 ) -> str:
     """Render a per-run configurations.toml for the engine."""
     doc = tomlkit.document()
 
     spec = tomlkit.table()
     spec["location"] = spec_location
-    spec["recursion_limit"] = 1
+    # Match the core's default (50). A low limit under-expands nested $ref
+    # schemas, producing shallow request bodies (→ 400s) and a weaker
+    # dependency graph (→ poor ID reuse → 404s).
+    spec["recursion_limit"] = recursion_limit
     spec["strict_validation"] = False
     doc["spec"] = spec
 

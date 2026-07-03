@@ -33,6 +33,24 @@ export interface EngineOperationResult {
   serverErrors: unknown[];
 }
 
+/** One captured request/response from the recording proxy. */
+export interface EngineRequestRecord {
+  seq: number;
+  timestamp: string;
+  method: string;
+  path: string;
+  url: string;
+  endpointPath: string | null;
+  statusCode: number | null;
+  durationMs: number | null;
+  requestHeaders: Record<string, string> | null;
+  requestBody: string | null;
+  requestTruncated: boolean;
+  responseHeaders: Record<string, string> | null;
+  responseBody: string | null;
+  responseTruncated: boolean;
+}
+
 export interface EngineResult {
   summary: {
     totalOperations: number;
@@ -79,6 +97,15 @@ export class EngineService {
 
   async getResult(jobId: string): Promise<EngineResult> {
     return this.request<EngineResult>('GET', `/runs/${jobId}/result`);
+  }
+
+  /** Fetch every request/response captured by the recording proxy for a run. */
+  async getRequests(jobId: string): Promise<EngineRequestRecord[]> {
+    const res = await this.request<{ requests: EngineRequestRecord[] }>(
+      'GET',
+      `/runs/${jobId}/requests`,
+    );
+    return res.requests ?? [];
   }
 
   private async request<T>(
