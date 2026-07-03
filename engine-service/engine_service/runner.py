@@ -81,6 +81,22 @@ def render_config_toml(
     llm["max_tokens"] = 30000
     doc["llm"] = llm
 
+    # Both `agents` and `agent` are required (no defaults) on the core's Config
+    # model. The Header Agent only supports Basic auth, so keep it disabled;
+    # `[agent]` can be an empty table since AgentCombinationConfig defaults it all.
+    agents = tomlkit.table()
+    header_agent = tomlkit.table()
+    header_agent["enabled"] = False
+    agents["header"] = header_agent
+    doc["agents"] = agents
+
+    agent = tomlkit.table()
+    agent["max_combinations"] = 12
+    agent["max_total_combinations"] = 3000
+    agent["base_samples_per_size"] = 200
+    agent["combination_seed"] = 42
+    doc["agent"] = agent
+
     cache = tomlkit.table()
     cache["use_cached_graph"] = False
     cache["use_cached_table"] = False
@@ -314,6 +330,8 @@ def run_real(
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=time_duration + cfg.job_timeout_buffer,
             env=env,
         )
@@ -333,4 +351,9 @@ def _engine_env(cfg: Config) -> Dict[str, str]:
     env = os.environ.copy()
     if cfg.api_key:
         env["API_KEY"] = cfg.api_key  # python-dotenv won't override an existing var
+    # The engine's Rich TUI prints Unicode symbols (e.g. the info glyph). When run
+    # as a captured subprocess on Windows, Python defaults stdout to legacy cp1252
+    # and crashes with UnicodeEncodeError. Force UTF-8 I/O so the TUI can render.
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     return env
