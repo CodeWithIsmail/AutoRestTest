@@ -5,6 +5,7 @@ configurations.toml, so runs must be serialized)."""
 from __future__ import annotations
 
 import json
+import os
 import queue
 import shutil
 import threading
@@ -135,7 +136,10 @@ class JobManager:
                 mutation_rate=float(params.get("mutationRate", 0.2)),
                 llm_engine=params.get("llmEngine") or self.cfg.llm_engine,
                 llm_api_base=self.cfg.llm_api_base,
-                auth_header=params.get("authHeader"),
+                # Per-run authHeader wins; otherwise fall back to a service-wide
+                # TEST_AUTH_HEADER env var (temporary shortcut for testing auth'd
+                # endpoints before the per-suite auth field is built).
+                auth_header=params.get("authHeader") or os.getenv("TEST_AUTH_HEADER"),
             )
             runner.run_real(self.cfg, spec_path, time_budget, toml_text)
 

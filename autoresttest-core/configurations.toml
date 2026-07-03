@@ -1,5 +1,5 @@
 [spec]
-location = "D:\\SPL 3\\AutoRestTest\\engine-service\\jobs\\d371d04812c44c09a0a51a3632a52e66\\job_d371d04812c4.yaml"
+location = "D:\\SPL 3\\AutoRestTest\\engine-service\\jobs\\032c0d70bf41412ca465a1be26dbd666\\job_032c0d70bf41.yaml"
 recursion_limit = 1
 strict_validation = false
 
@@ -29,7 +29,7 @@ discount_factor = 0.9
 max_exploration = 1
 
 [request_generation]
-time_duration = 1200
+time_duration = 300
 mutation_rate = 0.2
 
 [api]
