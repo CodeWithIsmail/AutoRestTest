@@ -6,7 +6,15 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 _SERVICE_ROOT = Path(__file__).resolve().parent.parent  # engine-service/
+
+# Load engine-service/.env so ENGINE_MODE, LLM_ENGINE, API_KEY, etc. can be set
+# there permanently instead of exported in the shell on every launch. Real
+# environment variables take precedence (override=False), so shell/CI overrides
+# still win. Loaded at import time, before any Config.from_env() reads os.environ.
+load_dotenv(_SERVICE_ROOT / ".env")
 
 
 def _bool(env: str, default: bool) -> bool:

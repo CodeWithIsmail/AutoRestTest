@@ -1,10 +1,10 @@
 [spec]
-location = "D:\\SPL 3\\AutoRestTest\\engine-service\\jobs\\032c0d70bf41412ca465a1be26dbd666\\job_032c0d70bf41.yaml"
-recursion_limit = 1
+location = "D:\\SPL 3\\AutoRestTest\\engine-service\\jobs\\7e5fa99ece1d46ef8b39815e62156f7a\\job_7e5fa99ece1d.yaml"
+recursion_limit = 50
 strict_validation = false
 
 [llm]
-engine = "google/gemini-2.5-flash-lite"
+engine = "openai/gpt-oss-20b:free"
 creative_temperature = 1
 strict_temperature = 1
 api_base = "https://openrouter.ai/api/v1"
@@ -36,3 +36,6 @@ mutation_rate = 0.2
 override_url = false
 host = "localhost"
 port = 8080
+
+[custom_headers]
+Authorization = "Bearer ${JWT_TOKEN}"

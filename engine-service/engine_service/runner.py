@@ -55,6 +55,34 @@ def inject_target_url(spec_text: str, target_url: str) -> str:
     return yaml.safe_dump(spec, sort_keys=False)
 
 
+def default_auth_header(core_dir: Path) -> Optional[str]:
+    """Fallback Authorization header sourced from the core's own `.env`.
+
+    The core CLI applies bearer auth via a `[custom_headers]` section whose
+    values interpolate `${VAR}` from `.env`. When run through engine-service the
+    config is regenerated from scratch, so that section (and thus the token) is
+    dropped unless the caller supplies an explicit header. To match the CLI's
+    behaviour, if the core's `.env` defines a non-empty ``JWT_TOKEN`` we emit
+    ``"Bearer ${JWT_TOKEN}"`` — a placeholder the engine resolves from its own
+    environment at run time, so the raw secret never lands in the generated
+    ``configurations.toml``. Returns None when no token is configured.
+    """
+    env_path = core_dir / ".env"
+    if not env_path.exists():
+        return None
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            if key.strip() == "JWT_TOKEN" and value.strip().strip("\"'"):
+                return "Bearer ${JWT_TOKEN}"
+    except OSError:
+        return None
+    return None
+
+
 def render_config_toml(
     *,
     spec_location: str,

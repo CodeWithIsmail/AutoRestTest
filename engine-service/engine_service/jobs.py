@@ -203,11 +203,15 @@ class JobManager:
                     mutation_rate=float(params.get("mutationRate", 0.2)),
                     llm_engine=params.get("llmEngine") or self.cfg.llm_engine,
                     llm_api_base=self.cfg.llm_api_base,
-                    # Per-run authHeader wins; otherwise fall back to a service-wide
-                    # TEST_AUTH_HEADER env var (temporary shortcut for testing auth'd
-                    # endpoints before the per-suite auth field is built).
-                    auth_header=params.get("authHeader")
-                    or os.getenv("TEST_AUTH_HEADER"),
+                    # Per-run authHeader wins; then a service-wide TEST_AUTH_HEADER
+                    # env var; then a JWT_TOKEN from the core's own .env (mirrors
+                    # the core CLI's [custom_headers] bearer auth). All are
+                    # temporary shortcuts until the per-suite auth field is built.
+                    auth_header=(
+                        params.get("authHeader")
+                        or os.getenv("TEST_AUTH_HEADER")
+                        or runner.default_auth_header(self.cfg.core_dir)
+                    ),
                 )
                 runner.run_real(self.cfg, spec_path, time_budget, toml_text)
         finally:

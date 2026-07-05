@@ -13,6 +13,7 @@ network boundary, not in its code.
 
 from __future__ import annotations
 
+import http.client
 import re
 import time
 import urllib.error
@@ -148,6 +149,17 @@ def forward(
             status = resp.status
             resp_headers = dict(resp.getheaders())
             raw = resp.read()
+    except (http.client.InvalidURL, ValueError) as exc:
+        # The engine generated a malformed URL — typically a path parameter
+        # filled with a structured (dict/array) value that string-formats into
+        # the path with illegal characters (spaces, control chars). The target
+        # never sees this request, so synthesize a 400 record: it's a bad
+        # request the engine produced, captured rather than crashed on.
+        status = 400
+        resp_headers = {"X-Proxy-Error": f"Malformed request URL: {exc}"[:200]}
+        raw = f"engine-service proxy rejected a malformed URL: {exc}".encode(
+            "utf-8"
+        )
     except urllib.error.HTTPError as exc:
         # A 4xx/5xx from the target is a normal, capturable outcome.
         status = exc.code
