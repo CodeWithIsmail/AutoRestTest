@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useProject } from "@/components/projects/project-context";
+import { RunTimeline } from "@/components/projects/RunTimeline";
 import { StatusDistribution } from "@/components/projects/StatusDistribution";
+import { StatusDonut } from "@/components/projects/StatusDonut";
 import { useToast } from "@/components/toast";
 import { Badge, MethodBadge, StatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -17,10 +19,6 @@ import { useApi } from "@/lib/useApi";
 import type { SuiteReport, TestSuiteDetail } from "@/lib/types";
 
 const POLL_MS = 3000;
-
-function formatDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : "—";
-}
 
 function StatCard({
   label,
@@ -244,19 +242,47 @@ export default function SuiteDetailPage() {
           </div>
         </div>
 
-        {/* Config + timing chips */}
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <Badge tone="zinc">Time budget: {suite.timeBudget}s</Badge>
-          <Badge tone="zinc">Mutation rate: {suite.mutationRate}</Badge>
-          <Badge tone="zinc">Created: {formatDate(suite.createdAt)}</Badge>
-          {suite.startedAt && (
-            <Badge tone="zinc">Started: {formatDate(suite.startedAt)}</Badge>
-          )}
-          {suite.completedAt && (
-            <Badge tone="zinc">Finished: {formatDate(suite.completedAt)}</Badge>
-          )}
-        </div>
       </div>
+
+      {/* Run details — configuration + lifecycle timeline */}
+      <Card className="grid gap-6 p-5 sm:grid-cols-2">
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-zinc-200">
+            Configuration
+          </h3>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-zinc-500">
+                Time budget
+              </dt>
+              <dd className="mt-0.5 text-zinc-200">{suite.timeBudget}s</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-zinc-500">
+                Mutation rate
+              </dt>
+              <dd className="mt-0.5 text-zinc-200">{suite.mutationRate}</dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-xs uppercase tracking-wider text-zinc-500">
+                Target URL
+              </dt>
+              <dd className="mt-0.5 break-all font-mono text-xs text-zinc-300">
+                {suite.targetUrl}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div className="sm:border-l sm:border-zinc-800 sm:pl-6">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-200">Timeline</h3>
+          <RunTimeline
+            status={suite.status}
+            createdAt={suite.createdAt}
+            startedAt={suite.startedAt}
+            completedAt={suite.completedAt}
+          />
+        </div>
+      </Card>
 
       {/* Status-specific body */}
       {suite.status === "pending" && (
@@ -340,9 +366,12 @@ export default function SuiteDetailPage() {
               <h3 className="mb-4 text-sm font-semibold text-zinc-200">
                 Status-code distribution
               </h3>
-              <StatusDistribution
-                distribution={report.statusCodeDistribution}
-              />
+              <StatusDonut distribution={report.statusCodeDistribution} />
+              <div className="mt-6 border-t border-zinc-800 pt-5">
+                <StatusDistribution
+                  distribution={report.statusCodeDistribution}
+                />
+              </div>
             </Card>
 
             {/* Per-endpoint results */}
