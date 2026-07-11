@@ -1,0 +1,14 @@
+%% Activity — 1.3 API Specification Management. draw.io: Insert > Advanced > Mermaid…
+flowchart TD
+    S([Start]) --> A["Open API Specification page"]
+    A --> Q{"Specification source?"}
+    Q -- Upload file --> U1["Select OpenAPI 3.0 YAML file"]
+    U1 --> U2["Upload file"]
+    Q -- "Generate from code" --> G1["Upload API source code"]
+    G1 --> G2["LLM generates specification"]
+    U2 --> V["Validate and parse specification"]
+    G2 --> V
+    V --> Q2{"Valid specification?"}
+    Q2 -- yes --> E1["Extract endpoints and operations"]
+    E1 --> E2["Display detected endpoints"] --> X([End])
+    Q2 -- no --> Err["Show error with description"] --> X

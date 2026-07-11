@@ -1,0 +1,27 @@
+@startuml
+!include _style_act.iuml
+title Activity Diagram — 1.1: Authentication
+start
+if (Registered user?) then (yes)
+  :Enter email and password;
+  :Submit login;
+  if (Credentials valid?) then (yes)
+  else (no)
+    :Show error message;
+    stop
+  endif
+else (no)
+  :Open sign-up form;
+  :Enter username, email, password;
+  :Submit registration;
+  if (Valid and unique?) then (yes)
+    :Create account;
+  else (no)
+    :Show validation error;
+    stop
+  endif
+endif
+:Issue authentication token;
+:Redirect to dashboard;
+stop
+@enduml

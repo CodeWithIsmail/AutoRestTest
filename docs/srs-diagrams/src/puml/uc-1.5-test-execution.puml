@@ -1,0 +1,30 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1.5: Test Execution
+
+actor "Tester" as Tester
+actor "Project Owner" as Owner
+actor "Admin" as Admin
+actor "Target REST API" as TGT
+actor "LLM API" as LLM
+
+rectangle "Test Execution" {
+  usecase "Run Test Suite\n(One-Click)" as RUN
+  usecase "Generate Test\nCases" as GEN
+  usecase "Send Requests\nto Target" as SEND
+  usecase "Monitor Live\nProgress" as MON
+  usecase "Receive Completion\nAlert" as OK
+  usecase "Receive Failure\nAlert" as FAIL
+}
+
+Tester --> RUN
+Tester --> MON
+Owner --> RUN
+Admin --> RUN
+RUN ..> GEN : <<include>>
+RUN ..> SEND : <<include>>
+RUN ..> OK : <<extend>>
+RUN ..> FAIL : <<extend>>
+GEN ..> LLM
+SEND ..> TGT
+@enduml

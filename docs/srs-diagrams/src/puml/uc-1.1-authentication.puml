@@ -1,0 +1,20 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1.1: Authentication
+
+actor "Visitor" as V
+actor "Registered User" as RU
+
+rectangle "Authentication" {
+  usecase "Sign Up" as SU
+  usecase "Log In" as LI
+  usecase "Log Out" as LO
+  usecase "View Profile" as VP
+}
+
+V --> SU
+V --> LI
+RU --> LI
+RU --> LO
+RU --> VP
+@enduml

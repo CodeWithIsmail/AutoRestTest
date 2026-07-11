@@ -1,0 +1,11 @@
+%% Activity — 1.7 Team Collaboration. draw.io: Insert > Advanced > Mermaid…
+flowchart TD
+    S([Start]) --> A["Owner / Admin opens Members"]
+    A --> B["Enter invitee email and role"]
+    B --> C["Create invitation with unique token"]
+    C --> D["Send invitation email"]
+    D --> E["Invited user opens the link"]
+    E --> Q{"Invitation response?"}
+    Q -- Accept --> A1["Add user as member with assigned role"]
+    A1 --> A2["Project appears on their dashboard"] --> X([End])
+    Q -- Decline --> D1["Mark invitation as declined"] --> X

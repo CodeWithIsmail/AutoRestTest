@@ -1,0 +1,16 @@
+' Shared look-and-feel for all AutoRestTest activity diagrams (top-down flow).
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam ArrowColor #33475b
+skinparam activity {
+  BackgroundColor #EAF2FB
+  BorderColor #2B6CB0
+  DiamondBackgroundColor #EAF2FB
+  DiamondBorderColor #2B6CB0
+  DiamondFontColor #14181F
+  StartColor #2B6CB0
+  EndColor #2B6CB0
+  BarColor #2B6CB0
+}

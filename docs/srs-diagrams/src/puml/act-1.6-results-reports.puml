@@ -1,0 +1,18 @@
+@startuml
+!include _style_act.iuml
+title Activity Diagram — 1.6: Test Results & Reports
+start
+:Open a completed test run;
+:View results\n(endpoints, methods, responses, pass/fail);
+if (Next action?) then (Filter)
+  :Filter by endpoint / status / response code;
+elseif (Inspect) then (inspect)
+  :View captured requests and responses;
+elseif (Analytics) then (analytics)
+  :View response-code distribution,\ncoverage and server failures;
+  :View failure explanations (LLM);
+else (Export)
+  :Download report as PDF / CSV;
+endif
+stop
+@enduml

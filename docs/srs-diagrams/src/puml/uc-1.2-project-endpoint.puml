@@ -1,0 +1,35 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1.2: Project & Endpoint Management
+
+actor "Registered User" as RU
+actor "Project Owner" as Owner
+actor "Admin" as Admin
+actor "Tester" as Tester
+
+rectangle "Project & Endpoint Management" {
+  usecase "View Dashboard" as DASH
+  usecase "Create Project" as CREATE
+  usecase "Open Project" as OPEN
+  usecase "Rename / Update\nProject" as RENAME
+  usecase "Delete Project" as DELETE
+  usecase "View Endpoints" as VEP
+  usecase "Add Endpoint\n(manual)" as AEP
+  usecase "Delete Endpoint" as DEP
+}
+
+RU --> DASH
+RU --> CREATE
+Owner --> OPEN
+Owner --> RENAME
+Owner --> DELETE
+Owner --> AEP
+Owner --> DEP
+Admin --> OPEN
+Admin --> RENAME
+Admin --> AEP
+Tester --> OPEN
+Tester --> VEP
+Tester --> AEP
+Tester --> DEP
+@enduml

@@ -1,0 +1,16 @@
+@startuml
+!include _style_act.iuml
+title Activity Diagram — 1.4: Test Suite Management
+start
+:Open Test Suites section;
+if (New or reuse?) then (Generate new)
+  :Configure suite\n(target URL, time budget, mutation rate);
+  :Trigger generation;
+  :Engine generates test cases\n(LLM-generated values);
+  :Save test suite;
+else (Reuse saved)
+  :Select a saved suite;
+endif
+:Display test suite;
+stop
+@enduml

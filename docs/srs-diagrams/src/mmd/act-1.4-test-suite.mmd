@@ -1,0 +1,12 @@
+%% Activity — 1.4 Test Suite Management. draw.io: Insert > Advanced > Mermaid…
+flowchart TD
+    S([Start]) --> A["Open Test Suites section"]
+    A --> Q{"New or reuse?"}
+    Q -- Generate new --> C1["Configure suite: target URL, time budget, mutation rate"]
+    C1 --> C2["Trigger generation"]
+    C2 --> C3["Engine generates test cases with LLM values"]
+    C3 --> C4["Save test suite"]
+    Q -- Reuse saved --> R1["Select a saved suite"]
+    C4 --> D["Display test suite"]
+    R1 --> D
+    D --> X([End])

@@ -1,0 +1,28 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1.4: Test Suite Management
+
+actor "Tester" as Tester
+actor "Project Owner" as Owner
+actor "Admin" as Admin
+actor "LLM API" as LLM
+
+rectangle "Test Suite Management" {
+  usecase "Configure Test\nSuite" as CFG
+  usecase "Generate Test\nSuite" as GEN
+  usecase "Generate Test\nValues" as VAL
+  usecase "Save Test Suite" as SAVE
+  usecase "View Saved Suites" as VIEW
+  usecase "Re-run Saved Suite" as RERUN
+}
+
+Tester --> CFG
+Tester --> VIEW
+Tester --> RERUN
+Owner --> CFG
+Admin --> CFG
+CFG ..> GEN : <<include>>
+GEN ..> VAL : <<include>>
+GEN ..> SAVE : <<include>>
+VAL ..> LLM
+@enduml

@@ -1,0 +1,31 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1.3: API Specification Management
+
+actor "Tester" as Tester
+actor "Project Owner" as Owner
+actor "Admin" as Admin
+actor "LLM API" as LLM
+
+rectangle "API Specification Management" {
+  usecase "Upload OpenAPI\nSpecification" as UP
+  usecase "Validate &\nParse Spec" as VAL
+  usecase "Extract Endpoints" as EXT
+  usecase "View Detected\nEndpoints" as VIEW
+  usecase "Generate Spec from\nSource Code" as GEN
+  usecase "Replace Spec" as REP
+  usecase "Delete Spec" as DEL
+}
+
+Tester --> UP
+Tester --> VIEW
+Tester --> REP
+Tester --> DEL
+Tester --> GEN
+Owner --> UP
+Admin --> UP
+UP ..> VAL : <<include>>
+VAL ..> EXT : <<include>>
+GEN ..> LLM
+GEN ..> VAL : <<include>>
+@enduml

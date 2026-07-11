@@ -1,0 +1,18 @@
+%% Activity — 1.5 Test Execution. draw.io: Insert > Advanced > Mermaid…
+flowchart TD
+    S([Start]) --> A["Select a test suite"]
+    A --> B["Click Run (one-click)"]
+    B --> C["Backend creates asynchronous job"]
+    C --> D["Engine generates test cases"]
+    D --> Q{"More requests to send?"}
+    Q -- yes --> E1["Send request to target API"]
+    E1 --> E2["Record response"]
+    E2 --> E3["Update live progress"]
+    E3 --> Q
+    Q -- no --> Q2{"Run completed successfully?"}
+    Q2 -- yes --> F1["Compile results and analytics"]
+    F1 --> F2["Send completion alert"]
+    Q2 -- no --> G1["Send failure alert with reason"]
+    F2 --> H["Store results and report"]
+    G1 --> H
+    H --> X([End])

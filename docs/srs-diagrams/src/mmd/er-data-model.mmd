@@ -1,0 +1,119 @@
+%% AutoRestTest — Entity-Relationship model (crow's-foot).
+%% Editable copy for draw.io: Arrange > Insert > Advanced > Mermaid…
+%% The document figure uses the Chen-notation version (src/dot/er-data-model.puml).
+erDiagram
+    User ||--o{ Project : owns
+    User ||--o{ ProjectMember : is
+    Project ||--o{ ProjectMember : has
+    Project ||--o{ ProjectInvitation : has
+    User ||--o{ ProjectInvitation : sends
+    Project ||--|| ApiSpecification : has
+    Project ||--o{ Endpoint : contains
+    Project ||--o{ TestSuite : has
+    User ||--o{ TestSuite : triggers
+    TestSuite ||--o{ TestCase : produces
+    Endpoint ||--o{ TestCase : "tested by"
+    TestSuite ||--o{ RequestLog : captures
+    Endpoint ||--o{ RequestLog : maps
+
+    User {
+        uuid id PK
+        string username
+        string email
+        string password
+        datetime createdAt
+        datetime updatedAt
+    }
+    Project {
+        uuid id PK
+        string name
+        string description
+        uuid ownerId FK
+        datetime createdAt
+        datetime updatedAt
+    }
+    ProjectMember {
+        uuid id PK
+        uuid projectId FK
+        uuid userId FK
+        enum role
+        datetime joinedAt
+    }
+    ProjectInvitation {
+        uuid id PK
+        uuid projectId FK
+        string email
+        enum role
+        string token
+        enum status
+        uuid invitedById FK
+        datetime expiresAt
+        datetime createdAt
+    }
+    ApiSpecification {
+        uuid id PK
+        uuid projectId FK
+        string fileName
+        text fileContent
+        boolean generatedByAI
+        datetime uploadedAt
+    }
+    Endpoint {
+        uuid id PK
+        uuid projectId FK
+        string path
+        enum method
+        string description
+        boolean addedManually
+        datetime createdAt
+    }
+    TestSuite {
+        uuid id PK
+        uuid projectId FK
+        string name
+        enum status
+        string jobId
+        string targetUrl
+        int timeBudget
+        float mutationRate
+        int totalEndpoints
+        int coveredEndpoints
+        int totalTestCases
+        int passedTestCases
+        int failedTestCases
+        uuid triggeredById FK
+        datetime startedAt
+        datetime completedAt
+        datetime createdAt
+    }
+    TestCase {
+        uuid id PK
+        uuid testSuiteId FK
+        uuid endpointId FK
+        json requestBody
+        json requestHeaders
+        int statusCode
+        json responseBody
+        int responseTimeMs
+        boolean passed
+        string failureExplanation
+        datetime createdAt
+    }
+    RequestLog {
+        uuid id PK
+        uuid testSuiteId FK
+        uuid endpointId FK
+        int seq
+        string method
+        string path
+        string url
+        int statusCode
+        int durationMs
+        json requestHeaders
+        text requestBody
+        boolean requestTruncated
+        json responseHeaders
+        text responseBody
+        boolean responseTruncated
+        datetime createdAt
+    }

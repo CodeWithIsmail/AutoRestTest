@@ -1,0 +1,35 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 0: AutoRestTest System Overview
+
+actor "User" as U
+
+rectangle "AutoRestTest Platform" {
+  usecase "Authenticate" as UC_AUTH
+  usecase "Manage Projects\n& Endpoints" as UC_PROJ
+  usecase "Manage API\nSpecification" as UC_SPEC
+  usecase "Manage Test\nSuites" as UC_SUITE
+  usecase "Execute Tests" as UC_EXEC
+  usecase "View Results\n& Reports" as UC_REP
+  usecase "Collaborate\nwith Team" as UC_COLLAB
+}
+
+actor "LLM API" as LLM
+actor "Target REST API" as TGT
+actor "Email Service" as MAIL
+
+U --> UC_AUTH
+U --> UC_PROJ
+U --> UC_SPEC
+U --> UC_SUITE
+U --> UC_EXEC
+U --> UC_REP
+U --> UC_COLLAB
+
+UC_SPEC ..> LLM
+UC_SUITE ..> LLM
+UC_EXEC ..> TGT
+UC_EXEC ..> LLM
+UC_REP ..> LLM
+UC_COLLAB ..> MAIL
+@enduml

@@ -1,0 +1,64 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1: AutoRestTest (Full System, Role-Based)
+
+actor "Visitor" as V
+actor "Registered User" as RU
+actor "Viewer" as Viewer
+actor "Tester" as Tester
+actor "Admin" as Admin
+actor "Project Owner" as Owner
+
+actor "LLM API" as LLM
+actor "Target REST API" as TGT
+actor "Email Service" as MAIL
+
+' Role generalisation: every project role is a registered user with more rights.
+Viewer --|> RU
+Tester --|> Viewer
+Admin  --|> Tester
+Owner  --|> Admin
+
+rectangle "AutoRestTest Platform" {
+  package "Authentication" {
+    usecase "Sign Up" as SU
+    usecase "Log In" as LI
+  }
+  package "Projects" {
+    usecase "Create Project" as CP
+    usecase "Delete Project" as DP
+    usecase "Manage Endpoints" as ME
+  }
+  package "API Specification" {
+    usecase "Upload / Generate\nSpecification" as SPEC
+  }
+  package "Test Suites & Execution" {
+    usecase "Generate Test\nSuite" as GS
+    usecase "Run Test Suite" as RUN
+  }
+  package "Results & Reports" {
+    usecase "View Results\n& Reports" as VRR
+  }
+  package "Collaboration" {
+    usecase "Invite Member\n& Assign Role" as INV
+    usecase "Accept Invitation" as ACC
+  }
+}
+
+V --> SU
+V --> LI
+RU --> CP
+RU --> ACC
+Viewer --> VRR
+Tester --> SPEC
+Tester --> GS
+Tester --> RUN
+Tester --> ME
+Admin --> INV
+Owner --> DP
+
+SPEC ..> LLM
+GS ..> LLM
+RUN ..> TGT
+INV ..> MAIL
+@enduml

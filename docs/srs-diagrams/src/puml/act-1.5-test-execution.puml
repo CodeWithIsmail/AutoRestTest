@@ -1,0 +1,22 @@
+@startuml
+!include _style_act.iuml
+title Activity Diagram — 1.5: Test Execution
+start
+:Select a test suite;
+:Click Run (one-click);
+:Backend creates asynchronous job;
+:Engine generates test cases;
+while (More requests to send?) is (yes)
+  :Send request to target API;
+  :Record response;
+  :Update live progress;
+endwhile (no)
+if (Run completed successfully?) then (yes)
+  :Compile results and analytics;
+  :Send completion alert;
+else (no)
+  :Send failure alert with reason;
+endif
+:Store results and report;
+stop
+@enduml

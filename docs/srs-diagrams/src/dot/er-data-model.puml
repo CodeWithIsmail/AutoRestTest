@@ -1,0 +1,76 @@
+@startdot
+graph ER {
+  rankdir=LR; splines=true; overlap=false;
+  nodesep=0.14; ranksep=1.15; fontname="Arial"; fontsize=12;
+  node [fontname="Arial", fontsize=12];
+  edge [fontname="Arial", fontsize=10, len=1.1];
+
+  // ---- entity styling (rectangles) ----
+  node [shape=box, style=filled, fillcolor="#cfe3ff", color="#2b6cb0", penwidth=1.4, margin="0.12,0.06"];
+  User; Project; ProjectMember; ProjectInvitation;
+  ApiSpecification; Endpoint; TestSuite; TestCase; RequestLog;
+
+  // ---- relationship styling (diamonds) ----
+  node [shape=diamond, style=filled, fillcolor="#ffe6a7", color="#b7791f", penwidth=1.2, margin="0.02,0.02", height=0.55, width=1.0];
+  r_owns   [label="owns"];
+  r_member [label="has"];
+  r_ident  [label="is"];
+  r_invite [label="has"];
+  r_sends  [label="sends"];
+  r_spec   [label="has"];
+  r_contain[label="contains"];
+  r_suite  [label="has"];
+  r_trig   [label="triggers"];
+  r_produce[label="produces"];
+  r_tests  [label="tested by"];
+  r_capture[label="captures"];
+  r_maps   [label="maps"];
+
+  // ---- attribute styling (ellipses) ----
+  node [shape=ellipse, style=filled, fillcolor="#ffffff", color="#555555", penwidth=1.0, fontsize=10, margin="0.02,0.01"];
+  // User
+  u_id [label=<<u>id</u>>]; u_name [label="username"]; u_mail [label="email"]; u_pwd [label="password"];
+  // Project
+  p_id [label=<<u>id</u>>]; p_name [label="name"]; p_desc [label="description"];
+  // ProjectMember
+  m_id [label=<<u>id</u>>]; m_role [label="role"]; m_join [label="joinedAt"];
+  // ProjectInvitation
+  i_id [label=<<u>id</u>>]; i_mail [label="email"]; i_role [label="role"]; i_tok [label="token"]; i_stat [label="status"]; i_exp [label="expiresAt"];
+  // ApiSpecification
+  s_id [label=<<u>id</u>>]; s_fn [label="fileName"]; s_ai [label="generatedByAI"];
+  // Endpoint
+  e_id [label=<<u>id</u>>]; e_path [label="path"]; e_meth [label="method"]; e_man [label="addedManually"];
+  // TestSuite
+  t_id [label=<<u>id</u>>]; t_name [label="name"]; t_stat [label="status"]; t_url [label="targetUrl"]; t_budg [label="timeBudget"]; t_mut [label="mutationRate"];
+  // TestCase
+  c_id [label=<<u>id</u>>]; c_code [label="statusCode"]; c_pass [label="passed"]; c_expl [label="failureExplanation"];
+  // RequestLog
+  l_id [label=<<u>id</u>>]; l_seq [label="seq"]; l_meth [label="method"]; l_code [label="statusCode"]; l_dur [label="durationMs"];
+
+  // ---- attribute edges ----
+  User -- {u_id u_name u_mail u_pwd};
+  Project -- {p_id p_name p_desc};
+  ProjectMember -- {m_id m_role m_join};
+  ProjectInvitation -- {i_id i_mail i_role i_tok i_stat i_exp};
+  ApiSpecification -- {s_id s_fn s_ai};
+  Endpoint -- {e_id e_path e_meth e_man};
+  TestSuite -- {t_id t_name t_stat t_url t_budg t_mut};
+  TestCase -- {c_id c_code c_pass c_expl};
+  RequestLog -- {l_id l_seq l_meth l_code l_dur};
+
+  // ---- relationships with cardinality ----
+  User -- r_owns [taillabel="1"];   r_owns -- Project [headlabel="N"];
+  Project -- r_member [taillabel="1"]; r_member -- ProjectMember [headlabel="N"];
+  ProjectMember -- r_ident [taillabel="N"]; r_ident -- User [headlabel="1"];
+  Project -- r_invite [taillabel="1"]; r_invite -- ProjectInvitation [headlabel="N"];
+  ProjectInvitation -- r_sends [taillabel="N"]; r_sends -- User [headlabel="1"];
+  Project -- r_spec [taillabel="1"]; r_spec -- ApiSpecification [headlabel="1"];
+  Project -- r_contain [taillabel="1"]; r_contain -- Endpoint [headlabel="N"];
+  Project -- r_suite [taillabel="1"]; r_suite -- TestSuite [headlabel="N"];
+  User -- r_trig [taillabel="1"]; r_trig -- TestSuite [headlabel="N"];
+  TestSuite -- r_produce [taillabel="1"]; r_produce -- TestCase [headlabel="N"];
+  Endpoint -- r_tests [taillabel="1"]; r_tests -- TestCase [headlabel="N"];
+  TestSuite -- r_capture [taillabel="1"]; r_capture -- RequestLog [headlabel="N"];
+  Endpoint -- r_maps [taillabel="1"]; r_maps -- RequestLog [headlabel="N"];
+}
+@enddot

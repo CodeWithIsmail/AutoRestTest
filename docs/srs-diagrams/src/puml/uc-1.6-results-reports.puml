@@ -1,0 +1,33 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1.6: Test Results & Reports
+
+actor "Viewer" as Viewer
+actor "Tester" as Tester
+actor "Admin" as Admin
+actor "Project Owner" as Owner
+actor "LLM API" as LLM
+
+rectangle "Test Results & Reports" {
+  usecase "View Test Results" as VR
+  usecase "Filter Results" as FILTER
+  usecase "Inspect Captured\nRequests" as INSPECT
+  usecase "View Analytics\nReport" as REPORT
+  usecase "View Failure\nExplanation" as EXPL
+  usecase "View Execution\nHistory" as HIST
+  usecase "Export Report\n(PDF / CSV)" as EXPORT
+}
+
+Viewer --> VR
+Viewer --> REPORT
+Viewer --> HIST
+Tester --> VR
+Tester --> FILTER
+Tester --> INSPECT
+Tester --> EXPORT
+Admin --> REPORT
+Owner --> REPORT
+VR ..> FILTER : <<extend>>
+REPORT ..> EXPL : <<include>>
+EXPL ..> LLM
+@enduml

@@ -1,0 +1,28 @@
+@startuml
+!include _style_act.iuml
+title Activity Diagram — 1.2: Project & Endpoint Management
+start
+:Open dashboard;
+:View projects list;
+if (Action?) then (Create project)
+  :Enter name and description;
+  :Submit;
+  :Create project and assign owner;
+  :Open project workspace;
+else (Manage existing)
+  :Open a project;
+  if (Operation?) then (Rename / update)
+    :Update project details;
+  elseif (Add endpoint) then (add)
+    :Enter path and HTTP method;
+    :Validate uniqueness;
+    :Add endpoint to list;
+  elseif (Delete endpoint) then (delete)
+    :Remove endpoint;
+  else (Delete project)
+    :Confirm deletion;
+    :Permanently remove project and all data;
+  endif
+endif
+stop
+@enduml

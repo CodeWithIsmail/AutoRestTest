@@ -1,0 +1,17 @@
+%% Activity — 1.1 Authentication. draw.io: Insert > Advanced > Mermaid…
+flowchart TD
+    S([Start]) --> Q1{"Registered user?"}
+    Q1 -- yes --> L1["Enter email and password"]
+    L1 --> L2["Submit login"]
+    L2 --> Q2{"Credentials valid?"}
+    Q2 -- no --> E1["Show error message"] --> X1([End])
+    Q1 -- no --> R1["Open sign-up form"]
+    R1 --> R2["Enter username, email, password"]
+    R2 --> R3["Submit registration"]
+    R3 --> Q3{"Valid and unique?"}
+    Q3 -- no --> E2["Show validation error"] --> X2([End])
+    Q3 -- yes --> R4["Create account"]
+    Q2 -- yes --> T["Issue authentication token"]
+    R4 --> T
+    T --> D["Redirect to dashboard"]
+    D --> X([End])

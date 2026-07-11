@@ -1,0 +1,32 @@
+@startuml
+!include _style.iuml
+title Use Case Diagram — Level 1.7: Team Collaboration
+
+actor "Project Owner" as Owner
+actor "Admin" as Admin
+actor "Invited User" as Invitee
+actor "Email Service" as MAIL
+
+rectangle "Team Collaboration" {
+  usecase "Invite Member\n(by email)" as INV
+  usecase "Assign Role" as ROLE
+  usecase "Send Invitation\nEmail" as SEND
+  usecase "Update Member\nRole" as UPD
+  usecase "Remove Member" as RM
+  usecase "View Members\n& Invitations" as VIEW
+  usecase "Accept Invitation" as ACC
+  usecase "Decline Invitation" as DEC
+}
+
+Owner --> INV
+Owner --> UPD
+Owner --> RM
+Owner --> VIEW
+Admin --> INV
+Admin --> VIEW
+INV ..> ROLE : <<include>>
+INV ..> SEND : <<include>>
+SEND ..> MAIL
+Invitee --> ACC
+Invitee --> DEC
+@enduml

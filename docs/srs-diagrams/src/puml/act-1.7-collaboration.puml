@@ -1,0 +1,17 @@
+@startuml
+!include _style_act.iuml
+title Activity Diagram — 1.7: Team Collaboration
+start
+:Owner / Admin opens Members;
+:Enter invitee email and role;
+:Create invitation with unique token;
+:Send invitation email;
+:Invited user opens the link;
+if (Invitation response?) then (Accept)
+  :Add user as member with assigned role;
+  :Project appears on their dashboard;
+else (Decline)
+  :Mark invitation as declined;
+endif
+stop
+@enduml

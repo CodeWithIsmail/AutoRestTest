@@ -1,0 +1,10 @@
+%% Activity — 1.6 Test Results & Reports. draw.io: Insert > Advanced > Mermaid…
+flowchart TD
+    S([Start]) --> A["Open a completed test run"]
+    A --> B["View results: endpoints, methods, responses, pass/fail"]
+    B --> Q{"Next action?"}
+    Q -- Filter --> F["Filter by endpoint / status / response code"] --> X([End])
+    Q -- Inspect --> I["View captured requests and responses"] --> X
+    Q -- Analytics --> N1["View response-code distribution, coverage, failures"]
+    N1 --> N2["View failure explanations (LLM)"] --> X
+    Q -- Export --> E["Download report as PDF / CSV"] --> X
