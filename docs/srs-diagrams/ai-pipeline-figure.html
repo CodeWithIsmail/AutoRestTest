@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html,body { width:1680px; height:1000px; background:#ffffff; }
+  body { font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; color:#0f172a; -webkit-font-smoothing:antialiased; }
+  .canvas { position:relative; width:1680px; height:1000px; background:
+      radial-gradient(1200px 600px at 60% -10%, #f8fafc 0%, #ffffff 60%); }
+
+  /* ---- headers ---- */
+  .hdr { position:absolute; height:44px; border-radius:12px; display:flex; align-items:center;
+         padding:0 16px; color:#fff; font-weight:700; font-size:15px; letter-spacing:.4px;
+         box-shadow:0 6px 16px rgba(2,6,23,.16); }
+  .hdr .hn { font-size:18px; font-weight:800; margin-right:9px; opacity:.9; }
+  .hdr-init { background:linear-gradient(135deg,#1d4ed8,#3b82f6); }
+  .hdr-exec { background:linear-gradient(135deg,#6d28d9,#8b5cf6); }
+  .hdr-rep  { background:linear-gradient(135deg,#0369a1,#0ea5e9); }
+
+  /* ---- generic card ---- */
+  .card { position:absolute; background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
+          box-shadow:0 4px 14px rgba(15,23,42,.06); padding:12px 13px; }
+  .num { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:20px;
+         padding:0 7px; border-radius:7px; font-size:11.5px; font-weight:800; color:#fff; }
+  .toprow { display:flex; align-items:center; gap:9px; }
+  .ic { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .ic svg { width:21px; height:21px; }
+  .ttl { font-weight:700; font-size:14.5px; line-height:1.15; }
+  .desc { font-size:12.3px; color:#475569; line-height:1.34; margin-top:7px; }
+  ul.b { list-style:none; margin-top:8px; }
+  ul.b li { position:relative; font-size:12.2px; color:#334155; line-height:1.3; padding-left:16px; margin:5px 0; }
+  ul.b li::before { content:""; position:absolute; left:2px; top:6px; width:6px; height:6px; border-radius:2px; background:var(--c,#64748b); }
+
+  /* ---- container behind execution phase ---- */
+  .exec-box { position:absolute; border:2px solid #e9d5ff; background:linear-gradient(180deg,#fbf7ff, #ffffff 40%);
+              border-radius:20px; }
+
+  /* ---- Q-table mini heatmap ---- */
+  .qwrap { margin-top:10px; }
+  .qlabel { font-size:10px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+  .qgrid { display:grid; grid-template-columns:repeat(6,1fr); gap:3px; }
+  .qcell { height:12px; border-radius:2px; background:var(--c); opacity:.3; }
+  .qcell.best { opacity:1; outline:2px solid #0f172a; outline-offset:1px; }
+
+  /* agent color helpers */
+  .a-op   { --c:#2563eb; }
+  .a-par  { --c:#16a34a; }
+  .a-val  { --c:#7c3aed; }
+  .a-dep  { --c:#0d9488; }
+
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
+          padding:5px 9px; border-radius:8px; background:#f1f5f9; color:#334155; margin-top:9px; }
+  .mini-agent { display:flex; align-items:center; gap:9px; font-size:12.6px; color:#1e293b; margin:7px 0; font-weight:600;}
+  .dot { width:20px; height:20px; border-radius:6px; display:flex;align-items:center;justify-content:center;}
+  .dot svg{width:13px;height:13px;color:#fff;}
+
+  .codechip { margin-top:9px; font-family:"Cascadia Code",Consolas,monospace; font-size:11.5px; color:#1e3a8a;
+              background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; padding:6px 9px; }
+
+  .barrow { display:flex; align-items:center; gap:8px; margin:7px 0; }
+  .barrow .lb { width:28px; font-size:11px; font-weight:800; color:#475569; }
+  .barrow .track { flex:1; height:13px; background:#eef2f7; border-radius:6px; overflow:hidden; }
+  .barrow .track i { display:block; height:100%; border-radius:6px; }
+
+  /* svg overlay */
+  .flow { position:absolute; inset:0; width:1680px; height:1000px; pointer-events:none; z-index:40; }
+  .looptext { font-size:11px; font-weight:800; letter-spacing:1.5px; fill:#7c3aed; text-transform:uppercase; }
+  .elabel { font-size:11px; font-weight:700; fill:#475569; }
+  .elabel-o { font-size:11px; font-weight:700; fill:#b45309; }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- ============ HEADERS ============ -->
+  <div class="hdr hdr-init" style="left:20px;  top:18px; width:250px;"><span class="hn">1</span>INITIALIZATION</div>
+  <div class="hdr hdr-exec" style="left:290px; top:18px; width:1130px;"><span class="hn">2</span>TESTING EXECUTION PHASE&nbsp;&nbsp;<span style="font-weight:600;opacity:.85;font-size:12.5px;">(iterative loop)</span></div>
+  <div class="hdr hdr-rep"  style="left:1440px;top:18px; width:220px;"><span class="hn">3</span>FINAL REPORT</div>
+
+  <!-- exec container -->
+  <div class="exec-box" style="left:290px; top:70px; width:1130px; height:912px;"></div>
+
+  <!-- ============ 1. INITIALIZATION COLUMN ============ -->
+  <div class="card" style="left:20px; top:76px; width:250px; height:148px;">
+    <div class="toprow"><span class="num" style="background:#2563eb;">1.1</span>
+      <div class="ic" style="background:#eff6ff;color:#2563eb;">SVG_DOC</div>
+      <div class="ttl">OpenAPI<br>Specification</div></div>
+    <div class="desc">The target REST API described in OpenAPI&nbsp;3.0.</div>
+    <div class="codechip">openapi: 3.0 &nbsp;·&nbsp; paths &#123; … &#125;</div>
+  </div>
+
+  <div class="card" style="left:20px; top:236px; width:250px; height:182px;">
+    <div class="toprow"><span class="num" style="background:#2563eb;">1.2</span>
+      <div class="ic" style="background:#eff6ff;color:#2563eb;">SVG_GEAR</div>
+      <div class="ttl">Parse<br>Specification</div></div>
+    <ul class="b" style="--c:#2563eb;">
+      <li>Operations (endpoints)</li>
+      <li>Parameters</li>
+      <li>Request schemas</li>
+      <li>Response schemas</li>
+    </ul>
+  </div>
+
+  <div class="card" style="left:20px; top:430px; width:250px; height:200px;">
+    <div class="toprow"><span class="num" style="background:#2563eb;">1.3</span>
+      <div class="ic" style="background:#eff6ff;color:#2563eb;">SVG_GRAPH</div>
+      <div class="ttl">Build SPDG</div></div>
+    <div class="desc" style="margin-top:5px;font-weight:600;color:#1e3a8a;">Semantic Property Dependency Graph</div>
+    <ul class="b" style="--c:#2563eb;margin-top:6px;">
+      <li>Nodes = API operations</li>
+      <li>Edges = potential dependencies</li>
+      <li>Weighted by cosine similarity of input / output property names</li>
+    </ul>
+  </div>
+
+  <div class="card" style="left:20px; top:642px; width:250px; height:340px;">
+    <div class="toprow"><span class="num" style="background:#2563eb;">1.4</span>
+      <div class="ic" style="background:#eff6ff;color:#2563eb;">SVG_ROBOT</div>
+      <div class="ttl">Initialize Agents</div></div>
+    <div class="mini-agent"><span class="dot" style="background:#2563eb;">SVG_ROBOT</span>Operation Agent</div>
+    <div class="mini-agent"><span class="dot" style="background:#16a34a;">SVG_ROBOT</span>Parameter Agent</div>
+    <div class="mini-agent"><span class="dot" style="background:#7c3aed;">SVG_ROBOT</span>Value Agent</div>
+    <div class="mini-agent"><span class="dot" style="background:#0d9488;">SVG_ROBOT</span>Dependency Agent</div>
+    <div class="chip" style="background:#eef2ff;color:#3730a3;margin-top:12px;">SVG_TABLE&nbsp; Initialize Q-tables for all agents</div>
+    <div class="desc" style="margin-top:10px;">Value Agent pre-generates realistic values via the LLM (few-shot, JSON mode).</div>
+  </div>
+
+  <!-- ============ 2. AGENTS (top row) ============ -->
+  <div class="card agent a-op" style="left:306px; top:88px; width:256px; height:214px;">
+    <div class="toprow"><span class="num" style="background:#2563eb;">2.1</span>
+      <div class="ic" style="background:#eff6ff;color:#2563eb;">SVG_ROBOT</div>
+      <div class="ttl">Operation Agent</div></div>
+    <div class="desc">Selects the next API operation to test.</div>
+    <div class="qwrap"><div class="qlabel">Q-table · Operations</div><div class="qgrid" data-best="8"></div></div>
+  </div>
+  <div class="card agent a-par" style="left:578px; top:88px; width:256px; height:214px;">
+    <div class="toprow"><span class="num" style="background:#16a34a;">2.2</span>
+      <div class="ic" style="background:#f0fdf4;color:#16a34a;">SVG_ROBOT</div>
+      <div class="ttl">Parameter Agent</div></div>
+    <div class="desc">Chooses a parameter combination for the selected operation.</div>
+    <div class="qwrap"><div class="qlabel">Q-table · Parameter combos</div><div class="qgrid" data-best="3"></div></div>
+  </div>
+  <div class="card agent a-val" style="left:850px; top:88px; width:256px; height:214px;">
+    <div class="toprow"><span class="num" style="background:#7c3aed;">2.3</span>
+      <div class="ic" style="background:#f5f3ff;color:#7c3aed;">SVG_ROBOT</div>
+      <div class="ttl">Value Agent</div></div>
+    <div class="desc">Generates each value from its best data source: <b>LLM · dependency · default</b>.</div>
+    <div class="qwrap"><div class="qlabel">Q-table · Value sources</div><div class="qgrid" data-best="15"></div></div>
+  </div>
+  <div class="card agent a-dep" style="left:1122px; top:88px; width:256px; height:214px;">
+    <div class="toprow"><span class="num" style="background:#0d9488;">2.4</span>
+      <div class="ic" style="background:#f0fdfa;color:#0d9488;">SVG_ROBOT</div>
+      <div class="ttl">Dependency Agent</div></div>
+    <div class="desc">Supplies values from dependent operations via the SPDG.</div>
+    <div class="qwrap"><div class="qlabel">Q-table · Dependencies</div><div class="qgrid" data-best="10"></div></div>
+  </div>
+
+  <!-- ============ 2.5 request gen + mutator ============ -->
+  <div class="card" style="left:306px; top:334px; width:470px; height:120px; border-color:#c7d2fe;">
+    <div class="toprow"><span class="num" style="background:#4f46e5;">2.5</span>
+      <div class="ic" style="background:#eef2ff;color:#4f46e5;">SVG_CODE</div>
+      <div class="ttl">Request Generator</div></div>
+    <div class="desc">Constructs the HTTP request from&nbsp; <b>operation + parameters + values + headers</b>.</div>
+  </div>
+  <div class="card" style="left:806px; top:334px; width:420px; height:120px; border-color:#fde68a; background:#fffbeb;">
+    <div class="toprow"><span class="num" style="background:#d97706;">M</span>
+      <div class="ic" style="background:#fef3c7;color:#b45309;">SVG_SHUF</div>
+      <div class="ttl">Mutator <span style="font-weight:600;color:#b45309;font-size:12px;">· ≈20% of requests</span></div></div>
+    <div class="desc">Perturbs values, types, headers &amp; methods to probe error handling and trigger faults.</div>
+  </div>
+
+  <!-- ============ send / SUT / receive ============ -->
+  <div class="card" style="left:306px; top:478px; width:250px; height:120px;">
+    <div class="toprow"><span class="num" style="background:#0284c7;">2.6</span>
+      <div class="ic" style="background:#f0f9ff;color:#0284c7;">SVG_GLOBE</div>
+      <div class="ttl">Send Request</div></div>
+    <div class="desc">HTTP(S) request dispatched to the target service.</div>
+  </div>
+  <div class="card" style="left:600px; top:478px; width:200px; height:120px; background:#f8fafc; border-color:#cbd5e1;">
+    <div class="toprow"><div class="ic" style="background:#e2e8f0;color:#475569;">SVG_CLOUD</div>
+      <div class="ttl" style="font-size:14px;">Service<br>Under Test</div></div>
+    <div class="desc" style="text-align:left;">Target REST API (SUT).</div>
+  </div>
+  <div class="card" style="left:846px; top:478px; width:256px; height:120px;">
+    <div class="toprow"><span class="num" style="background:#16a34a;">2.7</span>
+      <div class="ic" style="background:#f0fdf4;color:#16a34a;">SVG_CHECK</div>
+      <div class="ttl">Receive Response</div></div>
+    <div class="desc">Captures the status code, headers &amp; body.</div>
+  </div>
+
+  <!-- ============ bottom row 2.8 / 2.9 / 2.10 ============ -->
+  <div class="card" style="left:306px; top:670px; width:346px; height:252px; background:#fffdf7; border-color:#fde68a;">
+    <div class="toprow"><span class="num" style="background:#b45309;">2.8</span>
+      <div class="ic" style="background:#fef3c7;color:#b45309;">SVG_SEARCH</div>
+      <div class="ttl">Response Handler</div></div>
+    <ul class="b" style="--c:#d97706;">
+      <li>Analyse the status code &amp; body</li>
+      <li>Extract values from 2xx responses</li>
+      <li>Cache values for future requests</li>
+      <li>Flag 5xx server errors for the report</li>
+    </ul>
+  </div>
+  <div class="card" style="left:672px; top:670px; width:346px; height:252px; background:#fff5f7; border-color:#fecdd3;">
+    <div class="toprow"><span class="num" style="background:#e11d48;">2.9</span>
+      <div class="ic" style="background:#ffe4e6;color:#e11d48;">SVG_REFRESH</div>
+      <div class="ttl">Update Q-tables<br><span style="font-size:12px;font-weight:600;color:#be123c;">learning step</span></div></div>
+    <div class="desc" style="margin-top:10px;">Updates <b>every</b> agent's Q-table using <b>value-decomposition Q-learning</b> (temporal-difference update), rewarding choices that led to successful requests.</div>
+    <div class="chip" style="background:#ffe4e6;color:#9f1239;">ε-greedy exploration · shared reward</div>
+  </div>
+  <div class="card" style="left:1038px; top:670px; width:340px; height:252px; background:#f2fdfb; border-color:#99f6e4;">
+    <div class="toprow"><span class="num" style="background:#0d9488;">2.10</span>
+      <div class="ic" style="background:#ccfbf1;color:#0d9488;">SVG_NET</div>
+      <div class="ttl">Refine SPDG</div></div>
+    <ul class="b" style="--c:#0d9488;">
+      <li>Increase edge weight on successful (2xx) dependencies</li>
+      <li>Decrease weight on failed (4xx / 5xx) dependencies</li>
+      <li>Prune very low-weight edges</li>
+    </ul>
+  </div>
+
+  <!-- ============ 3. FINAL REPORT ============ -->
+  <div class="card" style="left:1440px; top:76px; width:220px; height:820px; border-color:#bae6fd;">
+    <div class="ic" style="background:#e0f2fe;color:#0369a1;width:44px;height:44px;margin-bottom:6px;">SVG_REPORT</div>
+    <div class="ttl" style="font-size:15px;margin-bottom:4px;">Testing Report</div>
+    <div class="desc" style="margin-top:2px;">Produced when the time budget is exhausted.</div>
+    <ul class="b" style="--c:#0369a1;margin-top:14px;">
+      <li>Tested operations</li>
+      <li>Code / operation coverage</li>
+      <li>Detected 500 server errors</li>
+      <li>Execution history &amp; request logs</li>
+    </ul>
+    <div style="margin-top:18px;">
+      <div class="qlabel">Status-code distribution</div>
+      <div class="barrow"><span class="lb" style="color:#16a34a;">2xx</span><div class="track"><i style="width:64%;background:#16a34a;"></i></div></div>
+      <div class="barrow"><span class="lb" style="color:#d97706;">4xx</span><div class="track"><i style="width:27%;background:#d97706;"></i></div></div>
+      <div class="barrow"><span class="lb" style="color:#e11d48;">5xx</span><div class="track"><i style="width:11%;background:#e11d48;"></i></div></div>
+    </div>
+    <div class="codechip" style="margin-top:18px;color:#0369a1;background:#f0f9ff;border-color:#bae6fd;">report.json<br>server_errors.json</div>
+  </div>
+
+  <!-- ============ FLOW ARROWS ============ -->
+  <svg class="flow" viewBox="0 0 1680 1000">
+    <defs>
+      <marker id="aBlue" markerWidth="9" markerHeight="9" refX="6.5" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="#2563eb"/></marker>
+      <marker id="aSlate" markerWidth="9" markerHeight="9" refX="6.5" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="#64748b"/></marker>
+      <marker id="aPurple" markerWidth="10" markerHeight="10" refX="6.8" refY="3.4" orient="auto"><path d="M0,0 L7.4,3.4 L0,6.8 Z" fill="#7c3aed"/></marker>
+      <marker id="aAmber" markerWidth="9" markerHeight="9" refX="6.5" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="#d97706"/></marker>
+      <marker id="aGreen" markerWidth="9" markerHeight="9" refX="6.5" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="#16a34a"/></marker>
+      <marker id="aTeal" markerWidth="9" markerHeight="9" refX="6.5" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="#0d9488"/></marker>
+      <marker id="aSky" markerWidth="9" markerHeight="9" refX="6.5" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 Z" fill="#0284c7"/></marker>
+    </defs>
+
+    <!-- init -> exec (bold) -->
+    <path d="M272,180 L302,180" stroke="#2563eb" stroke-width="5" fill="none" marker-end="url(#aBlue)"/>
+
+    <!-- agent chain -->
+    <path d="M562,182 L576,182" stroke="#64748b" stroke-width="2.4" fill="none" marker-end="url(#aSlate)"/>
+    <path d="M834,182 L848,182" stroke="#64748b" stroke-width="2.4" fill="none" marker-end="url(#aSlate)"/>
+    <path d="M1106,182 L1120,182" stroke="#64748b" stroke-width="2.4" fill="none" marker-end="url(#aSlate)"/>
+
+    <!-- agents collector into 2.5 -->
+    <path d="M434,302 L434,318" stroke="#94a3b8" stroke-width="2" fill="none"/>
+    <path d="M706,302 L706,318" stroke="#94a3b8" stroke-width="2" fill="none"/>
+    <path d="M978,302 L978,318" stroke="#94a3b8" stroke-width="2" fill="none"/>
+    <path d="M1250,302 L1250,318" stroke="#94a3b8" stroke-width="2" fill="none"/>
+    <path d="M434,318 L1250,318" stroke="#94a3b8" stroke-width="2" fill="none"/>
+    <path d="M541,318 L541,330" stroke="#64748b" stroke-width="2.6" fill="none" marker-end="url(#aSlate)"/>
+
+    <!-- 2.5 -> 2.6 -->
+    <path d="M431,454 L431,474" stroke="#4f46e5" stroke-width="2.6" fill="none" marker-end="url(#aBlue)"/>
+    <!-- mutator -> send (dashed) -->
+    <path d="M900,454 C900,478 640,470 562,506" stroke="#d97706" stroke-width="2.4" fill="none" stroke-dasharray="6 5" marker-end="url(#aAmber)"/>
+
+    <!-- send -> SUT -> receive -->
+    <path d="M556,538 L596,538" stroke="#0284c7" stroke-width="2.6" fill="none" marker-end="url(#aSky)"/>
+    <text class="elabel" x="556" y="530">request</text>
+    <path d="M800,538 L842,538" stroke="#16a34a" stroke-width="2.6" fill="none" marker-end="url(#aGreen)"/>
+    <text class="elabel" x="800" y="530">response</text>
+
+    <!-- receive -> response handler (orthogonal) -->
+    <path d="M974,598 L974,644 L479,644 L479,670" stroke="#64748b" stroke-width="2.6" fill="none" marker-end="url(#aSlate)"/>
+
+    <!-- 2.8 -> 2.9 -> 2.10 -->
+    <path d="M652,796 L668,796" stroke="#e11d48" stroke-width="2.6" fill="none" marker-end="url(#aPurple)"/>
+    <path d="M1018,796 L1034,796" stroke="#0d9488" stroke-width="2.6" fill="none" marker-end="url(#aTeal)"/>
+
+    <!-- loop back to 2.1 -->
+    <path d="M1378,760 L1398,760 L1398,80 L438,80 L438,86" stroke="#7c3aed" stroke-width="2.8" fill="none"
+          stroke-dasharray="2 0" marker-end="url(#aPurple)"/>
+    <text class="looptext" transform="rotate(-90 1414 420)" x="1414" y="420" text-anchor="middle">repeat until time budget is exhausted</text>
+
+    <!-- exec -> final report -->
+    <path d="M1420,470 L1438,470" stroke="#0369a1" stroke-width="3.4" fill="none" marker-end="url(#aSky)"/>
+  </svg>
+
+</div>
+
+<script>
+// ---- inline SVG icon set ----
+const I = {
+  DOC:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/></svg>',
+  GEAR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.5v2.7M12 18.8v2.7M21.5 12h-2.7M5.2 12H2.5M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9M18.7 18.7l-1.9-1.9M7.2 7.2 5.3 5.3"/></svg>',
+  GRAPH:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="6" r="2.2"/><circle cx="18" cy="8.5" r="2.2"/><circle cx="10" cy="18" r="2.2"/><path d="M7.4 6.7 15.8 8M6.6 8 9 15.9M12 17l4.7-6.8"/></svg>',
+  ROBOT:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.2"/><path d="M12 4.2V8"/><circle cx="12" cy="3.2" r="1.5" fill="currentColor" stroke="none"/><circle cx="9.2" cy="13.4" r="1.5" fill="currentColor" stroke="none"/><circle cx="14.8" cy="13.4" r="1.5" fill="currentColor" stroke="none"/><path d="M9.6 16.4h4.8M2.5 12H4M20 12h1.5"/></svg>',
+  CODE:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg>',
+  SHUF:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h4l8 10h4M18 15l3 2-3 2M4 17h4l2.5-3.1M14.5 9.1 16 7l-.1 0h2M18 5l3 2-3 2"/></svg>',
+  GLOBE:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.5 12h17M12 3.4c2.6 2.5 2.6 14.7 0 17.2M12 3.4c-2.6 2.5-2.6 14.7 0 17.2"/></svg>',
+  CLOUD:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.2 18.5h9.3a3.9 3.9 0 0 0 .9-7.7A5.6 5.6 0 0 0 6.3 9.6 3.9 3.9 0 0 0 7.2 18.5Z"/><path d="M9.5 14.5h5M10.5 11.8h3.4"/></svg>',
+  CHECK:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M8.3 12.4l2.5 2.5 4.9-5.3"/></svg>',
+  SEARCH:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.2"/><path d="M15.6 15.6 20.5 20.5"/></svg>',
+  REFRESH:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.6 4.5V10h-5.5"/></svg>',
+  NET:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M7.7 7.6 10.6 16M16.3 7.6 13.4 16M8 6h8"/></svg>',
+  TABLE:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 10h17M9 10v9M15 10v9"/></svg>',
+  REPORT:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 15l2.3-2.3 2 1.6 3-3.3"/></svg>'
+};
+document.querySelectorAll('.ic,.dot,.chip').forEach(el=>{
+  el.innerHTML = el.innerHTML
+    .replace('SVG_DOC',I.DOC).replace('SVG_GEAR',I.GEAR).replace('SVG_GRAPH',I.GRAPH)
+    .replace(/SVG_ROBOT/g,I.ROBOT).replace('SVG_CODE',I.CODE).replace('SVG_SHUF',I.SHUF)
+    .replace('SVG_GLOBE',I.GLOBE).replace('SVG_CLOUD',I.CLOUD).replace('SVG_CHECK',I.CHECK)
+    .replace('SVG_SEARCH',I.SEARCH).replace('SVG_REFRESH',I.REFRESH).replace('SVG_NET',I.NET)
+    .replace('SVG_TABLE',I.TABLE).replace('SVG_REPORT',I.REPORT);
+});
+// mini-agent robot dots
+document.querySelectorAll('.mini-agent .dot').forEach(el=>{ el.innerHTML = I.ROBOT; });
+
+// ---- Q-table heatmaps ----
+const pat=[.18,.4,.66,.24,.52,.2, .32,.6,.2,.8,.42,.16, .5,.24,.46,.3,.7,.22];
+document.querySelectorAll('.qgrid').forEach(g=>{
+  const best=+g.dataset.best;
+  for(let i=0;i<18;i++){
+    const c=document.createElement('div');
+    c.className='qcell'+(i===best?' best':'');
+    c.style.opacity=(i===best?1:pat[i]);
+    g.appendChild(c);
+  }
+});
+</script>
+</body>
+</html>

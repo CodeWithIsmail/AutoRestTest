@@ -1,0 +1,40 @@
+<mxfile host="app.diagrams.net" scale="4" border="0">
+  <diagram id="DedWzPCYD24HjhBUQCg0" name="use 1.1">
+    <mxGraphModel dx="916" dy="379" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="mt4ZzendssvNs0NUpyu2-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="320" width="214" x="671" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-21" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Signup&amp;nbsp;" vertex="1">
+          <mxGeometry height="50" width="110" x="723" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-22" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Login" vertex="1">
+          <mxGeometry height="50" width="110" x="723" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-23" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Logout" vertex="1">
+          <mxGeometry height="50" width="110" x="723" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-24" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="AutoRestTest service" vertex="1">
+          <mxGeometry height="50" width="110" x="723" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-31" edge="1" parent="1" source="mt4ZzendssvNs0NUpyu2-26" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="mt4ZzendssvNs0NUpyu2-22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-32" edge="1" parent="1" source="mt4ZzendssvNs0NUpyu2-26" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;endArrow=none;endFill=0;" target="mt4ZzendssvNs0NUpyu2-23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-33" edge="1" parent="1" source="mt4ZzendssvNs0NUpyu2-26" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="mt4ZzendssvNs0NUpyu2-24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-oQ9Eo5K9YMO9bR7Wrwy-2" edge="1" parent="1" source="mt4ZzendssvNs0NUpyu2-26" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="mt4ZzendssvNs0NUpyu2-21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="mt4ZzendssvNs0NUpyu2-26" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="User&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="560" y="380" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

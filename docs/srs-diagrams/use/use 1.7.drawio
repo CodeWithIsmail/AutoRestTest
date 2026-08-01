@@ -1,0 +1,78 @@
+<mxfile host="app.diagrams.net" scale="4" border="0">
+  <diagram name="use 1.7" id="t7Z0r2-Vk8Zm5FPfh9Ad">
+    <mxGraphModel dx="1078" dy="446" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-0" />
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-1" parent="g9SG5wo7lq5pRkNVExZM-0" />
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-2" parent="g9SG5wo7lq5pRkNVExZM-1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="420" width="269.5" x="665.13" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-3" parent="g9SG5wo7lq5pRkNVExZM-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Invite member" vertex="1">
+          <mxGeometry height="50" width="110" x="740" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-4" parent="g9SG5wo7lq5pRkNVExZM-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Update member role" vertex="1">
+          <mxGeometry height="50" width="110" x="740.01" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-5" parent="g9SG5wo7lq5pRkNVExZM-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Remove member" vertex="1">
+          <mxGeometry height="50" width="119.75" x="735.13" y="435" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-6" parent="g9SG5wo7lq5pRkNVExZM-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Accept / Decline invitation" vertex="1">
+          <mxGeometry height="50" width="110" x="744.88" y="585" as="geometry" />
+        </mxCell>
+        <object label="AutoRestTest engine" id="g9SG5wo7lq5pRkNVExZM-7">
+          <mxCell parent="g9SG5wo7lq5pRkNVExZM-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1">
+            <mxGeometry height="60" width="30" x="1030" y="315" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="LLM Service" id="g9SG5wo7lq5pRkNVExZM-8">
+          <mxCell parent="g9SG5wo7lq5pRkNVExZM-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1">
+            <mxGeometry height="60" width="30" x="1030" y="425" as="geometry" />
+          </mxCell>
+        </object>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-10" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-12" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="g9SG5wo7lq5pRkNVExZM-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-11" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-12" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="g9SG5wo7lq5pRkNVExZM-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="P753DOjzlqU8OHzUItcO-1" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-12" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="g9SG5wo7lq5pRkNVExZM-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="P753DOjzlqU8OHzUItcO-2" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-12" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="x9Y99Lf9_4tXUgMRx0iK-0">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <object label="Admin" id="g9SG5wo7lq5pRkNVExZM-12">
+          <mxCell parent="g9SG5wo7lq5pRkNVExZM-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1">
+            <mxGeometry height="60" width="30" x="550" y="310" as="geometry" />
+          </mxCell>
+        </object>
+        <mxCell id="P753DOjzlqU8OHzUItcO-3" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-17" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;startArrow=none;startFill=0;endArrow=none;endFill=0;" target="g9SG5wo7lq5pRkNVExZM-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="76Pn9uBM7oHkm87lrf7_-4" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-17" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="x9Y99Lf9_4tXUgMRx0iK-0">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-17" parent="g9SG5wo7lq5pRkNVExZM-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="User" vertex="1">
+          <mxGeometry height="60" width="30" x="550" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-18" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-3" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.3333333333333333;entryDx=0;entryDy=0;entryPerimeter=0;endArrow=none;endFill=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="g9SG5wo7lq5pRkNVExZM-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g9SG5wo7lq5pRkNVExZM-19" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-3" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3333333333333333;entryDx=0;entryDy=0;entryPerimeter=0;endArrow=none;endFill=0;" target="g9SG5wo7lq5pRkNVExZM-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="x9Y99Lf9_4tXUgMRx0iK-0" parent="g9SG5wo7lq5pRkNVExZM-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="View collaborator list" vertex="1">
+          <mxGeometry height="50" width="119.75" x="735.13" y="510" as="geometry" />
+        </mxCell>
+        <object label="&lt;div&gt;Email service&lt;/div&gt;" id="kik1-OBR4BbX2hevXQPn-0">
+          <mxCell parent="g9SG5wo7lq5pRkNVExZM-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1">
+            <mxGeometry height="60" width="30" x="1030" y="545" as="geometry" />
+          </mxCell>
+        </object>
+        <mxCell id="kik1-OBR4BbX2hevXQPn-1" edge="1" parent="g9SG5wo7lq5pRkNVExZM-1" source="g9SG5wo7lq5pRkNVExZM-3" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3333333333333333;entryDx=0;entryDy=0;entryPerimeter=0;endArrow=none;endFill=0;" target="kik1-OBR4BbX2hevXQPn-0">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,76 @@
+<mxfile host="app.diagrams.net" scale="4" border="0">
+  <diagram name="use 1.3" id="-QDQhE4UD8pK33ur81kZ">
+    <mxGraphModel dx="916" dy="379" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-0" />
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-1" parent="RuvoUttDjQxlTF1AoRyK-0" />
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-2" parent="RuvoUttDjQxlTF1AoRyK-1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="360" width="249" x="671" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="1bVNw72hoVanAHlVmpDk-5" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-3" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;endArrow=classic;endFill=1;" target="RuvoUttDjQxlTF1AoRyK-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-3" parent="RuvoUttDjQxlTF1AoRyK-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Upload Codebase" vertex="1">
+          <mxGeometry height="50" width="110" x="740" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-4" parent="RuvoUttDjQxlTF1AoRyK-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Update / Delete Spec" vertex="1">
+          <mxGeometry height="50" width="110" x="740.5" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-5" parent="RuvoUttDjQxlTF1AoRyK-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="&lt;span style=&quot;line-height: 115%;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;Generate API Spec&lt;/font&gt;&lt;/span&gt;" vertex="1">
+          <mxGeometry height="50" width="120.25" x="740" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-6" parent="RuvoUttDjQxlTF1AoRyK-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="&lt;span style=&quot;line-height: 115%;&quot;&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;View API Spec details&lt;/font&gt;&lt;/span&gt;" vertex="1">
+          <mxGeometry height="50" width="110" x="745.13" y="560" as="geometry" />
+        </mxCell>
+        <object label="AutoRestTest engine" id="RuvoUttDjQxlTF1AoRyK-14">
+          <mxCell parent="RuvoUttDjQxlTF1AoRyK-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1">
+            <mxGeometry height="60" width="30" x="990" y="330" as="geometry" />
+          </mxCell>
+        </object>
+        <object label="LLM Service" id="RuvoUttDjQxlTF1AoRyK-15">
+          <mxCell parent="RuvoUttDjQxlTF1AoRyK-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1">
+            <mxGeometry height="60" width="30" x="990" y="440" as="geometry" />
+          </mxCell>
+        </object>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-19" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-5" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.3333333333333333;entryDx=0;entryDy=0;entryPerimeter=0;endArrow=none;endFill=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="RuvoUttDjQxlTF1AoRyK-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EGtFB8iuRgbfQO-x7Orw-1" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-23" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="RuvoUttDjQxlTF1AoRyK-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EGtFB8iuRgbfQO-x7Orw-10" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-23" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="RuvoUttDjQxlTF1AoRyK-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lDe5lAbReSfERUR9n0a8-2" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-23" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="RuvoUttDjQxlTF1AoRyK-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1bVNw72hoVanAHlVmpDk-4" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-23" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="1bVNw72hoVanAHlVmpDk-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <object label="Admin" id="RuvoUttDjQxlTF1AoRyK-23">
+          <mxCell parent="RuvoUttDjQxlTF1AoRyK-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1">
+            <mxGeometry height="60" width="30" x="590" y="290" as="geometry" />
+          </mxCell>
+        </object>
+        <mxCell id="EGtFB8iuRgbfQO-x7Orw-4" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-24" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;startArrow=none;startFill=0;" target="RuvoUttDjQxlTF1AoRyK-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-24" parent="RuvoUttDjQxlTF1AoRyK-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="Tester&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="590" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="EGtFB8iuRgbfQO-x7Orw-7" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-25" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=none;endFill=0;" target="RuvoUttDjQxlTF1AoRyK-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="RuvoUttDjQxlTF1AoRyK-25" parent="RuvoUttDjQxlTF1AoRyK-1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="Viewer&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="590" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="EGtFB8iuRgbfQO-x7Orw-9" edge="1" parent="RuvoUttDjQxlTF1AoRyK-1" source="RuvoUttDjQxlTF1AoRyK-5" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;endArrow=none;endFill=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="RuvoUttDjQxlTF1AoRyK-15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="1bVNw72hoVanAHlVmpDk-3" parent="RuvoUttDjQxlTF1AoRyK-1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="Upload API Specification" vertex="1">
+          <mxGeometry height="50" width="110" x="740" y="425" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
