@@ -37,6 +37,35 @@ function StatCard({
   );
 }
 
+// Aggregate the raw HTTP status-code distribution into outcome classes. In
+// black-box API testing there is no oracle for a generated request, so a
+// non-2xx response is NOT automatically a "failure": a 4xx means the API
+// correctly rejected a bad request, whereas a 5xx is an unhandled server
+// error — the genuine fault signal.
+function classifyOutcomes(distribution: Record<string, number>) {
+  let successful = 0;
+  let clientErrors = 0;
+  let serverErrors = 0;
+  let other = 0;
+  for (const [code, n] of Object.entries(distribution)) {
+    const count = Number(n) || 0;
+    switch (code.charAt(0)) {
+      case "2":
+        successful += count;
+        break;
+      case "4":
+        clientErrors += count;
+        break;
+      case "5":
+        serverErrors += count;
+        break;
+      default:
+        other += count; // 1xx / 3xx / non-numeric
+    }
+  }
+  return { successful, clientErrors, serverErrors, other };
+}
+
 export default function SuiteDetailPage() {
   const { project, canRun } = useProject();
   const { suiteId } = useParams<{ suiteId: string }>();
@@ -177,6 +206,14 @@ export default function SuiteDetailPage() {
 
   const runLabel = suite.name || `Run ${suite.id.slice(0, 8)}`;
   const canReRun = canRun && suite.status !== "running";
+
+  // Outcome breakdown from the honest source (the status-code distribution).
+  // "Faults" are 5xx server errors only — the real defects this tool exists to
+  // surface — never 4xx client rejections.
+  const outcomes = report
+    ? classifyOutcomes(report.statusCodeDistribution)
+    : null;
+  const faults = outcomes?.serverErrors ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -329,6 +366,43 @@ export default function SuiteDetailPage() {
           </Card>
         ) : (
           <>
+            {/* Faults detected — the headline signal. In black-box API
+                testing, 5xx server errors are the genuine defects; 4xx are the
+                API correctly rejecting bad requests, not failures. */}
+            <div
+              className={`flex items-center gap-4 rounded-xl border p-5 ${
+                faults > 0
+                  ? "border-red-500/40 bg-red-500/10"
+                  : "border-emerald-500/30 bg-emerald-500/10"
+              }`}
+            >
+              <div
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl ${
+                  faults > 0
+                    ? "bg-red-500/15 text-red-400"
+                    : "bg-emerald-500/15 text-emerald-400"
+                }`}
+              >
+                {faults > 0 ? "⚠" : "✓"}
+              </div>
+              <div className="min-w-0">
+                <p
+                  className={`text-2xl font-semibold ${
+                    faults > 0 ? "text-red-300" : "text-emerald-300"
+                  }`}
+                >
+                  {faults > 0
+                    ? `${faults} fault${faults === 1 ? "" : "s"} detected`
+                    : "No faults detected"}
+                </p>
+                <p className="mt-0.5 text-sm text-zinc-400">
+                  {faults > 0
+                    ? "5xx server errors — unhandled conditions that likely indicate defects in the API."
+                    : "No 5xx server errors were returned in this run."}
+                </p>
+              </div>
+            </div>
+
             {/* KPI row */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
               <StatCard
@@ -337,27 +411,27 @@ export default function SuiteDetailPage() {
                 tone="text-emerald-400"
               />
               <StatCard
-                label="Pass rate"
-                value={`${report.overview.passRatePct}%`}
-                tone="text-emerald-400"
-              />
-              <StatCard
                 label="Endpoints"
                 value={`${report.overview.coveredEndpoints}/${report.overview.totalEndpoints}`}
               />
               <StatCard
-                label="Test cases"
+                label="Requests"
                 value={report.overview.totalTestCases}
               />
               <StatCard
-                label="Passed"
-                value={report.overview.passedTestCases}
+                label="Successful (2xx)"
+                value={outcomes?.successful ?? 0}
                 tone="text-emerald-400"
               />
               <StatCard
-                label="Failed"
-                value={report.overview.failedTestCases}
-                tone="text-red-400"
+                label="Client errors (4xx)"
+                value={outcomes?.clientErrors ?? 0}
+                tone="text-amber-400"
+              />
+              <StatCard
+                label="Server errors (5xx)"
+                value={outcomes?.serverErrors ?? 0}
+                tone={faults > 0 ? "text-red-400" : "text-zinc-100"}
               />
             </div>
 
@@ -418,14 +492,19 @@ export default function SuiteDetailPage() {
                             {e.path}
                           </td>
                           <td className="px-5 py-3">
-                            <div className="flex flex-col gap-1">
-                              <Badge tone={e.passed ? "emerald" : "red"}>
-                                {e.passed ? "Passed" : "Failed"}
-                              </Badge>
-                              {e.hasServerErrors && (
-                                <Badge tone="red">Server error</Badge>
-                              )}
-                            </div>
+                            {(() => {
+                              const has5xx =
+                                e.hasServerErrors ||
+                                codes.some(([c]) => c.startsWith("5"));
+                              const has2xx = codes.some(([c]) =>
+                                c.startsWith("2"),
+                              );
+                              if (has5xx)
+                                return <Badge tone="red">Server error</Badge>;
+                              if (has2xx)
+                                return <Badge tone="emerald">Successful</Badge>;
+                              return <Badge tone="amber">Client error</Badge>;
+                            })()}
                           </td>
                           <td className="px-5 py-3">
                             {codes.length === 0 ? (
