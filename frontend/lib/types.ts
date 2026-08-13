@@ -84,6 +84,30 @@ export interface SpecDetail {
   fileContent: string;
 }
 
+export type SpecGenStatus = "pending" | "running" | "completed" | "failed";
+
+/**
+ * A codebase-to-OpenAPI generation job
+ * (GET /projects/:id/spec/generate). `generatedSpec` is populated once the job
+ * completes and holds the document awaiting the user's review.
+ */
+export interface SpecGeneration {
+  id: string;
+  status: SpecGenStatus;
+  sourceName: string;
+  /** Human-readable current pipeline step, e.g. "Finding API entry points". */
+  step: string | null;
+  stepIndex: number;
+  stepTotal: number;
+  generatedSpec: string | null;
+  operationCount: number;
+  warnings: string[];
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
 /** A single endpoint (GET /projects/:id/endpoints). */
 export interface EndpointItem {
   id: string;

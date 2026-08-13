@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -49,6 +50,35 @@ export interface EngineRequestRecord {
   responseHeaders: Record<string, string> | null;
   responseBody: string | null;
   responseTruncated: boolean;
+}
+
+/** Options sent alongside the source archive to `POST /generations`. */
+export interface EngineGenerationOptions {
+  title: string;
+  version: string;
+  /** Directory names the pipeline should not walk into. */
+  ignorePath?: string[];
+}
+
+/** Status of a codebase-to-OpenAPI generation job. */
+export interface EngineGenerationJob extends EngineJob {
+  sourceName: string;
+  warnings: string[];
+  /** Raw pipeline step name, e.g. "run_swagger_generation". */
+  step: string | null;
+  /** Human-readable step name for the UI. */
+  stepLabel: string | null;
+  stepIndex: number;
+  stepTotal: number;
+}
+
+export interface EngineGenerationResult {
+  /** The generated document, serialized as JSON. */
+  openapi: string;
+  /** "swagger2" when the OAS 3 upgrade step could not run (no JRE). */
+  format: 'oas3' | 'swagger2';
+  operationCount: number;
+  warnings: string[];
 }
 
 export interface EngineResult {
@@ -106,6 +136,95 @@ export class EngineService {
       `/runs/${jobId}/requests`,
     );
     return res.requests ?? [];
+  }
+
+  // -- spec generation (upload a codebase, get an OpenAPI document) --------- //
+
+  /**
+   * Upload a source archive and queue a generation. Sent as multipart rather
+   * than JSON because the archive is binary and can be tens of megabytes;
+   * base64 in a JSON body would inflate it by a third for no benefit.
+   */
+  async startGeneration(
+    file: { buffer: Buffer; originalname: string },
+    opts: EngineGenerationOptions,
+  ): Promise<EngineGenerationJob> {
+    const form = new FormData();
+    form.append(
+      'file',
+      new Blob([new Uint8Array(file.buffer)], { type: 'application/zip' }),
+      file.originalname,
+    );
+    form.append('title', opts.title);
+    form.append('version', opts.version);
+    if (opts.ignorePath?.length) {
+      form.append('ignorePath', opts.ignorePath.join(','));
+    }
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers['X-Service-Token'] = this.token;
+
+    let res: Response;
+    try {
+      // No Content-Type header: the runtime sets it with the multipart boundary.
+      res = await fetch(`${this.baseUrl}/generations`, {
+        method: 'POST',
+        headers,
+        body: form,
+      });
+    } catch (err) {
+      this.logger.error(`engine-service unreachable: ${String(err)}`);
+      throw new ServiceUnavailableException('Spec generator is unavailable');
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      this.logger.error(
+        `engine-service POST /generations -> ${res.status} ${text}`,
+      );
+      // Archive rejections (bad zip, too large, too many files) are the user's
+      // to fix, so pass them through instead of masking them as a 503.
+      if (res.status === 400 || res.status === 413) {
+        throw new BadRequestException(
+          this.errorMessageOf(text) ?? 'The source archive was rejected',
+        );
+      }
+      throw new ServiceUnavailableException(
+        `Spec generator returned ${res.status}`,
+      );
+    }
+
+    return (await res.json()) as EngineGenerationJob;
+  }
+
+  async getGenerationStatus(jobId: string): Promise<EngineGenerationJob> {
+    return this.request<EngineGenerationJob>('GET', `/generations/${jobId}`);
+  }
+
+  async getGenerationResult(jobId: string): Promise<EngineGenerationResult> {
+    return this.request<EngineGenerationResult>(
+      'GET',
+      `/generations/${jobId}/result`,
+    );
+  }
+
+  /** Best-effort cleanup of a generation's working directory. */
+  async deleteGeneration(jobId: string): Promise<void> {
+    try {
+      await this.request('DELETE', `/generations/${jobId}`);
+    } catch {
+      // The row is going away regardless; a stale job directory is harmless.
+    }
+  }
+
+  /** Pull the `error` field out of an engine-service JSON error body. */
+  private errorMessageOf(text: string): string | null {
+    try {
+      const parsed = JSON.parse(text) as { error?: unknown };
+      return typeof parsed.error === 'string' ? parsed.error : null;
+    } catch {
+      return null;
+    }
   }
 
   private async request<T>(

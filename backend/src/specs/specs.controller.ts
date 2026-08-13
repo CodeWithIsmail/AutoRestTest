@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -16,6 +17,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SpecsService } from './specs.service';
+import {
+  MAX_ARCHIVE_BYTES,
+  SpecGenerationService,
+} from './spec-generation.service';
+import { GenerateSpecDto } from './dto/generate-spec.dto';
 
 interface AuthenticatedRequest extends Request {
   user: { id: string };
@@ -24,7 +30,10 @@ interface AuthenticatedRequest extends Request {
 @Controller('projects/:projectId/spec')
 @UseGuards(JwtAuthGuard)
 export class SpecsController {
-  constructor(private readonly specsService: SpecsService) {}
+  constructor(
+    private readonly specsService: SpecsService,
+    private readonly generationService: SpecGenerationService,
+  ) {}
 
   /**
    * POST /projects/:projectId/spec
@@ -65,5 +74,66 @@ export class SpecsController {
     @Param('projectId', new ParseUUIDPipe()) projectId: string,
   ) {
     return this.specsService.remove(projectId, req.user.id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Generate a spec from an uploaded codebase. The result is held for review
+  // and only becomes the project's spec once the user applies it.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * POST /projects/:projectId/spec/generate
+   * Queues a generation from a .zip of the API's source. Owner/admin only.
+   */
+  @Post('generate')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_ARCHIVE_BYTES } }),
+  )
+  async startGeneration(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: GenerateSpecDto,
+  ) {
+    return this.generationService.start(projectId, req.user.id, file, dto);
+  }
+
+  /**
+   * GET /projects/:projectId/spec/generate
+   * Current generation job, including progress. Any project member.
+   */
+  @Get('generate')
+  async findGeneration(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+  ) {
+    return this.generationService.findForProject(projectId, req.user.id);
+  }
+
+  /**
+   * POST /projects/:projectId/spec/generate/apply
+   * Promotes the reviewed document to the project's spec. Owner/admin only.
+   */
+  @Post('generate/apply')
+  @HttpCode(HttpStatus.CREATED)
+  async applyGeneration(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+  ) {
+    return this.generationService.apply(projectId, req.user.id);
+  }
+
+  /**
+   * DELETE /projects/:projectId/spec/generate
+   * Discards the generation, leaving any existing spec untouched. Owner/admin.
+   */
+  @Delete('generate')
+  @HttpCode(HttpStatus.OK)
+  async discardGeneration(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+  ) {
+    return this.generationService.discard(projectId, req.user.id);
   }
 }

@@ -242,16 +242,92 @@ At least one field must be provided.
 
 ---
 
+## Module 3b — Spec generation from source code
+
+Instead of uploading a spec, a project owner/admin can upload a **zip of the
+API's source** and have one generated. The result is held for review and only
+becomes the project's spec once it is applied (route 11c) — generation never
+replaces a spec on its own. There is one generation per project; starting a new
+one replaces the previous attempt.
+
+Generation is slow (LLM-driven analysis of the whole codebase, minutes to
+hours). Poll route 11b for progress.
+
+### 11a. Start generation — `POST /projects/:projectId/spec/generate`
+
+**Body:** `multipart/form-data`
+
+| Field | Required | Notes |
+|---|---|---|
+| `file` | yes | `.zip` of the source tree, ≤ 50 MB |
+| `title` | no | `info.title`; defaults to the project name |
+| `version` | no | `info.version`; defaults to `1.0.0` |
+| `ignorePath` | no | comma-separated directories to skip; merged with the defaults (`node_modules`, `dist`, `build`, `coverage`, `.git`, `venv`, `.venv`, `__pycache__`) |
+
+**Response `202 Accepted`**
+
+```json
+{
+  "id": "uuid",
+  "status": "running",
+  "sourceName": "demo-api.zip",
+  "step": null,
+  "stepIndex": 0,
+  "stepTotal": 9,
+  "generatedSpec": null,
+  "operationCount": 0,
+  "warnings": [],
+  "error": null,
+  "createdAt": "2026-08-13T01:34:34.676Z",
+  "startedAt": "2026-08-13T01:34:34.643Z",
+  "completedAt": null
+}
+```
+
+**Errors:** `400` missing/non-zip/oversized archive, or the engine rejected it
+(corrupt zip, too many files, expands too large) · `403` not owner/admin ·
+`409` a generation is already running · `503` engine-service unreachable.
+
+### 11b. Get generation — `GET /projects/:projectId/spec/generate`
+
+**Response `200 OK`** — the same shape as 11a. While running, `step` holds a
+human-readable stage name (e.g. `"Generating request/response schemas"`) and
+`stepIndex`/`stepTotal` track progress through the 9-step pipeline. Once
+`status` is `completed`, `generatedSpec` holds the OpenAPI 3 JSON awaiting
+review and `warnings` may explain reduced fidelity (e.g. converted from
+Swagger 2.0 because no JRE was available on the engine host).
+
+**Errors:** `403` not a member · `404` no generation for this project.
+
+### 11c. Apply generation — `POST /projects/:projectId/spec/generate/apply`
+
+Promotes the reviewed document to the project's spec. Validated and persisted
+through the same path as an upload, with `generatedByAI: true` and a
+`<archive>.generated.json` filename, then the generation record is deleted.
+
+**Response `201 Created`** — same body as route 9.
+**Errors:** `403` not owner/admin · `404` no generation · `409` the generation
+is not completed yet · `400` the generated document failed validation.
+
+### 11d. Discard generation — `DELETE /projects/:projectId/spec/generate`
+
+Drops the generation. Any existing spec is left untouched.
+
+**Response `200 OK`** — `{ "message": "Specification generation discarded" }`.
+**Errors:** `403` not owner/admin · `404` no generation.
+
+---
+
 ## Module 4 — Endpoints
 
 > All routes require `Authorization: Bearer <access_token>`.
 > `:projectId` and `:endpointId` must be valid **UUIDs**.
 
-**Auto-extraction:** every time a spec is uploaded (route 9), the project's
-endpoints are re-synced from the spec's `paths` — one entry per path × method
-(GET/POST/PUT/PATCH/DELETE; `head`/`options`/`trace` are ignored).
-**Re-uploading a spec replaces all endpoints for the project**, including any
-that were added manually.
+**Auto-extraction:** every time a spec is uploaded (route 9) or a generated one
+is applied (route 11c), the project's endpoints are re-synced from the spec's
+`paths` — one entry per path × method (GET/POST/PUT/PATCH/DELETE;
+`head`/`options`/`trace` are ignored). **Storing a spec replaces all endpoints
+for the project**, including any that were added manually.
 
 ### 12. List endpoints — `GET /projects/:projectId/endpoints`
 

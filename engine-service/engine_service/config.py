@@ -24,6 +24,15 @@ def _bool(env: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _default_oops_python(oops_dir: Path) -> Path:
+    """Interpreter for the OOPS venv. OOPS needs Python >= 3.12 while
+    autoresttest-core is on 3.10, so spec generation always runs in its own
+    virtualenv rather than whichever interpreter serves this process."""
+    if os.name == "nt":
+        return oops_dir / ".venv" / "Scripts" / "python.exe"
+    return oops_dir / ".venv" / "bin" / "python"
+
+
 @dataclass(frozen=True)
 class Config:
     core_dir: Path
@@ -33,9 +42,20 @@ class Config:
     api_key: str
     llm_engine: str
     llm_api_base: str
+    llm_rpm_limit: int
     service_token: str
     port: int
     job_timeout_buffer: int
+    # -- OOPS spec generation (codebase -> OpenAPI) ------------------------- #
+    oops_dir: Path
+    oops_python: Path
+    oops_model: str
+    oops_timeout: int
+    oops_rpm_limit: int
+    oops_batch_semaphore: int
+    oops_max_zip_bytes: int
+    oops_max_source_bytes: int
+    oops_max_files: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -43,6 +63,12 @@ class Config:
             os.environ.get("CORE_DIR", _SERVICE_ROOT.parent / "autoresttest-core")
         ).resolve()
         jobs_dir = Path(os.environ.get("JOBS_DIR", _SERVICE_ROOT / "jobs")).resolve()
+        oops_dir = Path(
+            os.environ.get("OOPS_DIR", _SERVICE_ROOT.parent / "OOPS-core")
+        ).resolve()
+        oops_python = Path(
+            os.environ.get("OOPS_PYTHON", _default_oops_python(oops_dir))
+        ).resolve()
         return cls(
             core_dir=core_dir,
             jobs_dir=jobs_dir,
@@ -53,9 +79,30 @@ class Config:
             llm_api_base=os.environ.get(
                 "LLM_API_BASE", "https://openrouter.ai/api/v1"
             ),
+            llm_rpm_limit=int(os.environ.get("LLM_RPM_LIMIT", "0")),
             service_token=os.environ.get("SERVICE_TOKEN", ""),
             port=int(os.environ.get("PORT", "5000")),
             job_timeout_buffer=int(os.environ.get("JOB_TIMEOUT_BUFFER", "1800")),
+            oops_dir=oops_dir,
+            oops_python=oops_python,
+            # Measured on the NVIDIA NIM free tier in OOPS-core/run_careerstory.py:
+            # the llama deployments are degraded and the larger nemotron earns an
+            # account-level cooldown, so nemotron-nano is the one that finishes.
+            oops_model=os.environ.get("OOPS_MODEL", "nvidia/nemotron-3-nano-30b-a3b"),
+            # Generation is LLM-bound and runs for hours on a mid-size backend.
+            oops_timeout=int(os.environ.get("OOPS_TIMEOUT", str(4 * 60 * 60))),
+            # OOPS defaults to 120 rpm, which is ~3x the NVIDIA free tier and
+            # collapses into a 429 retry storm. Kept just under the ~40 rpm
+            # ceiling; raise it only against a paid endpoint.
+            oops_rpm_limit=int(os.environ.get("OOPS_RPM_LIMIT", "35")),
+            oops_batch_semaphore=int(os.environ.get("OOPS_BATCH_SEMAPHORE", "3")),
+            oops_max_zip_bytes=int(
+                os.environ.get("OOPS_MAX_ZIP_BYTES", str(50 * 1024 * 1024))
+            ),
+            oops_max_source_bytes=int(
+                os.environ.get("OOPS_MAX_SOURCE_BYTES", str(200 * 1024 * 1024))
+            ),
+            oops_max_files=int(os.environ.get("OOPS_MAX_FILES", "5000")),
         )
 
     @property

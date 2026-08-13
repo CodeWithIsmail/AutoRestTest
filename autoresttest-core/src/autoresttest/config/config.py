@@ -33,6 +33,10 @@ class LLMConfig(BaseModel):
     strict_temperature: float
     api_base: str = "https://api.openai.com/v1"
     max_tokens: int = 20000
+    # Client-side request pacing. Caps outgoing LLM calls to this many per
+    # minute across all threads (0 = disabled). Set to match a provider's rate
+    # limit, e.g. 40 for NVIDIA NIM's free tier.
+    rpm_limit: int = 0
 
 
 class HeaderAgentConfig(BaseModel):
@@ -142,6 +146,11 @@ class Config(BaseModel):
     def llm_max_tokens(self) -> int:
         """Return LLM max tokens. -1 means omit from API call."""
         return self.llm.max_tokens
+
+    @property
+    def llm_rpm_limit(self) -> int:
+        """Max LLM requests per minute (client-side throttle). 0 = disabled."""
+        return self.llm.rpm_limit
 
     @property
     def enable_header_agent(self) -> bool:

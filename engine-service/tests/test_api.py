@@ -29,9 +29,19 @@ def make_config(tmp_path, **overrides) -> Config:
         api_key="",
         llm_engine="test/model",
         llm_api_base="https://example/v1",
+        llm_rpm_limit=0,
         service_token="",
         port=5000,
         job_timeout_buffer=60,
+        oops_dir=tmp_path / "oops",
+        oops_python=tmp_path / "oops" / "python",
+        oops_model="test/model",
+        oops_timeout=60,
+        oops_rpm_limit=35,
+        oops_batch_semaphore=3,
+        oops_max_zip_bytes=1024 * 1024,
+        oops_max_source_bytes=4 * 1024 * 1024,
+        oops_max_files=50,
     )
     base.update(overrides)
     return Config(**base)

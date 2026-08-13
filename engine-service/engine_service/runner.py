@@ -92,6 +92,7 @@ def render_config_toml(
     llm_api_base: str,
     auth_header: Optional[str],
     recursion_limit: int = 50,
+    llm_rpm_limit: int = 0,
 ) -> str:
     """Render a per-run configurations.toml for the engine."""
     doc = tomlkit.document()
@@ -110,7 +111,11 @@ def render_config_toml(
     llm["creative_temperature"] = 1
     llm["strict_temperature"] = 1
     llm["api_base"] = llm_api_base
-    llm["max_tokens"] = 30000
+    llm["max_tokens"] = 4096
+    # Client-side request pacing (0 = disabled). Caps outgoing LLM calls per
+    # minute across all threads to respect a provider's rate limit, e.g. 40 for
+    # NVIDIA NIM's free tier.
+    llm["rpm_limit"] = llm_rpm_limit
     doc["llm"] = llm
 
     # Both `agents` and `agent` are required (no defaults) on the core's Config
@@ -127,6 +132,12 @@ def render_config_toml(
     agent["max_total_combinations"] = 3000
     agent["base_samples_per_size"] = 200
     agent["combination_seed"] = 42
+    # Low value-generation concurrency keeps the RPM throttle smooth and avoids
+    # tripping rate-limited providers' concurrent-request ceilings.
+    value = tomlkit.table()
+    value["parallelize"] = True
+    value["max_workers"] = 2
+    agent["value"] = value
     doc["agent"] = agent
 
     cache = tomlkit.table()

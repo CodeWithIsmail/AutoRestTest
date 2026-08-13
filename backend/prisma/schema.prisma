@@ -42,6 +42,15 @@ enum SuiteStatus {
   failed
 }
 
+// Lifecycle of a codebase-to-OpenAPI generation job. Mirrors SuiteStatus:
+// both track an async job running in the Python engine-service.
+enum SpecGenStatus {
+  pending
+  running
+  completed
+  failed
+}
+
 // Lifecycle of an email invitation to join a project.
 enum InvitationStatus {
   pending
@@ -95,9 +104,10 @@ model Project {
   invitations ProjectInvitation[]
 
   // Testing artifacts
-  spec       ApiSpecification?
-  endpoints  Endpoint[]
-  testSuites TestSuite[]
+  spec           ApiSpecification?
+  specGeneration SpecGeneration?
+  endpoints      Endpoint[]
+  testSuites     TestSuite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -166,6 +176,42 @@ model ApiSpecification {
   uploadedAt    DateTime @default(now())
 
   @@map("api_specifications")
+}
+
+// ----------------------------------------------------------------------------
+// SpecGeneration model — one in-flight or awaiting-review "generate an OpenAPI
+// spec from an uploaded codebase" job, run by OOPS inside the engine-service.
+//
+// The generated document is parked in generatedSpec rather than written
+// straight into ApiSpecification: the user reviews it first and explicitly
+// applies it, so generation never silently replaces a project's spec or wipes
+// its endpoints. One row per project, upserted on each attempt.
+// ----------------------------------------------------------------------------
+model SpecGeneration {
+  id        String  @id @default(uuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Engine-service job id, null until the job has been accepted.
+  jobId  String?
+  status SpecGenStatus @default(pending)
+
+  sourceName String // uploaded archive filename
+
+  // Progress, copied from the engine on each poll (9 pipeline steps).
+  step      String?
+  stepIndex Int     @default(0)
+  stepTotal Int     @default(9)
+
+  generatedSpec String? // the OAS JSON, held for review before it is applied
+  warnings      String[]
+  error         String?
+
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@map("spec_generations")
 }
 
 // ----------------------------------------------------------------------------

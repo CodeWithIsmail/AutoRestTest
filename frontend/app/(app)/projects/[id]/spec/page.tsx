@@ -1,19 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GenerateSpecPanel } from "@/components/projects/GenerateSpecPanel";
 import { useProject } from "@/components/projects/project-context";
 import { useToast } from "@/components/toast";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Spinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api";
+import { getGeneration } from "@/lib/spec-generation";
 import { deleteSpec, getSpec, uploadSpec } from "@/lib/specs";
 import { useApi } from "@/lib/useApi";
 
 const ACCEPT = ".json,.yaml,.yml";
 const VALID_EXT = /\.(json|ya?ml)$/i;
+
+type SpecMode = "file" | "codebase";
+
+const MODES: { value: SpecMode; label: string }[] = [
+  { value: "file", label: "Upload OAS file" },
+  { value: "codebase", label: "Generate from source code" },
+];
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
@@ -28,6 +38,26 @@ export default function SpecPage() {
     error,
     reload,
   } = useApi(() => getSpec(project.id), [project.id]);
+
+  const [mode, setMode] = useState<SpecMode>("file");
+
+  // A generation in flight (or awaiting review) must not be hidden behind an
+  // unselected tab, so it decides the initial mode. The panel owns the job
+  // state from then on; this is a one-shot check.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const current = await getGeneration(project.id);
+        if (active && current) setMode("codebase");
+      } catch {
+        // No generation, or unreadable — the default file mode is correct.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -98,6 +128,35 @@ export default function SpecPage() {
     );
   }
 
+  // Both ways of getting a spec live on this screen; the tabs pick between
+  // them. Only shown to members who may actually change the spec.
+  const modeTabs = canManage ? (
+    <SegmentedControl
+      segments={MODES}
+      value={mode}
+      onChange={setMode}
+      className="mb-6"
+    />
+  ) : null;
+
+  if (canManage && mode === "codebase") {
+    return (
+      <>
+        {modeTabs}
+        <GenerateSpecPanel
+          projectId={project.id}
+          projectName={project.name}
+          canManage={canManage}
+          hasSpec={Boolean(spec)}
+          onApplied={() => {
+            setMode("file");
+            reload();
+          }}
+        />
+      </>
+    );
+  }
+
   // Hidden input shared by the dropzone and the Replace button.
   const hiddenInput = (
     <input
@@ -125,6 +184,7 @@ export default function SpecPage() {
     }
     return (
       <>
+        {modeTabs}
         {hiddenInput}
         <div
           onClick={() => fileInput.current?.click()}
@@ -167,6 +227,7 @@ export default function SpecPage() {
   // --- Spec exists ----------------------------------------------------------
   return (
     <div className="flex flex-col gap-6">
+      {modeTabs}
       {hiddenInput}
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">

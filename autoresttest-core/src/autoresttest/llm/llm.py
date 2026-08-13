@@ -30,6 +30,27 @@ class LanguageModel:
     _cache_lock = threading.RLock()
     _token_lock = threading.RLock()
 
+    # Client-side rate limiting. Every LLM call funnels through query(), so a
+    # single min-interval throttle here caps outgoing requests per minute across
+    # all worker threads (parallel Q-table init + the MARL loop). Needed for
+    # providers with strict free-tier limits, e.g. NVIDIA NIM at 40 RPM.
+    _rate_lock = threading.Lock()
+    _last_request_ts = 0.0
+    _min_interval = (
+        60.0 / CONFIG.llm_rpm_limit if CONFIG.llm_rpm_limit > 0 else 0.0
+    )
+
+    @classmethod
+    def _throttle(cls) -> None:
+        """Block until enough time has elapsed to respect the RPM limit."""
+        if cls._min_interval <= 0:
+            return
+        with cls._rate_lock:
+            wait = cls._last_request_ts + cls._min_interval - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            cls._last_request_ts = time.monotonic()
+
     @staticmethod
     def get_tokens() -> TokenCounter:
         return TokenCounter(
@@ -96,6 +117,7 @@ class LanguageModel:
 
         for attempt in range(max_retries):
             try:
+                self._throttle()
                 response = self.client.chat.completions.create(**kwargs)
                 break
             except Exception:

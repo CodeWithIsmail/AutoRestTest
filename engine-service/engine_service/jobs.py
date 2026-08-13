@@ -203,6 +203,7 @@ class JobManager:
                     mutation_rate=float(params.get("mutationRate", 0.2)),
                     llm_engine=params.get("llmEngine") or self.cfg.llm_engine,
                     llm_api_base=self.cfg.llm_api_base,
+                    llm_rpm_limit=self.cfg.llm_rpm_limit,
                     # Per-run authHeader wins; then a service-wide TEST_AUTH_HEADER
                     # env var; then a JWT_TOKEN from the core's own .env (mirrors
                     # the core CLI's [custom_headers] bearer auth). All are

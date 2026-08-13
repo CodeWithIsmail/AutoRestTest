@@ -4,14 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-AutoRestTest is an AI-powered platform for automated REST API testing. The repo is a **monorepo of three independent subprojects** that are developed and run separately (each has its own dependencies, build, and lockfile):
+AutoRestTest is an AI-powered platform for automated REST API testing. The repo is a **monorepo of independent subprojects** that are developed and run separately (each has its own dependencies, build, and lockfile):
 
 - **`autoresttest-core/`** — the Python testing engine. Parses an OpenAPI 3.0 spec, builds a semantic dependency graph between operations, and drives request generation with multi-agent reinforcement learning (MARL/Q-learning) plus LLM-backed value generation. This is the underlying research tool; the backend/frontend wrap it into a SaaS product.
-- **`backend/`** — NestJS 11 + Prisma 7 + PostgreSQL REST API. The platform's application server (auth, projects, and future test-orchestration modules).
+- **`OOPS-core/`** — a second, unmodified research tool: an LLM pipeline that reads a REST API project's **source code** and generates an OpenAPI spec for it. Vendored as-is — do not edit it. The platform drives it through `engine-service/oops_worker.py`.
+- **`engine-service/`** — Flask + waitress microservice that wraps both Python tools behind an async-job HTTP API (`/runs` for test runs, `/generations` for spec generation) and records engine traffic through a reverse proxy.
+- **`backend/`** — NestJS 11 + Prisma 7 + PostgreSQL REST API. The platform's application server (auth, projects, specs, endpoints, test suites, reports, collaboration).
 - **`frontend/`** — Next.js 16 + React 19 + Tailwind CSS 4 web client.
 
 Each subproject has its own agent docs — **read them before working in that subproject**:
 - `autoresttest-core/CLAUDE.md` — full architecture of the Python engine (pipeline phases, the seven Q-learning agents, caching, config).
+- `OOPS-core/CLAUDE.md` — architecture of the spec-generation pipeline (partly stale: it references a `main.py` and `core/ablate.py` that are absent).
 - `frontend/AGENTS.md` (referenced from `frontend/CLAUDE.md`) — **critical:** this is a non-standard Next.js version with breaking changes; consult `node_modules/next/dist/docs/` before writing frontend code rather than relying on training data.
 
 There is no root-level package manager or workspace tool — `cd` into the relevant subproject directory to run any command.
@@ -51,6 +54,52 @@ poetry install
 poetry run autoresttest                 # interactive TUI + config wizard
 poetry run autoresttest --skip-wizard   # use configurations.toml directly
 ```
+
+### engine-service/ (Flask)
+```bash
+python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
+.venv/Scripts/python wsgi.py            # serves on PORT (default 5000)
+.venv/Scripts/python -m pytest -q       # tests (all run in mock mode)
+```
+Set `ENGINE_MODE=mock` in `engine-service/.env` to exercise both job types
+offline in seconds — no LLM key, no engine, no OOPS run. This is the fast loop
+for anything touching the backend or frontend job flows.
+
+## Spec generation from source code (OOPS)
+
+A project's OpenAPI spec can either be uploaded as a file or **generated from a
+zip of the API's source**. The generated document is parked for review and only
+becomes the project's spec when the user explicitly applies it, so generation
+never silently replaces a spec or wipes endpoints.
+
+Flow: `frontend spec page → POST /projects/:id/spec/generate (multipart zip) →
+engine-service POST /generations → OOPS venv subprocess → openapi.json →
+backend polls and stores it on SpecGeneration → user reviews → POST
+/spec/generate/apply → SpecsService.persistSpec(..., generatedByAI: true)`.
+
+Things to know before touching this path:
+
+- **`OOPS-core/` is never modified.** `engine-service/oops_worker.py` is the
+  single point of contact with `core.*`. It runs under OOPS's own venv
+  (`OOPS_PYTHON`, Python ≥3.12) because autoresttest-core is on 3.10.
+- **Generation has its own queue and worker thread** (`GenerationManager`),
+  separate from `JobManager`. Test runs are serialized because the engine reads
+  one global `configurations.toml`; a multi-hour generation must not block them.
+- **A JRE is required for best results.** OOPS upgrades its Swagger 2.0 output
+  to OAS 3.x by shelling out to `java -jar codegen-3.0.68.jar`. Without `java`
+  on PATH the run still completes, but falls back to the raw Swagger 2.0
+  payload, which the backend converts with `swagger2openapi` at lower schema
+  fidelity (no hoisting into `#/components/schemas`). The job carries a warning
+  when this happens. Install Temurin 17+ to avoid it.
+- **Uploads are untrusted input.** `GenerationManager._extract` rejects
+  zip-slip paths, symlinks, oversized expansions, and excessive file counts —
+  these are the only guard between an upload and an arbitrary host write.
+  Separately, OOPS hands the LLM a `run_command` shell tool scoped to the
+  extracted tree (`FileHandler`, `enable_run_command=True`); it is the agents'
+  only tool and cannot be disabled without degrading the pipeline, so treat
+  engine-service as a trusted single-tenant host or containerize it.
+- Generation is slow (hours on a mid-size backend) and LLM-bound. Watch
+  `engine-service/jobs/<id>/stdout.log` and `progress.json` while a run is live.
 
 ## Backend architecture & conventions
 

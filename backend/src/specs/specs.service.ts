@@ -77,6 +77,20 @@ export class SpecsService {
     }
 
     const raw = file.buffer.toString('utf-8');
+    return this.persistSpec(projectId, file.originalname, raw, false);
+  }
+
+  // --------------------------------------------------------------------------
+  // persistSpec — validate a raw OAS document and store it with its endpoints.
+  // Shared by the file-upload path and by SpecGenerationService when the user
+  // applies a spec generated from their source code.
+  // --------------------------------------------------------------------------
+  async persistSpec(
+    projectId: string,
+    fileName: string,
+    raw: string,
+    generatedByAI: boolean,
+  ): Promise<SpecSummary> {
     const parsed = this.parse(raw);
     const meta = await this.validateOpenApi3(parsed);
     const endpoints = extractEndpoints(parsed);
@@ -89,14 +103,14 @@ export class SpecsService {
         where: { projectId },
         create: {
           projectId,
-          fileName: file.originalname,
+          fileName,
           fileContent: raw,
-          generatedByAI: false,
+          generatedByAI,
         },
         update: {
-          fileName: file.originalname,
+          fileName,
           fileContent: raw,
-          generatedByAI: false,
+          generatedByAI,
           uploadedAt: new Date(),
         },
         select: {

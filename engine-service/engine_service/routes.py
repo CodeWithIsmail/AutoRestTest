@@ -8,6 +8,7 @@ from flask import Blueprint, Response, current_app, jsonify, request
 
 from . import proxy
 from .config import Config
+from .generation import ArchiveError, GenerationManager
 from .jobs import JobManager
 
 bp = Blueprint("engine", __name__)
@@ -26,6 +27,10 @@ def _manager() -> JobManager:
     return current_app.config["JOB_MANAGER"]
 
 
+def _generations() -> GenerationManager:
+    return current_app.config["GENERATION_MANAGER"]
+
+
 @bp.before_request
 def _check_token():
     # /health and the internal recording proxy (called by the engine subprocess,
@@ -36,6 +41,13 @@ def _check_token():
     if token and request.headers.get("X-Service-Token") != token:
         return jsonify({"error": "Unauthorized"}), 401
     return None
+
+
+@bp.errorhandler(413)
+def _too_large(_err):
+    # Werkzeug's default 413 body is HTML; the backend only ever parses JSON.
+    limit = _cfg().oops_max_zip_bytes // (1024 * 1024)
+    return jsonify({"error": f"Upload exceeds the {limit} MB size limit"}), 413
 
 
 @bp.get("/health")
@@ -116,6 +128,75 @@ def delete_run(job_id: str):
     if not _manager().delete(job_id):
         return jsonify({"error": "Job not found"}), 404
     return jsonify({"message": "Job deleted"})
+
+
+# --------------------------------------------------------------------------- #
+# Spec generation — upload a source archive, get an OpenAPI document back.
+# Separate namespace and separate worker from /runs; see create_app.
+# --------------------------------------------------------------------------- #
+def _split_list(raw: str | None) -> list[str]:
+    """Parse a comma-separated form field into a clean list."""
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+@bp.post("/generations")
+def create_generation():
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify({"error": 'Missing required file field: "file"'}), 400
+    if not upload.filename.lower().endswith(".zip"):
+        return jsonify({"error": "The source archive must be a .zip file"}), 400
+
+    params = {
+        "sourceName": upload.filename,
+        "title": (request.form.get("title") or "").strip() or "Generated API",
+        "version": (request.form.get("version") or "").strip() or "1.0.0",
+        "ignorePath": _split_list(request.form.get("ignorePath")),
+        # Excluding .env keeps credentials out of both the prompt context and
+        # the shell tool the pipeline hands to the model.
+        "ignoreSufx": _split_list(request.form.get("ignoreSufx")) or ["env"],
+    }
+
+    try:
+        gen = _generations().submit(params, upload.read())
+    except ArchiveError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify(gen.public()), 202
+
+
+@bp.get("/generations/<gen_id>")
+def get_generation(gen_id: str):
+    state = _generations().public_state(gen_id)
+    if state is None:
+        return jsonify({"error": "Generation not found"}), 404
+    return jsonify(state)
+
+
+@bp.get("/generations/<gen_id>/result")
+def get_generation_result(gen_id: str):
+    manager = _generations()
+    gen = manager.get(gen_id)
+    if gen is None:
+        return jsonify({"error": "Generation not found"}), 404
+    if gen.status != "completed":
+        return (
+            jsonify({"error": f"Generation is {gen.status}, result not available yet"}),
+            409,
+        )
+    result = manager.result(gen_id)
+    if result is None:
+        return jsonify({"error": "Result missing"}), 404
+    return jsonify(result)
+
+
+@bp.delete("/generations/<gen_id>")
+def delete_generation(gen_id: str):
+    if not _generations().delete(gen_id):
+        return jsonify({"error": "Generation not found"}), 404
+    return jsonify({"message": "Generation deleted"})
 
 
 # --------------------------------------------------------------------------- #
