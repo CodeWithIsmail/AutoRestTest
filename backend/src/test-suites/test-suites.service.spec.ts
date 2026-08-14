@@ -7,6 +7,7 @@ import {
 import { HttpMethod, Role, SuiteStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectAccessService } from '../common/project-access.service';
+import { EmailService } from '../email/email.service';
 import { EngineService } from '../engine/engine.service';
 import { TestSuitesService } from './test-suites.service';
 
@@ -23,6 +24,7 @@ describe('TestSuitesService', () => {
       create: jest.Mock;
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
       deleteMany: jest.Mock;
       update: jest.Mock;
     };
@@ -47,6 +49,7 @@ describe('TestSuitesService', () => {
     getResult: jest.Mock;
     getRequests: jest.Mock;
   };
+  let email: { sendRunFinished: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -56,6 +59,7 @@ describe('TestSuitesService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
         deleteMany: jest.fn(),
         update: jest.fn(),
       },
@@ -86,10 +90,12 @@ describe('TestSuitesService', () => {
       getResult: jest.fn(),
       getRequests: jest.fn().mockResolvedValue([]),
     };
+    email = { sendRunFinished: jest.fn().mockResolvedValue(true) };
     service = new TestSuitesService(
       prisma as unknown as PrismaService,
       access as unknown as ProjectAccessService,
       engine as unknown as EngineService,
+      email as unknown as EmailService,
     );
   });
 
@@ -445,6 +451,60 @@ describe('TestSuitesService', () => {
       expect(data.passedTestCases).toBe(21); // only 2xx
       expect(data.failedTestCases).toBe(9);
       expect(data.coveredEndpoints).toBe(1);
+    });
+
+    it('emails the run summary to whoever triggered the run', async () => {
+      prisma.endpoint.findMany.mockResolvedValue([]);
+      prisma.testSuite.findUnique.mockResolvedValue({
+        name: 'Smoke run',
+        projectId: PROJECT_ID,
+        totalTestCases: 30,
+        passedTestCases: 21,
+        failedTestCases: 9,
+        project: { name: 'Petstore API' },
+        triggeredBy: { email: 'alice@example.com', username: 'alice' },
+      });
+
+      await (
+        service as unknown as {
+          persistResults: (
+            p: string,
+            s: string,
+            j: string,
+            r: unknown,
+          ) => Promise<void>;
+        }
+      ).persistResults(PROJECT_ID, SUITE_ID, 'job-1', result);
+
+      expect(email.sendRunFinished).toHaveBeenCalledWith(
+        'alice@example.com',
+        expect.objectContaining({
+          outcome: 'completed',
+          projectName: 'Petstore API',
+          suiteId: SUITE_ID,
+          stats: { total: 30, passed: 21, failed: 9 },
+        }),
+      );
+    });
+
+    it('does not fail the run when the notification cannot be sent', async () => {
+      prisma.endpoint.findMany.mockResolvedValue([]);
+      prisma.testSuite.findUnique.mockRejectedValue(new Error('db gone'));
+
+      // persistResults runs inside the background poller, where a rejection
+      // would surface as an unhandled promise rejection on the process.
+      await expect(
+        (
+          service as unknown as {
+            persistResults: (
+              p: string,
+              s: string,
+              j: string,
+              r: unknown,
+            ) => Promise<void>;
+          }
+        ).persistResults(PROJECT_ID, SUITE_ID, 'job-1', result),
+      ).resolves.toBeUndefined();
     });
   });
 

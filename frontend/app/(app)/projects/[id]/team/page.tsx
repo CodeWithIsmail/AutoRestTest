@@ -17,6 +17,7 @@ import {
   listInvitations,
   listMembers,
   removeMember,
+  resendInvitation,
   revokeInvitation,
   updateMemberRole,
 } from "@/lib/collaboration";
@@ -70,6 +71,9 @@ export default function TeamPage() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<InvitationItem | null>(null);
   const [busy, setBusy] = useState(false);
+  // Its own flag rather than `busy`, which the confirm dialogs share — resending
+  // must only disable the one row's button.
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   async function onChangeRole(m: MemberItem, role: Role) {
     try {
@@ -120,6 +124,20 @@ export default function TeamPage() {
       toast.error(err instanceof ApiError ? err.message : "Failed to revoke");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onResend(inv: InvitationItem) {
+    setResendingId(inv.id);
+    try {
+      await resendInvitation(project.id, inv.id);
+      toast.success(`Invitation email sent to ${inv.email}.`);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to send the email",
+      );
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -265,6 +283,14 @@ export default function TeamPage() {
                     <Badge tone={inviteTone(inv.status)}>{inv.status}</Badge>
                     {inv.status === "pending" && (
                       <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onResend(inv)}
+                          loading={resendingId === inv.id}
+                        >
+                          Resend email
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

@@ -96,8 +96,8 @@ export function InviteModal({
           <p className="text-xs text-zinc-500">{ROLE_HINT[role]}</p>
         </div>
         <p className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-500">
-          No email is sent. After inviting, copy the invite link to share, or
-          the teammate can accept it from their Invitations page.
+          An invite link is emailed to this address. Your teammate can also
+          accept it from their Invitations page after signing in with it.
         </p>
       </form>
     </Modal>

@@ -13,6 +13,7 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectAccessService } from '../common/project-access.service';
+import { EmailService } from '../email/email.service';
 import {
   EngineRequestRecord,
   EngineResult,
@@ -171,6 +172,7 @@ export class TestSuitesService {
     private readonly prisma: PrismaService,
     private readonly access: ProjectAccessService,
     private readonly engine: EngineService,
+    private readonly email: EmailService,
   ) {}
 
   // --------------------------------------------------------------------------
@@ -724,6 +726,8 @@ export class TestSuitesService {
     this.logger.log(
       `Suite ${suiteId} completed: ${passed}/${totalTestCases} requests passed, ${rows.length} endpoint results.`,
     );
+
+    await this.notifyRunFinished(suiteId, 'completed');
   }
 
   /**
@@ -794,6 +798,59 @@ export class TestSuitesService {
     } catch (err) {
       this.logger.error(
         `Could not mark suite ${suiteId} failed: ${String(err)}`,
+      );
+    }
+    await this.notifyRunFinished(suiteId, 'failed', message);
+  }
+
+  /**
+   * Email whoever started the run that it has finished.
+   *
+   * Called from the background poller, which has no request to fail into, so
+   * everything here is best-effort: an unhandled rejection would surface as an
+   * unhandled promise rejection on the process instead.
+   */
+  private async notifyRunFinished(
+    suiteId: string,
+    outcome: 'completed' | 'failed',
+    error?: string,
+  ): Promise<void> {
+    try {
+      const suite = await this.prisma.testSuite.findUnique({
+        where: { id: suiteId },
+        select: {
+          name: true,
+          projectId: true,
+          totalTestCases: true,
+          passedTestCases: true,
+          failedTestCases: true,
+          project: { select: { name: true } },
+          triggeredBy: { select: { email: true, username: true } },
+        },
+      });
+      if (!suite) return;
+
+      await this.email.sendRunFinished(suite.triggeredBy.email, {
+        username: suite.triggeredBy.username,
+        projectName: suite.project.name,
+        // Suites are optionally named; fall back to something recognisable.
+        suiteName: suite.name ?? 'Untitled run',
+        outcome,
+        projectId: suite.projectId,
+        suiteId,
+        stats:
+          outcome === 'completed'
+            ? {
+                total: suite.totalTestCases,
+                passed: suite.passedTestCases,
+                failed: suite.failedTestCases,
+              }
+            : undefined,
+        error,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Could not send the run notification for suite ${suiteId}: ${String(err)}`,
       );
     }
   }

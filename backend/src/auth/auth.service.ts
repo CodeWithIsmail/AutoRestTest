@@ -2,12 +2,14 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '../../generated/prisma/client';
+import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -24,10 +26,13 @@ export interface PublicUser {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly email: EmailService,
   ) {}
 
   // --------------------------------------------------------------------------
@@ -65,6 +70,16 @@ export class AuthService {
         },
         select: { id: true, username: true, email: true },
       });
+
+      // The account is created either way — a mailer problem must not turn a
+      // successful sign-up into an error the visitor sees.
+      try {
+        await this.email.sendWelcome(user.email, user.username);
+      } catch (err) {
+        this.logger.warn(
+          `Could not send the welcome email to ${user.email}: ${String(err)}`,
+        );
+      }
 
       return {
         message: 'Account created successfully',

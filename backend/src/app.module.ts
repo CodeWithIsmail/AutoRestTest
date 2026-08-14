@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { CommonModule } from './common/common.module';
+import { EmailModule } from './email/email.module';
 import { EndpointsModule } from './endpoints/endpoints.module';
 import { EngineModule } from './engine/engine.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -30,6 +31,9 @@ import { TestSuitesModule } from './test-suites/test-suites.module';
 
     // EngineModule is @Global so the engine-service client is injectable anywhere.
     EngineModule,
+
+    // EmailModule is @Global so the mailer is injectable anywhere.
+    EmailModule,
 
     // Feature modules
     AuthModule,

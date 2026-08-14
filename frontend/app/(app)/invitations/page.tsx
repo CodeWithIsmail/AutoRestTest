@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useToast } from "@/components/toast";
 import { Badge, roleTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -23,9 +23,33 @@ function formatDate(iso: string): string {
   });
 }
 
+/**
+ * `useSearchParams` client-side-renders everything up to the nearest Suspense
+ * boundary, so the Next docs call for wrapping the component that uses it.
+ */
 export default function MyInvitationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-16">
+          <Spinner className="h-6 w-6 text-emerald-500" />
+        </div>
+      }
+    >
+      <MyInvitations />
+    </Suspense>
+  );
+}
+
+function MyInvitations() {
   const router = useRouter();
   const toast = useToast();
+
+  // Set when the user arrives from the link in an invitation email. Highlights
+  // that one invitation so the link lands on something specific rather than on
+  // an undifferentiated list.
+  const highlightToken = useSearchParams().get("token");
+
   const {
     data: invitations,
     loading,
@@ -97,7 +121,11 @@ export default function MyInvitationsPage() {
             {invitations.map((inv) => (
               <Card
                 key={inv.id}
-                className="flex items-center justify-between gap-4 p-4"
+                className={`flex items-center justify-between gap-4 p-4 ${
+                  inv.token === highlightToken
+                    ? "ring-1 ring-emerald-500/40"
+                    : ""
+                }`}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">

@@ -6,11 +6,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { InvitationStatus, Role } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectAccessService } from '../common/project-access.service';
+import { EmailService } from '../email/email.service';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 
 const INVITE_EXPIRY_DAYS = 7;
@@ -57,8 +59,13 @@ export class InvitationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: ProjectAccessService,
+    private readonly email: EmailService,
   ) {}
 
+  /**
+   * The *API* path the invitee's client POSTs to. Not the link that goes in the
+   * email — that one points at the frontend and is built by `EmailService`.
+   */
   private acceptUrl(token: string): string {
     return `/invitations/${token}/accept`;
   }
@@ -78,6 +85,7 @@ export class InvitationsService {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: {
+        name: true,
         owner: { select: { email: true } },
         members: { select: { user: { select: { email: true } } } },
       },
@@ -129,8 +137,25 @@ export class InvitationsService {
         });
 
     this.logger.log(
-      `Invitation for ${email} to project ${projectId}: ${this.acceptUrl(token)}`,
+      `Invited ${email} to project ${projectId} as ${invitation.role}.`,
     );
+
+    const inviter = await this.prisma.user.findUnique({
+      where: { id: inviterId },
+      select: { username: true },
+    });
+
+    // The invitation exists whether or not the mail goes out — the invitee can
+    // still find it on their Invitations page — so a mailer problem is logged,
+    // not raised.
+    await this.sendInvitationEmail({
+      to: invitation.email,
+      inviterName: inviter?.username ?? 'A teammate',
+      projectName: project.name,
+      role: invitation.role,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt,
+    });
 
     return { ...invitation, acceptUrl: this.acceptUrl(invitation.token) };
   }
@@ -169,6 +194,85 @@ export class InvitationsService {
       throw new NotFoundException('Invitation not found');
     }
     return { message: 'Invitation revoked' };
+  }
+
+  // --------------------------------------------------------------------------
+  // resend — POST /projects/:projectId/invitations/:invitationId/resend
+  // (owner/admin). Re-sends the email for an existing pending invitation.
+  // --------------------------------------------------------------------------
+  async resend(
+    projectId: string,
+    invitationId: string,
+    userId: string,
+  ): Promise<{ message: string }> {
+    await this.access.assertAccess(projectId, userId, [Role.admin]);
+
+    const invitation = await this.prisma.projectInvitation.findFirst({
+      where: { id: invitationId, projectId },
+      select: {
+        email: true,
+        role: true,
+        token: true,
+        status: true,
+        expiresAt: true,
+        project: { select: { name: true } },
+        invitedBy: { select: { username: true } },
+      },
+    });
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+    if (invitation.status !== InvitationStatus.pending) {
+      throw new ConflictException(`Invitation is already ${invitation.status}`);
+    }
+    if (invitation.expiresAt < new Date()) {
+      throw new GoneException(
+        'Invitation has expired — revoke it and invite again',
+      );
+    }
+
+    // Deliberately reuses the existing token: minting a new one would silently
+    // dead-link whatever is already sitting in the invitee's inbox.
+    const sent = await this.sendInvitationEmail({
+      to: invitation.email,
+      inviterName: invitation.invitedBy.username,
+      projectName: invitation.project.name,
+      role: invitation.role,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt,
+    });
+    if (!sent) {
+      throw new ServiceUnavailableException(
+        'Could not send the invitation email. Copy the invite token instead.',
+      );
+    }
+
+    return { message: 'Invitation email sent' };
+  }
+
+  /**
+   * Render and send an invitation email. Returns whether it went out.
+   *
+   * `EmailService.send` already swallows delivery failures, so the try/catch is
+   * for the unexpected — a template or config error must not take down an
+   * invitation that has already been written to the database.
+   */
+  private async sendInvitationEmail(args: {
+    to: string;
+    inviterName: string;
+    projectName: string;
+    role: Role;
+    token: string;
+    expiresAt: Date;
+  }): Promise<boolean> {
+    try {
+      return await this.email.sendProjectInvitation(args);
+    } catch (err) {
+      this.logger.error(
+        `Could not send the invitation email to ${args.to}: ${String(err)}`,
+      );
+      return false;
+    }
   }
 
   // --------------------------------------------------------------------------

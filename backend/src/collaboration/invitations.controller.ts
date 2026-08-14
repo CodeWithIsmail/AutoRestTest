@@ -45,6 +45,20 @@ export class InvitationsController {
     return this.invitations.findForProject(projectId, req.user.id);
   }
 
+  /**
+   * POST /projects/:projectId/invitations/:invitationId/resend — re-send the
+   * invitation email for a still-pending invitation. Owner/admin.
+   */
+  @Post(':invitationId/resend')
+  @HttpCode(HttpStatus.OK)
+  async resend(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('invitationId', new ParseUUIDPipe()) invitationId: string,
+  ) {
+    return this.invitations.resend(projectId, invitationId, req.user.id);
+  }
+
   /** DELETE /projects/:projectId/invitations/:invitationId — revoke. Owner/admin. */
   @Delete(':invitationId')
   @HttpCode(HttpStatus.OK)

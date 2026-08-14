@@ -58,6 +58,7 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 24 | `POST` | `/projects/:projectId/invitations` | 🔒 | Owner / admin | Invite a user by email |
 | 25 | `GET` | `/projects/:projectId/invitations` | 🔒 | Owner / admin | List a project's invitations |
 | 26 | `DELETE` | `/projects/:projectId/invitations/:invitationId` | 🔒 | Owner / admin | Revoke a pending invitation |
+| 26a | `POST` | `/projects/:projectId/invitations/:invitationId/resend` | 🔒 | Owner / admin | Re-send the invitation email |
 | 27 | `GET` | `/projects/:projectId/members` | 🔒 | Any member | List owner + members |
 | 28 | `PATCH` | `/projects/:projectId/members/:userId` | 🔒 | Owner / admin | Change a member's role |
 | 29 | `DELETE` | `/projects/:projectId/members/:userId` | 🔒 | Owner / admin | Remove a member |
@@ -572,8 +573,14 @@ Requires `LLM_MODE=mock` (offline canned text) or a real `LLM_API_KEY`.
 > Project-scoped routes require `Authorization: Bearer <accessToken>`; `:projectId`,
 > `:invitationId`, `:userId` must be valid **UUIDs**. The `/invitations` routes are
 > for the *invitee* (they may not be a project member yet), so they're not
-> project-scoped. **No email is sent** — the invite response returns the shareable
-> `token` + `acceptUrl`.
+> project-scoped.
+>
+> **Inviting sends an email** carrying a link to the frontend's Invitations page
+> (`APP_URL/invitations?token=…`), delivered through Resend. Delivery is
+> best-effort: the invitation is created, and the response still returns the
+> shareable `token` + `acceptUrl`, whether or not the mail went out. With
+> `EMAIL_MODE=mock` the message is logged to the server console instead of sent.
+> See `.env.example` for the `EMAIL_*` / `RESEND_API_KEY` / `APP_URL` settings.
 
 ### 24. Invite by email — `POST /projects/:projectId/invitations`  (owner/admin)
 
@@ -589,11 +596,23 @@ Requires `LLM_MODE=mock` (offline canned text) or a real `LLM_API_KEY`.
   "expiresAt": "2026-07-08T…", "createdAt": "2026-07-01T…"
 }
 ```
-Share `token`/`acceptUrl` with the invitee. **Errors:** `400` email is the owner · `403` not owner/admin · `409` already a member **or** a pending invite already exists.
+An email goes to `email`; `token`/`acceptUrl` are also returned so the link can be shared by hand. Note `acceptUrl` is the **API** path the invitee's client POSTs to — the emailed link points at the frontend instead. **Errors:** `400` email is the owner · `403` not owner/admin · `409` already a member **or** a pending invite already exists.
 
 ### 25–26. List / revoke invitations  (owner/admin)
 `GET …/invitations` → all invitations (any status) with their links.
 `DELETE …/invitations/:invitationId` → `{ "message": "Invitation revoked" }` (`404` if not found).
+
+### 26a. Re-send the invitation email — `POST …/invitations/:invitationId/resend`  (owner/admin)
+
+Sends the invitation email again, **reusing the existing token** so any link
+already in the invitee's inbox keeps working.
+
+**Response `200 OK`** — `{ "message": "Invitation email sent" }`
+
+**Errors:** `403` not owner/admin · `404` no such invitation in this project ·
+`409` the invitation is already `accepted`/`declined`/`expired` · `410` it has
+passed `expiresAt` · `503` the mail could not be sent (unlike route 24, this
+endpoint exists only to send mail, so a delivery failure is reported).
 
 ### 27. List members — `GET /projects/:projectId/members`  (any member)
 

@@ -60,6 +60,17 @@ export function createInvitation(
   });
 }
 
+/** Re-sends the email for a pending invitation, reusing the same token. */
+export function resendInvitation(
+  projectId: string,
+  invitationId: string,
+): Promise<{ message: string }> {
+  return apiFetch(
+    `/projects/${projectId}/invitations/${invitationId}/resend`,
+    { method: "POST" },
+  );
+}
+
 export function revokeInvitation(
   projectId: string,
   invitationId: string,
