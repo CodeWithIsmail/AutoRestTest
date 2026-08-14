@@ -180,6 +180,9 @@ export interface RequestLogEndpointSummary {
   passed: number;
   failed: number;
   statusClasses: Record<string, number>;
+  /** Exact code tallies, e.g. `{ "200": 8, "404": 5 }`. Requests that never
+   *  got a response (null status) are counted in `total` but not here. */
+  statusCodes: Record<string, number>;
 }
 
 /** Lightweight row in the paginated captured-request list. */

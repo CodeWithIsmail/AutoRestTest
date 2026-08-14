@@ -49,6 +49,9 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | 18 | `DELETE` | `/projects/:projectId/test-suites/:suiteId` | 🔒 | Owner / admin | Delete a test run |
 | 19 | `POST` | `/projects/:projectId/test-suites/:suiteId/run` | 🔒 | Owner / admin / tester | Execute a run via the engine (async) |
 | 20 | `GET` | `/projects/:projectId/test-suites/:suiteId/test-cases` | 🔒 | Any member | Per-endpoint results of a run |
+| 20a | `GET` | `/projects/:projectId/test-suites/:suiteId/request-logs/summary` | 🔒 | Any member | Per-endpoint rollup of captured requests |
+| 20b | `GET` | `/projects/:projectId/test-suites/:suiteId/request-logs` | 🔒 | Any member | Captured requests, filterable by endpoint + status |
+| 20c | `GET` | `/projects/:projectId/test-suites/:suiteId/request-logs/:logId` | 🔒 | Any member | One captured request/response in full |
 | 21 | `GET` | `/projects/:projectId/test-suites/:suiteId/report` | 🔒 | Any member | Computed results report (JSON) |
 | 22 | `GET` | `/projects/:projectId/test-suites/:suiteId/report/export?format=csv\|pdf` | 🔒 | Any member | Download report as CSV or PDF |
 | 23 | `POST` | `/projects/:projectId/test-suites/:suiteId/explain` | 🔒 | Owner / admin / tester | Generate LLM failure explanations |
@@ -462,6 +465,56 @@ counters (`totalEndpoints`, `coveredEndpoints`, `totalTestCases`,
 ```
 `responseBody` holds the per-operation status-code distribution; `passed` is true
 if the endpoint saw any 2xx. **Errors:** `403` not a member · `404` run not found.
+
+### 20a. Captured-request summary — `GET …/test-suites/:suiteId/request-logs/summary`
+
+Per-endpoint rollup of everything the recording proxy captured during the run.
+Drives the endpoint and response-code filters in the UI.
+
+```json
+[
+  {
+    "endpointId": "…", "method": "GET", "path": "/pets",
+    "total": 12, "passed": 8, "failed": 4,
+    "statusClasses": { "2xx": 8, "4xx": 4 },
+    "statusCodes": { "200": 8, "404": 4 }
+  }
+]
+```
+`statusCodes` holds exact codes; a request that never got a response counts
+toward `total` and `statusClasses.other` but appears in neither map. Matched
+endpoints come first (by path), with the `endpointId: null` unmatched bucket
+last. **Errors:** `403` not a member · `404` run not found.
+
+### 20b. Captured requests — `GET …/test-suites/:suiteId/request-logs`
+
+Paginated list of the individual requests, in send order (`seq`).
+
+| Query | Values | Meaning |
+|---|---|---|
+| `endpointId` | UUID · `unmatched` | Only this endpoint, or only requests that matched none |
+| `status` | `2xx` `3xx` `4xx` `5xx` · an exact code such as `404` | Response status class, or one specific HTTP response code |
+| `page` | ≥ 1 (default 1) | Page number |
+| `pageSize` | 1–200 (default 50) | Rows per page |
+
+An unrecognised `status` is ignored and the list comes back unfiltered.
+
+```json
+{
+  "items": [
+    { "id": "…", "seq": 1, "method": "GET", "path": "/pets",
+      "statusCode": 200, "durationMs": 34 }
+  ],
+  "total": 120, "page": 1, "pageSize": 50
+}
+```
+**Errors:** `403` not a member · `404` run not found.
+
+### 20c. One captured request — `GET …/test-suites/:suiteId/request-logs/:logId`
+
+Full request/response pair: URL, both header maps, both bodies, and
+`requestTruncated`/`responseTruncated` flags for bodies clipped at storage time.
+**Errors:** `403` not a member · `404` run or record not found.
 
 ---
 

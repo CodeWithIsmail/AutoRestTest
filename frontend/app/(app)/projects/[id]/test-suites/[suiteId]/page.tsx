@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { EndpointFilterBar } from "@/components/projects/EndpointFilterBar";
+import type { OutcomeFilter } from "@/components/projects/EndpointFilterBar";
 import { useProject } from "@/components/projects/project-context";
 import { RunTimeline } from "@/components/projects/RunTimeline";
 import { StatusDistribution } from "@/components/projects/StatusDistribution";
@@ -16,7 +18,7 @@ import { ApiError } from "@/lib/api";
 import { downloadReport, explainFailures, getReport } from "@/lib/reports";
 import { getSuite, runSuite } from "@/lib/test-suites";
 import { useApi } from "@/lib/useApi";
-import type { SuiteReport, TestSuiteDetail } from "@/lib/types";
+import type { ReportEndpoint, SuiteReport, TestSuiteDetail } from "@/lib/types";
 
 const POLL_MS = 3000;
 
@@ -65,6 +67,31 @@ function classifyOutcomes(distribution: Record<string, number>) {
   }
   return { successful, clientErrors, serverErrors, other };
 }
+
+/**
+ * The outcome of a single endpoint, applying the same rule as
+ * `classifyOutcomes` one level down: a 5xx is the genuine fault signal, a 4xx
+ * is the API correctly rejecting a bad request.
+ *
+ * Single source of truth for both the Result badge and the outcome filter —
+ * keeping them on one function is what stops the table from showing a row the
+ * active filter says should be hidden.
+ */
+function endpointOutcome(e: ReportEndpoint): Exclude<OutcomeFilter, "all"> {
+  const codes = Object.keys(e.statusCodes);
+  if (e.hasServerErrors || codes.some((c) => c.startsWith("5"))) return "server";
+  if (codes.some((c) => c.startsWith("2"))) return "successful";
+  return "client";
+}
+
+const OUTCOME_BADGE: Record<
+  Exclude<OutcomeFilter, "all">,
+  { tone: "emerald" | "amber" | "red"; label: string }
+> = {
+  successful: { tone: "emerald", label: "Successful" },
+  client: { tone: "amber", label: "Client error" },
+  server: { tone: "red", label: "Server error" },
+};
 
 export default function SuiteDetailPage() {
   const { project, canRun } = useProject();
@@ -136,6 +163,45 @@ export default function SuiteDetailPage() {
 
   const [explaining, setExplaining] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // Per-endpoint table filters. Page-local (not in the URL) and deliberately
+  // preserved across the report reload that "Explain failures" triggers.
+  const [query, setQuery] = useState("");
+  const [outcome, setOutcome] = useState<OutcomeFilter>("all");
+  const [code, setCode] = useState("");
+
+  const endpoints = report?.endpoints;
+
+  // Offer only the codes this run actually returned — an empty "404" option
+  // would be a dead end.
+  const codeOptions = useMemo(
+    () =>
+      Object.keys(report?.statusCodeDistribution ?? {}).sort(
+        (a, b) => Number(a) - Number(b),
+      ),
+    [report?.statusCodeDistribution],
+  );
+
+  const visibleEndpoints = useMemo(() => {
+    if (!endpoints) return [];
+    const needle = query.trim().toLowerCase();
+    return endpoints.filter((e) => {
+      if (needle && !`${e.method} ${e.path}`.toLowerCase().includes(needle)) {
+        return false;
+      }
+      if (outcome !== "all" && endpointOutcome(e) !== outcome) return false;
+      if (code && !(e.statusCodes[code] > 0)) return false;
+      return true;
+    });
+  }, [endpoints, query, outcome, code]);
+
+  const filtersActive = query.trim() !== "" || outcome !== "all" || code !== "";
+
+  function clearFilters() {
+    setQuery("");
+    setOutcome("all");
+    setCode("");
+  }
 
   async function onRun() {
     setStarting(true);
@@ -461,10 +527,38 @@ export default function SuiteDetailPage() {
                   View all captured requests →
                 </Link>
               </div>
+              {report.endpoints.length > 0 && (
+                <EndpointFilterBar
+                  query={query}
+                  onQuery={setQuery}
+                  outcome={outcome}
+                  onOutcome={setOutcome}
+                  code={code}
+                  onCode={setCode}
+                  codes={codeOptions}
+                  shown={visibleEndpoints.length}
+                  total={report.endpoints.length}
+                  active={filtersActive}
+                />
+              )}
               {report.endpoints.length === 0 ? (
                 <p className="px-5 py-10 text-center text-sm text-zinc-500">
                   No endpoints were exercised in this run.
                 </p>
+              ) : visibleEndpoints.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <p className="text-sm text-zinc-400">
+                    No endpoints match these filters.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3"
+                    onClick={clearFilters}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
               ) : (
                 <table className="w-full text-left text-sm">
                   <thead>
@@ -478,8 +572,9 @@ export default function SuiteDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {report.endpoints.map((e) => {
+                    {visibleEndpoints.map((e) => {
                       const codes = Object.entries(e.statusCodes);
+                      const badge = OUTCOME_BADGE[endpointOutcome(e)];
                       return (
                         <tr
                           key={e.endpointId}
@@ -492,19 +587,7 @@ export default function SuiteDetailPage() {
                             {e.path}
                           </td>
                           <td className="px-5 py-3">
-                            {(() => {
-                              const has5xx =
-                                e.hasServerErrors ||
-                                codes.some(([c]) => c.startsWith("5"));
-                              const has2xx = codes.some(([c]) =>
-                                c.startsWith("2"),
-                              );
-                              if (has5xx)
-                                return <Badge tone="red">Server error</Badge>;
-                              if (has2xx)
-                                return <Badge tone="emerald">Successful</Badge>;
-                              return <Badge tone="amber">Client error</Badge>;
-                            })()}
+                            <Badge tone={badge.tone}>{badge.label}</Badge>
                           </td>
                           <td className="px-5 py-3">
                             {codes.length === 0 ? (

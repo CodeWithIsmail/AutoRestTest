@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Fragment, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Fragment, useMemo, useState } from "react";
 import { useProject } from "@/components/projects/project-context";
 import { Badge, MethodBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api";
 import { getRequestLog, getRequestLogSummary, listRequestLogs } from "@/lib/request-logs";
@@ -22,6 +23,10 @@ const STATUS_FILTERS = [
   { key: "4xx", label: "4xx" },
   { key: "5xx", label: "5xx" },
 ];
+
+/** Exact codes and status classes share one `status` value (and one query
+ *  param), so picking one clears the other. This tells them apart. */
+const EXACT_CODE = /^\d{3}$/;
 
 /** HTTP status code → badge tone. */
 function httpTone(code: number | null): "emerald" | "blue" | "amber" | "red" | "zinc" {
@@ -139,6 +144,7 @@ function DetailPanel({ detail }: { detail: RequestLogDetail }) {
 
 export default function CapturedRequestsPage() {
   const { project } = useProject();
+  const router = useRouter();
   const { suiteId, endpointId } = useParams<{
     suiteId: string;
     endpointId: string;
@@ -187,10 +193,26 @@ export default function CapturedRequestsPage() {
           ? `${endpointMeta.method} ${endpointMeta.path}`
           : "Endpoint requests";
 
+  // Every code seen anywhere in the run, so switching endpoints doesn't make
+  // options appear and disappear underneath the cursor.
+  const codeOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const s of summary ?? []) {
+      for (const code of Object.keys(s.statusCodes ?? {})) seen.add(code);
+    }
+    return [...seen].sort((a, b) => Number(a) - Number(b));
+  }, [summary]);
+
   function chooseStatus(key: string) {
     setStatus(key);
     setPage(1);
     setExpandedId(null);
+  }
+
+  /** Endpoint is a route segment, so switching navigates — that keeps every
+   *  filtered view deep-linkable. */
+  function chooseEndpoint(segment: string) {
+    router.push(`${suiteLink}/requests/${segment}`);
   }
 
   async function toggle(id: string) {
@@ -239,21 +261,59 @@ export default function CapturedRequestsPage() {
         </p>
       </div>
 
-      {/* Status filter */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => chooseStatus(f.key)}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              status === f.key
-                ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
-                : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-            }`}
+      {/* Filters: endpoint, status class, exact response code */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Select
+          value={endpointId}
+          onChange={(e) => chooseEndpoint(e.target.value)}
+          aria-label="Filter by endpoint"
+          className="max-w-xs"
+        >
+          <option value="all">All requests</option>
+          {(summary ?? []).map((s) =>
+            s.endpointId === null ? (
+              <option key="unmatched" value="unmatched">
+                Unmatched ({s.total})
+              </option>
+            ) : (
+              <option key={s.endpointId} value={s.endpointId}>
+                {s.method} {s.path} ({s.total})
+              </option>
+            ),
+          )}
+        </Select>
+
+        <div className="flex flex-wrap gap-1">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => chooseStatus(f.key)}
+              aria-pressed={status === f.key}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                status === f.key
+                  ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
+                  : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {codeOptions.length > 0 && (
+          <Select
+            value={EXACT_CODE.test(status) ? status : ""}
+            onChange={(e) => chooseStatus(e.target.value)}
+            aria-label="Filter by HTTP response code"
           >
-            {f.label}
-          </button>
-        ))}
+            <option value="">Any code</option>
+            {codeOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       {loading && !data ? (
@@ -267,7 +327,13 @@ export default function CapturedRequestsPage() {
       ) : !data || data.items.length === 0 ? (
         <Card className="p-10 text-center">
           <p className="text-sm text-zinc-400">
-            No captured requests{status ? ` with a ${status} status` : ""}.
+            No captured requests
+            {status
+              ? EXACT_CODE.test(status)
+                ? ` returned ${status}`
+                : ` with a ${status} status`
+              : ""}
+            .
           </p>
         </Card>
       ) : (

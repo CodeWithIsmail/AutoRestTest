@@ -31,6 +31,13 @@ describe('TestSuitesService', () => {
       deleteMany: jest.Mock;
       createMany: jest.Mock;
     };
+    requestLog: {
+      deleteMany: jest.Mock;
+      createMany: jest.Mock;
+      count: jest.Mock;
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let access: { assertAccess: jest.Mock };
@@ -64,7 +71,13 @@ describe('TestSuitesService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
-      $transaction: jest.fn((cb: (tx: typeof prisma) => unknown) => cb(prisma)),
+      // $transaction is used in both forms: a callback (writes) and an array
+      // of queries (the paginated reads).
+      $transaction: jest.fn((arg: unknown) =>
+        Array.isArray(arg)
+          ? Promise.all(arg)
+          : (arg as (tx: typeof prisma) => unknown)(prisma),
+      ),
     };
     access = { assertAccess: jest.fn().mockResolvedValue(undefined) };
     engine = {
@@ -468,6 +481,73 @@ describe('TestSuitesService', () => {
       await expect(
         service.findTestCases(PROJECT_ID, SUITE_ID, USER_ID),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('listRequestLogs status filter', () => {
+    beforeEach(() => {
+      prisma.testSuite.findFirst.mockResolvedValue({ id: SUITE_ID });
+      prisma.requestLog.count.mockResolvedValue(0);
+      prisma.requestLog.findMany.mockResolvedValue([]);
+    });
+
+    /** Runs a query and returns the `where` Prisma was actually called with. */
+    async function whereFor(status?: string) {
+      await service.listRequestLogs(PROJECT_ID, SUITE_ID, USER_ID, { status });
+      const [args] = prisma.requestLog.findMany.mock.calls.at(-1) as [
+        { where: Record<string, unknown> },
+      ];
+      return args.where;
+    }
+
+    it('filters by an exact HTTP response code', async () => {
+      expect(await whereFor('404')).toMatchObject({ statusCode: 404 });
+    });
+
+    it('filters by a status class as a range', async () => {
+      expect(await whereFor('4xx')).toMatchObject({
+        statusCode: { gte: 400, lt: 500 },
+      });
+    });
+
+    // An unrecognised value must widen to "no filter" rather than matching
+    // nothing — a typo in the query string should not look like an empty run.
+    it.each(['abc', '99', '600', ''])(
+      'leaves the list unfiltered for %p',
+      async (status) => {
+        expect(await whereFor(status)).not.toHaveProperty('statusCode');
+      },
+    );
+
+    it('leaves the list unfiltered when no status is given', async () => {
+      expect(await whereFor(undefined)).not.toHaveProperty('statusCode');
+    });
+  });
+
+  describe('getRequestLogSummary', () => {
+    it('tallies exact status codes alongside status classes', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue({ id: SUITE_ID });
+      prisma.requestLog.findMany.mockResolvedValue([
+        { endpointId: 'ep-1', statusCode: 200 },
+        { endpointId: 'ep-1', statusCode: 200 },
+        { endpointId: 'ep-1', statusCode: 404 },
+        { endpointId: 'ep-1', statusCode: null },
+      ]);
+      prisma.endpoint.findMany.mockResolvedValue([
+        { id: 'ep-1', method: HttpMethod.GET, path: '/pets' },
+      ]);
+
+      const [summary] = await service.getRequestLogSummary(
+        PROJECT_ID,
+        SUITE_ID,
+        USER_ID,
+      );
+
+      // A transport failure (null code) counts toward the total and the
+      // "other" class, but has no exact code to offer as a filter option.
+      expect(summary.statusCodes).toEqual({ '200': 2, '404': 1 });
+      expect(summary.statusClasses).toEqual({ '2xx': 2, '4xx': 1, other: 1 });
+      expect(summary.total).toBe(4);
     });
   });
 });

@@ -66,6 +66,7 @@ export interface RequestLogEndpointSummary {
   passed: number; // 2xx responses
   failed: number; // non-2xx responses
   statusClasses: Record<string, number>; // '2xx' | '3xx' | '4xx' | '5xx' | 'other'
+  statusCodes: Record<string, number>; // exact codes, e.g. { '200': 8, '404': 5 }
 }
 
 /** Lightweight row for the paginated per-endpoint request list. */
@@ -104,10 +105,18 @@ export interface RequestLogDetail {
   createdAt: Date;
 }
 
-function statusClassRange(
-  cls?: string,
-): { gte: number; lt: number } | undefined {
-  switch (cls) {
+/**
+ * Translates the `status` query param into a Prisma filter on `statusCode`.
+ *
+ * Accepts either a class ('4xx') or an exact code ('404') — the SRS asks for
+ * filtering by "response status, or HTTP response code", which are these two
+ * shapes. Anything unrecognised returns undefined so the list stays unfiltered
+ * rather than silently returning nothing.
+ */
+function statusCodeFilter(
+  value?: string,
+): Prisma.RequestLogWhereInput['statusCode'] {
+  switch (value) {
     case '2xx':
       return { gte: 200, lt: 300 };
     case '3xx':
@@ -117,7 +126,7 @@ function statusClassRange(
     case '5xx':
       return { gte: 500, lt: 600 };
     default:
-      return undefined;
+      return value && /^[1-5]\d{2}$/.test(value) ? Number(value) : undefined;
   }
 }
 
@@ -401,16 +410,32 @@ export class TestSuitesService {
     // Aggregate per endpoint (null endpointId = unmatched bucket).
     const acc = new Map<
       string,
-      { endpointId: string | null; total: number; classes: Map<string, number> }
+      {
+        endpointId: string | null;
+        total: number;
+        classes: Map<string, number>;
+        // Exact-code tallies, so the UI can offer a "filter by 404" dropdown
+        // listing only the codes this run actually produced.
+        codes: Map<string, number>;
+      }
     >();
     for (const l of logs) {
       const key = l.endpointId ?? '__unmatched__';
       let entry = acc.get(key);
       if (!entry) {
-        entry = { endpointId: l.endpointId, total: 0, classes: new Map() };
+        entry = {
+          endpointId: l.endpointId,
+          total: 0,
+          classes: new Map(),
+          codes: new Map(),
+        };
         acc.set(key, entry);
       }
       entry.total += 1;
+      if (l.statusCode != null) {
+        const code = String(l.statusCode);
+        entry.codes.set(code, (entry.codes.get(code) ?? 0) + 1);
+      }
       const cls =
         l.statusCode == null
           ? 'other'
@@ -450,6 +475,7 @@ export class TestSuitesService {
         passed,
         failed: e.total - passed,
         statusClasses: classes,
+        statusCodes: Object.fromEntries(e.codes),
       };
     });
 
@@ -492,8 +518,8 @@ export class TestSuitesService {
     } else if (opts.endpointId) {
       where.endpointId = opts.endpointId;
     }
-    const range = statusClassRange(opts.status);
-    if (range) where.statusCode = range;
+    const statusCode = statusCodeFilter(opts.status);
+    if (statusCode !== undefined) where.statusCode = statusCode;
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.requestLog.count({ where }),
