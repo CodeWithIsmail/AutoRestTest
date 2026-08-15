@@ -121,6 +121,12 @@ export class SpecsService {
         },
       });
 
+      // The dependency graph is derived from the spec, so it goes with it. Kept
+      // in this transaction rather than deleted afterwards: a graph left behind
+      // for a spec that no longer exists looks current, which is worse than the
+      // empty state the UI shows when there is none.
+      await tx.dependencyGraph.deleteMany({ where: { projectId } });
+
       await tx.endpoint.deleteMany({ where: { projectId } });
       if (endpoints.length > 0) {
         await tx.endpoint.createMany({

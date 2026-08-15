@@ -301,3 +301,91 @@ export interface CreateInvitationInput {
   email: string;
   role: Role;
 }
+
+// --- dependency graph -------------------------------------------------------
+
+/**
+ * How much the engine knows about one dependency.
+ *  - `predicted`  the semantic pass proposed it; the RL agent never acted on it
+ *  - `confirmed`  the agent used it and was rewarded (positive Q)
+ *  - `penalized`  the agent used it and was punished (negative Q)
+ *  - `discovered` the agent found it at run time; the spec never implied it
+ */
+export type GraphEdgeKind =
+  | "predicted"
+  | "confirmed"
+  | "penalized"
+  | "discovered";
+
+export type GraphBuildStatus = "pending" | "running" | "ready" | "failed";
+
+/** One parameter the consumer needs and the producer field that supplies it. */
+export interface GraphMatch {
+  param: string;
+  paramIn: string;
+  producedBy: string;
+  producedIn: string;
+  /** Cosine similarity; null on an edge only the RL agent found. */
+  similarity: number | null;
+  /** Learned Q-value; null when the agent never exercised this match. */
+  q: number | null;
+}
+
+export interface GraphNode {
+  id: string;
+  method: HttpMethod | null;
+  path: string | null;
+  summary: string | null;
+  parameters: string[];
+  hasRequestBody: boolean;
+  /** Run mode only; absent means the operation was never called. */
+  statusCodes?: Record<string, number>;
+  totalRequests?: number;
+  hasServerErrors?: boolean;
+}
+
+/**
+ * Edges point the way the data flows: `from` produces the value, `to` consumes
+ * it. The backend flips the engine's own (consumer -> producer) direction once,
+ * so top-to-bottom reads as execution order.
+ */
+export interface GraphEdge {
+  from: string;
+  to: string;
+  kind: GraphEdgeKind;
+  maxSimilarity: number | null;
+  maxQ: number | null;
+  tentative: boolean;
+  matches: GraphMatch[];
+}
+
+export interface GraphStats {
+  operations: number;
+  dependencies: number;
+  confirmed: number;
+  predicted: number;
+  penalized: number;
+  discovered: number;
+  isolated: number;
+  entryPoints: string[];
+  mostDependedUpon: { id: string; count: number } | null;
+}
+
+export interface DependencyGraph {
+  /** "spec" = built from the specification alone; "run" = with learned weights. */
+  source: "spec" | "run";
+  generatedAt: string;
+  /** True when the edge cap was hit and the weakest edges were dropped. */
+  truncated: boolean;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  stats: GraphStats;
+}
+
+/** GET /projects/:id/graph — the graph plus the state of any build. */
+export interface GraphState {
+  status: GraphBuildStatus;
+  graph: DependencyGraph | null;
+  error: string | null;
+  completedAt: string | null;
+}

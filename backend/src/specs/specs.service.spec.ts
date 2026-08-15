@@ -62,6 +62,7 @@ describe('SpecsService', () => {
       createMany: jest.Mock;
       count: jest.Mock;
     };
+    dependencyGraph: { deleteMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let access: { assertAccess: jest.Mock };
@@ -77,6 +78,10 @@ describe('SpecsService', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         count: jest.fn(),
+      },
+      // Replacing a spec drops the graph derived from the old one.
+      dependencyGraph: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       // Run the callback against the same mock object (tx === prisma here).
       $transaction: jest.fn((cb: (tx: typeof prisma) => unknown) => cb(prisma)),

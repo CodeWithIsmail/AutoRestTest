@@ -81,6 +81,63 @@ export interface EngineGenerationResult {
   warnings: string[];
 }
 
+/** One node of the engine's Semantic Operation Dependency Graph. */
+export interface EngineGraphNode {
+  operationId: string;
+  method: string | null;
+  path: string | null;
+  summary: string | null;
+  parameters: string[];
+  hasRequestBody: boolean;
+}
+
+/**
+ * One semantic edge. Named consumer/producer rather than source/destination
+ * because the engine's own direction is counter-intuitive: it stores the edge
+ * on the operation that *needs* the value, pointing at the one that supplies it.
+ */
+export interface EngineGraphEdge {
+  consumer: string;
+  producer: string;
+  tentative: boolean;
+  maxSimilarity: number;
+  matches: {
+    param: string;
+    paramIn: string;
+    producedBy: string;
+    producedIn: string;
+    similarity: number;
+  }[];
+}
+
+export interface EngineStaticGraph {
+  specName: string;
+  nodes: EngineGraphNode[];
+  edges: EngineGraphEdge[];
+}
+
+/**
+ * The Dependency Agent's learned Q-table, pruned to non-zero entries:
+ * `consumer -> 'params'|'body' -> param -> producer -> location -> field -> q`.
+ */
+export interface EngineLearnedGraph {
+  specName: string;
+  dependenciesDiscovered: number;
+  table: Record<
+    string,
+    Record<
+      string,
+      Record<string, Record<string, Record<string, Record<string, number>>>>
+    >
+  >;
+}
+
+export interface EngineDependencyGraph {
+  /** Null when the run came from an engine build predating the graph export. */
+  static: EngineStaticGraph | null;
+  learned: EngineLearnedGraph | null;
+}
+
 export interface EngineResult {
   summary: {
     totalOperations: number;
@@ -95,6 +152,7 @@ export interface EngineResult {
   operationStatusCodes: unknown;
   serverErrors: unknown;
   rawReport: unknown;
+  dependencyGraph?: EngineDependencyGraph;
 }
 
 /**
@@ -136,6 +194,20 @@ export class EngineService {
       `/runs/${jobId}/requests`,
     );
     return res.requests ?? [];
+  }
+
+  // -- dependency graphs (build the semantic graph without running a test) -- //
+
+  async startGraph(spec: string): Promise<EngineJob> {
+    return this.request<EngineJob>('POST', '/graphs', { spec });
+  }
+
+  async getGraphStatus(jobId: string): Promise<EngineJob> {
+    return this.request<EngineJob>('GET', `/graphs/${jobId}`);
+  }
+
+  async getGraphResult(jobId: string): Promise<EngineStaticGraph> {
+    return this.request<EngineStaticGraph>('GET', `/graphs/${jobId}/result`);
   }
 
   // -- spec generation (upload a codebase, get an OpenAPI document) --------- //

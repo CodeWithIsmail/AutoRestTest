@@ -33,6 +33,23 @@ def _default_oops_python(oops_dir: Path) -> Path:
     return oops_dir / ".venv" / "bin" / "python"
 
 
+def _default_engine_python() -> str:
+    """Interpreter used to run graph_worker.py under the engine's environment.
+
+    ENGINE_CMD is a whole command line, so its first token is the interpreter in
+    the recommended `<venv>/python -m autoresttest.autoresttest` form. That is
+    the right default: a graph build has to import autoresttest, so it must use
+    the same environment the engine does. When ENGINE_CMD is a wrapper instead
+    (`poetry run autoresttest`) the first token is not an interpreter, and
+    ENGINE_PYTHON has to be set explicitly.
+    """
+    explicit = os.environ.get("ENGINE_PYTHON", "").strip()
+    if explicit:
+        return explicit
+    first = os.environ.get("ENGINE_CMD", "").strip().split(" ")[0]
+    return first if "python" in first.lower() else ""
+
+
 @dataclass(frozen=True)
 class Config:
     core_dir: Path
@@ -48,6 +65,8 @@ class Config:
     job_timeout_buffer: int
     engine_value_workers: int
     engine_use_cache: bool
+    engine_python: str
+    graph_timeout: int
     # -- OOPS spec generation (codebase -> OpenAPI) ------------------------- #
     oops_dir: Path
     oops_python: Path
@@ -98,6 +117,16 @@ class Config:
             # is run again, skipping the un-timed phases entirely. Requires the
             # stable, content-derived spec name assigned in jobs.py.
             engine_use_cache=_bool("ENGINE_USE_CACHE", True),
+            # Interpreter for graph_worker.py, which builds a dependency graph
+            # without running a test. Defaults to the first token of ENGINE_CMD,
+            # which is already the engine venv's python in the recommended
+            # `<venv>/python -m autoresttest.autoresttest` form; set it explicitly
+            # if ENGINE_CMD is a wrapper such as `poetry run autoresttest`.
+            engine_python=_default_engine_python(),
+            # Graph construction is embedding-based, not LLM-based: seconds of
+            # work behind a one-off gensim model load. Generous enough for a cold
+            # model load on a slow disk, far below a test run's budget.
+            graph_timeout=int(os.environ.get("GRAPH_TIMEOUT", "900")),
             oops_dir=oops_dir,
             oops_python=oops_python,
             # Measured on the NVIDIA NIM free tier in OOPS-core/run_careerstory.py:

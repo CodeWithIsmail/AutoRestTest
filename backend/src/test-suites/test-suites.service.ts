@@ -19,6 +19,8 @@ import {
   EngineResult,
   EngineService,
 } from '../engine/engine.service';
+import type { DependencyGraph } from '../graph/graph-merge';
+import { mergeGraph } from '../graph/graph-merge';
 import { CreateTestSuiteDto } from './dto/create-test-suite.dto';
 
 /** Run configuration + results summary as returned in list views. */
@@ -586,6 +588,29 @@ export class TestSuitesService {
     return log;
   }
 
+  /**
+   * The dependency graph snapshotted for one run, with the RL agent's learned
+   * weights on its edges. Its own endpoint rather than a field on the suite
+   * detail: the payload is large and only one screen wants it — the same reason
+   * request logs are served separately.
+   */
+  async findGraph(
+    projectId: string,
+    suiteId: string,
+    userId: string,
+  ): Promise<{ graph: DependencyGraph | null }> {
+    await this.access.assertAccess(projectId, userId);
+
+    const suite = await this.prisma.testSuite.findFirst({
+      where: { id: suiteId, projectId },
+      select: { dependencyGraph: true },
+    });
+    if (!suite) {
+      throw new NotFoundException('Test suite not found');
+    }
+    return { graph: (suite.dependencyGraph as DependencyGraph | null) ?? null };
+  }
+
   private async assertSuiteInProject(
     projectId: string,
     suiteId: string,
@@ -701,6 +726,20 @@ export class TestSuitesService {
       });
     }
 
+    // The graph as it stood for this run: semantic edges from the spec, plus the
+    // Q-values the MARL loop put on them. Snapshotted here rather than read from
+    // the project later, so the graph shown beside these results is the one that
+    // produced them even after the spec moves on. Older engine builds don't emit
+    // it, hence the guard.
+    const engineGraph = result.dependencyGraph;
+    const dependencyGraph = engineGraph?.static
+      ? mergeGraph({
+          staticGraph: engineGraph.static,
+          learned: engineGraph.learned,
+          operations: result.operations ?? [],
+        })
+      : null;
+
     await this.prisma.$transaction(async (tx) => {
       await tx.testCase.deleteMany({ where: { testSuiteId: suiteId } });
       if (rows.length > 0) {
@@ -716,6 +755,14 @@ export class TestSuitesService {
           totalTestCases,
           passedTestCases: passed,
           failedTestCases: failed,
+          // Cast for the same reason as in GraphService.persist: an interface
+          // has no index signature, so it doesn't structurally match InputJson.
+          ...(dependencyGraph
+            ? {
+                dependencyGraph:
+                  dependencyGraph as unknown as Prisma.InputJsonObject,
+              }
+            : {}),
         },
       });
     });

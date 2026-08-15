@@ -453,6 +453,104 @@ describe('TestSuitesService', () => {
       expect(data.coveredEndpoints).toBe(1);
     });
 
+    it('snapshots the dependency graph the engine returned', async () => {
+      prisma.endpoint.findMany.mockResolvedValue([
+        { id: 'ep-get', method: HttpMethod.GET, path: '/pets' },
+      ]);
+
+      await (
+        service as unknown as {
+          persistResults: (
+            p: string,
+            s: string,
+            j: string,
+            r: unknown,
+          ) => Promise<void>;
+        }
+      ).persistResults(PROJECT_ID, SUITE_ID, 'job-1', {
+        ...result,
+        dependencyGraph: {
+          static: {
+            specName: 'x',
+            nodes: [
+              {
+                operationId: 'listPets',
+                method: 'GET',
+                path: '/pets',
+                summary: null,
+                parameters: [],
+                hasRequestBody: false,
+              },
+              {
+                operationId: 'delPet',
+                method: 'DELETE',
+                path: '/pets/{id}',
+                summary: null,
+                parameters: ['id|path'],
+                hasRequestBody: false,
+              },
+            ],
+            edges: [
+              {
+                consumer: 'delPet',
+                producer: 'listPets',
+                tentative: false,
+                maxSimilarity: 1,
+                matches: [
+                  {
+                    param: 'id|path',
+                    paramIn: 'params',
+                    producedBy: 'id',
+                    producedIn: 'response',
+                    similarity: 1,
+                  },
+                ],
+              },
+            ],
+          },
+          learned: {
+            specName: 'x',
+            dependenciesDiscovered: 0,
+            table: {
+              delPet: {
+                params: { 'id|path': { listPets: { response: { id: 0.7 } } } },
+              },
+            },
+          },
+        },
+      });
+
+      const updateCalls = prisma.testSuite.update.mock.calls as Array<
+        [{ data: { dependencyGraph?: { edges: { kind: string }[] } } }]
+      >;
+      const graph = updateCalls[0][0].data.dependencyGraph;
+      expect(graph).toBeDefined();
+      // Learned Q-value joined on, so the edge is confirmed rather than predicted.
+      expect(graph!.edges).toHaveLength(1);
+      expect(graph!.edges[0].kind).toBe('confirmed');
+    });
+
+    it('leaves the graph untouched when the engine sends none', async () => {
+      // An engine build predating the graph export must still persist results.
+      prisma.endpoint.findMany.mockResolvedValue([]);
+
+      await (
+        service as unknown as {
+          persistResults: (
+            p: string,
+            s: string,
+            j: string,
+            r: unknown,
+          ) => Promise<void>;
+        }
+      ).persistResults(PROJECT_ID, SUITE_ID, 'job-1', result);
+
+      const updateCalls = prisma.testSuite.update.mock.calls as Array<
+        [{ data: Record<string, unknown> }]
+      >;
+      expect(updateCalls[0][0].data).not.toHaveProperty('dependencyGraph');
+    });
+
     it('emails the run summary to whoever triggered the run', async () => {
       prisma.endpoint.findMany.mockResolvedValue([]);
       prisma.testSuite.findUnique.mockResolvedValue({

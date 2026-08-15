@@ -135,6 +135,148 @@ def output_q_table(q_learning: QLearning, spec_name: str):
         json.dump(compiled_q_table, f, indent=2)
 
 
+def _graph_label(value) -> str:
+    """Render a parameter key the same way `to_dict_helper` does.
+
+    Parameter keys are `(name, in)` tuples, and `to_dict_helper` flattens them
+    to `name|in` when it serializes the Q-tables. The graph export has to use
+    the identical convention or the two files can't be joined on the parameter:
+    `q_tables.json` would say `userId|path` where this file said `('userId',
+    'path')`.
+    """
+    if isinstance(value, tuple):
+        return "|".join("" if part is None else str(part) for part in value)
+    return str(value)
+
+
+def _bucket(location: str, is_source: bool = False) -> str:
+    """Mirror of `DependencyAgent._bucket_location`.
+
+    Duplicated deliberately rather than imported: the buckets are the join key
+    between this file and the dependency Q-table, so they must agree, and a
+    silent divergence here would show up as edges that simply never match.
+    """
+    if location == "body":
+        return "body"
+    if not is_source and location == "response":
+        return "response"
+    return "params"
+
+
+def output_dependency_graph(operation_graph: OperationGraph, spec_name: str):
+    """Write the semantic dependency graph to `data/<spec_name>/graph.json`.
+
+    The graph is otherwise only reachable as a pickle in `cache/graphs/`, which
+    nothing outside this process can read. Edges are emitted in the engine's own
+    direction — `consumer` needs a value that `producer` supplies — and the
+    consumer is deliberately named rather than called "source", because "source"
+    reads as "where the data comes from" and it is the opposite.
+    """
+    nodes = []
+    for operation_id, node in operation_graph.operation_nodes.items():
+        props = node.operation_properties
+        nodes.append(
+            {
+                "operationId": operation_id,
+                "method": (props.http_method or "").upper() or None,
+                "path": props.endpoint_path or None,
+                "summary": props.summary,
+                "parameters": [_graph_label(key) for key in (props.parameters or {})],
+                "hasRequestBody": bool(props.request_body),
+            }
+        )
+
+    # Edges promoted from `tentative_edges` by `determine_dependencies` land in
+    # `node.outgoing_edges` but are never appended to `graph.operation_edges`.
+    # The Dependency Agent builds its Q-table from `outgoing_edges`, so that is
+    # what has to be walked here; iterating the flat list instead would emit a
+    # graph that disagrees with the Q-table drawn on top of it.
+    confirmed_edges = {id(edge) for edge in operation_graph.operation_edges}
+
+    edges = []
+    for operation_id, node in operation_graph.operation_nodes.items():
+        for edge in node.outgoing_edges:
+            matches = []
+            for parameter, similarities in edge.similar_parameters.items():
+                for similarity in similarities:
+                    # in_value is "<consumer location> to <producer location>",
+                    # e.g. "body to response".
+                    parts = similarity.in_value.split(" to ")
+                    src = parts[0] if parts else "params"
+                    dst = parts[1] if len(parts) > 1 else "params"
+                    matches.append(
+                        {
+                            "param": _graph_label(parameter),
+                            "paramIn": _bucket(src, is_source=True),
+                            "producedBy": _graph_label(similarity.dependent_val),
+                            "producedIn": _bucket(dst),
+                            "similarity": similarity.similarity,
+                        }
+                    )
+            # `update_operation_dependencies` creates an edge whenever
+            # `similar_parameters` is a non-empty dict, but the values can all be
+            # empty lists — an edge to an operation that produces nothing the
+            # consumer wants (getHealth, or a DELETE with no response body). The
+            # Dependency Agent iterates these same inner lists, so it records
+            # nothing for them either; skipping keeps the two files in agreement.
+            if not matches:
+                continue
+            matches.sort(key=lambda m: m["similarity"], reverse=True)
+            edges.append(
+                {
+                    "consumer": operation_id,
+                    "producer": edge.destination.operation_id,
+                    "tentative": id(edge) not in confirmed_edges,
+                    "maxSimilarity": matches[0]["similarity"],
+                    "matches": matches,
+                }
+            )
+
+    output_dir = ensure_output_dir(spec_name)
+    with (output_dir / "graph.json").open("w") as f:
+        json.dump({"specName": spec_name, "nodes": nodes, "edges": edges}, f, indent=2)
+
+
+def output_dependency_q_table(q_learning: QLearning, spec_name: str):
+    """Write the *learned* dependency edges to `dependency_q_table.json`.
+
+    This is the half of the graph the MARL loop produces: Q-values the Dependency
+    Agent assigned to each candidate, plus edges it discovered at runtime that
+    the semantic pass never proposed. Only non-zero entries are kept — a zero is
+    a candidate the agent never got round to trying, which is already implied by
+    the static graph, and keeping them would roughly triple the file for no
+    information.
+    """
+    pruned: dict = {}
+    for operation_id, locations in q_learning.dependency_agent.q_table.items():
+        for location, params in locations.items():
+            for param, dependents in params.items():
+                for dependent_op, buckets in dependents.items():
+                    for bucket, dependent_params in buckets.items():
+                        for dependent_param, q_value in dependent_params.items():
+                            if not q_value:
+                                continue
+                            (
+                                pruned.setdefault(operation_id, {})
+                                .setdefault(location, {})
+                                .setdefault(_graph_label(param), {})
+                                .setdefault(dependent_op, {})
+                                .setdefault(bucket, {})
+                            )[_graph_label(dependent_param)] = q_value
+
+    output_dir = ensure_output_dir(spec_name)
+    with (output_dir / "dependency_q_table.json").open("w") as f:
+        json.dump(
+            {
+                "specName": spec_name,
+                "dependenciesDiscovered": q_learning.dependency_agent.dependencies_discovered,
+                "table": pruned,
+            },
+            f,
+            indent=2,
+        )
+
+
 def output_successes(q_learning: QLearning, spec_name: str):
     output_dir = ensure_output_dir(spec_name)
 
@@ -311,6 +453,18 @@ class AutoRestTest:
                     self.tui.print_step("Graph cached for future runs", "success")
                 except Exception as e:
                     self.tui.print_step(f"Cache save failed: {e}", "warning")
+
+        # Outside the shelve block on purpose, so this runs whether the graph was
+        # rebuilt or loaded from cache. Cached is now the common path, so placing
+        # this in the rebuild branch would mean almost every run exported nothing.
+        # Exported from `operation_graph` rather than the local `graph_properties`,
+        # which each branch binds separately and neither guarantees.
+        if self.config.export.dependency_graph:
+            try:
+                output_dependency_graph(operation_graph, spec_name)
+            except Exception as e:
+                # An export failure must not take down a test run.
+                self.tui.print_step(f"Graph export failed: {e}", "warning")
 
         self.tui.print_phase_complete(
             "Graph Construction",
@@ -494,6 +648,10 @@ class AutoRestTest:
         output_errors(q_learning, spec_name)
         output_operation_status_codes(q_learning, spec_name)
         output_report(q_learning, spec_name, operation_graph.spec_parser)
+        # After the MARL loop, so this captures the learned Q-values and any
+        # dependencies discovered at runtime rather than the zeroed initial table.
+        if self.config.export.dependency_graph:
+            output_dependency_q_table(q_learning, spec_name)
 
         self.tui.print_success("AutoRestTest completed successfully!")
         self.tui.print_step(f"Results saved to: data/{spec_name}/", "info")

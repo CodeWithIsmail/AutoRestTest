@@ -8,6 +8,7 @@ import { CommonModule } from './common/common.module';
 import { EmailModule } from './email/email.module';
 import { EndpointsModule } from './endpoints/endpoints.module';
 import { EngineModule } from './engine/engine.module';
+import { GraphModule } from './graph/graph.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { ReportsModule } from './reports/reports.module';
@@ -40,6 +41,7 @@ import { TestSuitesModule } from './test-suites/test-suites.module';
     ProjectsModule,
     SpecsModule,
     EndpointsModule,
+    GraphModule,
     TestSuitesModule,
     ReportsModule,
     CollaborationModule,

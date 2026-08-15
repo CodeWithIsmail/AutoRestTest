@@ -7,6 +7,7 @@ from flask import Flask
 
 from .config import Config
 from .generation import GenerationManager
+from .graphs import GraphManager
 from .jobs import JobManager
 from .routes import bp
 
@@ -15,10 +16,12 @@ def create_app(config: Config | None = None) -> Flask:
     """Application factory. Wires the job managers onto the app and registers
     the HTTP routes.
 
-    Test runs and spec generations get separate managers, each with its own
-    queue and worker thread: runs must be serialized (the engine reads one
-    global configurations.toml) while a generation can run for hours, so
-    sharing a queue would let one block the other indefinitely.
+    Test runs, spec generations, and dependency-graph builds each get their own
+    manager, queue, and worker thread. Runs must be serialized (the engine reads
+    one global configurations.toml) and can occupy their queue for hours, while
+    a generation runs for hours more and a graph build finishes in seconds —
+    sharing a queue would let the slowest of the three block the other two
+    indefinitely.
     """
     app = Flask(__name__)
     cfg = config or Config.from_env()
@@ -28,8 +31,9 @@ def create_app(config: Config | None = None) -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = cfg.oops_max_zip_bytes + 1024 * 1024
     app.config["JOB_MANAGER"] = JobManager(cfg)
     app.config["GENERATION_MANAGER"] = GenerationManager(cfg)
+    app.config["GRAPH_MANAGER"] = GraphManager(cfg)
     app.register_blueprint(bp)
     return app
 
 
-__all__ = ["create_app", "Config", "JobManager", "GenerationManager"]
+__all__ = ["create_app", "Config", "JobManager", "GenerationManager", "GraphManager"]

@@ -18,6 +18,7 @@ const TABS = [
   { label: "Overview", segment: "" },
   { label: "API Spec", segment: "spec" },
   { label: "Endpoints", segment: "endpoints" },
+  { label: "Dependencies", segment: "graph" },
   { label: "Test Suites", segment: "test-suites" },
   { label: "Team", segment: "team" },
 ];

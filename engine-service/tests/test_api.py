@@ -35,6 +35,8 @@ def make_config(tmp_path, **overrides) -> Config:
         job_timeout_buffer=60,
         engine_value_workers=2,
         engine_use_cache=False,
+        engine_python="",
+        graph_timeout=60,
         oops_dir=tmp_path / "oops",
         oops_python=tmp_path / "oops" / "python",
         oops_model="test/model",
@@ -61,6 +63,37 @@ def _wait_completed(client, job_id, timeout=5.0):
     while time.time() < deadline:
         resp = client.get(f"/runs/{job_id}")
         status = resp.get_json()["status"]
+        if status in ("completed", "failed"):
+            return status
+        time.sleep(0.05)
+    return "timeout"
+
+
+# A parameterised path, so the mock graph builder has something to link:
+# GET /pets/{petId} consumes an id that the /pets operations produce.
+GRAPH_SPEC = """openapi: 3.0.0
+info:
+  title: Demo
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      responses:
+        '200': {description: OK}
+    post:
+      responses:
+        '201': {description: Created}
+  /pets/{petId}:
+    get:
+      responses:
+        '200': {description: OK}
+"""
+
+
+def _wait_graph(client, job_id, timeout=5.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status = client.get(f"/graphs/{job_id}").get_json()["status"]
         if status in ("completed", "failed"):
             return status
         time.sleep(0.05)
@@ -119,9 +152,57 @@ def test_full_lifecycle_mock(client):
         ("POST", "/pets"),
     }
 
+    # Both halves of the dependency graph ride along on the run result.
+    graph = payload["dependencyGraph"]
+    assert {n["operationId"] for n in graph["static"]["nodes"]} == {
+        o["operationId"] for o in ops
+    }
+    assert graph["learned"] is not None
+
     # delete cleans up
     assert client.delete(f"/runs/{job_id}").status_code == 200
     assert client.get(f"/runs/{job_id}").status_code == 404
+
+
+def test_create_graph_validation(client):
+    assert client.post("/graphs", json={}).status_code == 400
+    assert client.post("/graphs", json={"spec": ""}).status_code == 400
+    assert client.post("/graphs", json={"spec": 42}).status_code == 400
+
+
+def test_graph_lifecycle_mock(client):
+    resp = client.post("/graphs", json={"spec": GRAPH_SPEC})
+    assert resp.status_code == 202
+    job_id = resp.get_json()["jobId"]
+
+    # The result is only served once the build has finished.
+    assert client.get(f"/graphs/{job_id}/result").status_code == 409
+
+    assert _wait_graph(client, job_id) == "completed"
+
+    result = client.get(f"/graphs/{job_id}/result")
+    assert result.status_code == 200
+    graph = result.get_json()
+
+    assert {n["operationId"] for n in graph["nodes"]} == {
+        "get_pets",
+        "post_pets",
+        "get_pets_petId",
+    }
+    # GET /pets/{petId} depends on both operations that own the /pets collection.
+    assert {(e["consumer"], e["producer"]) for e in graph["edges"]} == {
+        ("get_pets_petId", "get_pets"),
+        ("get_pets_petId", "post_pets"),
+    }
+
+    assert client.delete(f"/graphs/{job_id}").status_code == 200
+    assert client.get(f"/graphs/{job_id}").status_code == 404
+
+
+def test_graph_unknown_job(client):
+    assert client.get("/graphs/nope").status_code == 404
+    assert client.get("/graphs/nope/result").status_code == 404
+    assert client.delete("/graphs/nope").status_code == 404
 
 
 def test_result_409_before_completion(client, tmp_path):

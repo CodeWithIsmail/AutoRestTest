@@ -9,6 +9,7 @@ from flask import Blueprint, Response, current_app, jsonify, request
 from . import proxy
 from .config import Config
 from .generation import ArchiveError, GenerationManager
+from .graphs import GraphManager
 from .jobs import JobManager
 
 bp = Blueprint("engine", __name__)
@@ -29,6 +30,10 @@ def _manager() -> JobManager:
 
 def _generations() -> GenerationManager:
     return current_app.config["GENERATION_MANAGER"]
+
+
+def _graphs() -> GraphManager:
+    return current_app.config["GRAPH_MANAGER"]
 
 
 @bp.before_request
@@ -197,6 +202,50 @@ def delete_generation(gen_id: str):
     if not _generations().delete(gen_id):
         return jsonify({"error": "Generation not found"}), 404
     return jsonify({"message": "Generation deleted"})
+
+
+# --------------------------------------------------------------------------- #
+# Dependency graphs — build the semantic graph for a spec without running a test.
+# --------------------------------------------------------------------------- #
+@bp.post("/graphs")
+def create_graph():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+    spec = body.get("spec")
+    if not isinstance(spec, str) or not spec.strip():
+        return jsonify({"error": "Field 'spec' must be a non-empty string"}), 400
+    job = _graphs().submit(spec)
+    return jsonify(job.public()), 202
+
+
+@bp.get("/graphs/<job_id>")
+def get_graph(job_id: str):
+    job = _graphs().get(job_id)
+    if job is None:
+        return jsonify({"error": "Graph job not found"}), 404
+    return jsonify(job.public())
+
+
+@bp.get("/graphs/<job_id>/result")
+def get_graph_result(job_id: str):
+    manager = _graphs()
+    job = manager.get(job_id)
+    if job is None:
+        return jsonify({"error": "Graph job not found"}), 404
+    if job.status != "completed":
+        return jsonify({"error": f"Graph job is {job.status}"}), 409
+    result = manager.result(job_id)
+    if result is None:
+        return jsonify({"error": "Result missing"}), 404
+    return jsonify(result)
+
+
+@bp.delete("/graphs/<job_id>")
+def delete_graph(job_id: str):
+    if not _graphs().delete(job_id):
+        return jsonify({"error": "Graph job not found"}), 404
+    return jsonify({"message": "Graph job deleted"})
 
 
 # --------------------------------------------------------------------------- #

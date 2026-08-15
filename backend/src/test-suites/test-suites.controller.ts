@@ -97,6 +97,19 @@ export class TestSuitesController {
   }
 
   /**
+   * GET /projects/:projectId/test-suites/:suiteId/graph
+   * The dependency graph snapshotted for this run. Any project member.
+   */
+  @Get(':suiteId/graph')
+  async findGraph(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('suiteId', new ParseUUIDPipe()) suiteId: string,
+  ) {
+    return this.testSuitesService.findGraph(projectId, suiteId, req.user.id);
+  }
+
+  /**
    * GET /projects/:projectId/test-suites/:suiteId/request-logs/summary
    * Per-endpoint counts of captured requests. Any project member.
    */

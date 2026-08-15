@@ -51,6 +51,16 @@ enum SpecGenStatus {
   failed
 }
 
+// Lifecycle of a standalone dependency-graph build. Same four states as the
+// other engine-service jobs; `ready` rather than `completed` because the row
+// outlives the job — it goes on holding the graph long after the build ended.
+enum GraphStatus {
+  pending
+  running
+  ready
+  failed
+}
+
 // Lifecycle of an email invitation to join a project.
 enum InvitationStatus {
   pending
@@ -104,10 +114,11 @@ model Project {
   invitations ProjectInvitation[]
 
   // Testing artifacts
-  spec           ApiSpecification?
-  specGeneration SpecGeneration?
-  endpoints      Endpoint[]
-  testSuites     TestSuite[]
+  spec            ApiSpecification?
+  specGeneration  SpecGeneration?
+  dependencyGraph DependencyGraph?
+  endpoints       Endpoint[]
+  testSuites      TestSuite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -215,6 +226,31 @@ model SpecGeneration {
 }
 
 // ----------------------------------------------------------------------------
+// DependencyGraph model — the project's Semantic Operation Dependency Graph,
+// built from the spec alone (no test run, no LLM, no target API).
+//
+// Held here rather than on ApiSpecification so the heavy JSON stays out of that
+// model's select projections, and so a build in flight has somewhere to record
+// its status. Deleted when the spec is replaced: a graph derived from a spec
+// that no longer exists is worse than no graph at all.
+// ----------------------------------------------------------------------------
+model DependencyGraph {
+  id        String  @id @default(uuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  status GraphStatus @default(pending)
+  jobId  String? // engine-service job id, null until accepted
+  graph  Json? // the merged graph, in the frontend's wire shape
+  error  String?
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@map("dependency_graphs")
+}
+
+// ----------------------------------------------------------------------------
 // Endpoint model — a single path+method extracted from the spec (or added
 // manually). Stored so the UI can list detected endpoints, filter results,
 // and support manual additions.
@@ -265,6 +301,12 @@ model TestSuite {
 
   triggeredById String
   triggeredBy   User   @relation("TriggeredSuites", fields: [triggeredById], references: [id])
+
+  // Snapshot of the dependency graph as it stood for this run: the semantic
+  // edges plus the Q-values the MARL loop put on them. Stored per-run rather
+  // than read from the project, so the graph shown next to a run's results is
+  // the one that produced them even after the spec moves on.
+  dependencyGraph Json?
 
   startedAt   DateTime?
   completedAt DateTime?

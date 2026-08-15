@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -27,6 +28,8 @@ def make_runner_config(tmp_path, core_dir, engine_cmd, timeout_buffer=60) -> Con
         job_timeout_buffer=timeout_buffer,
         engine_value_workers=2,
         engine_use_cache=False,
+        engine_python="",
+        graph_timeout=60,
         oops_dir=tmp_path / "oops",
         oops_python=tmp_path / "oops" / "python",
         oops_model="m",
@@ -218,6 +221,58 @@ def test_normalize_report_maps_fields():
     assert out["operationStatusCodes"] == {"op1": {"200": 3}}
     assert out["serverErrors"] == [{"err": 1}]
     assert out["rawReport"] is report
+
+
+def test_collect_outputs_reads_the_dependency_graph(tmp_path):
+    (tmp_path / "graph.json").write_text(
+        json.dumps({"nodes": [{"operationId": "a"}], "edges": []}), encoding="utf-8"
+    )
+    (tmp_path / "dependency_q_table.json").write_text(
+        json.dumps({"table": {"a": {}}}), encoding="utf-8"
+    )
+    out = runner.collect_outputs(tmp_path, SPEC)
+    assert out["dependencyGraph"]["static"]["nodes"] == [{"operationId": "a"}]
+    assert out["dependencyGraph"]["learned"]["table"] == {"a": {}}
+
+
+def test_collect_outputs_without_a_graph_yields_none(tmp_path):
+    # A run from an engine predating the export must degrade to null rather than
+    # raise, and must stay distinguishable from a run that found no dependencies.
+    out = runner.collect_outputs(tmp_path, SPEC)
+    assert out["dependencyGraph"] == {"static": None, "learned": None}
+
+
+def test_mock_dependency_graph_covers_every_edge_kind():
+    spec = SPEC.replace("/pets:", "/pets:").rstrip() + """
+  /pets/{petId}:
+    get:
+      responses:
+        '200': {description: OK}
+"""
+    graph, learned = runner._mock_dependency_graph(spec)
+    assert graph["edges"], "a parameterised path should produce at least one edge"
+    # Confirmed (>0) and penalized (<0) both need to be present, plus a learned
+    # entry with no static counterpart, so the UI's four edge kinds are all
+    # reachable offline.
+    values = [
+        q
+        for locs in learned["table"].values()
+        for params in locs.values()
+        for deps in params.values()
+        for buckets in deps.values()
+        for fields in buckets.values()
+        for q in fields.values()
+    ]
+    assert any(v > 0 for v in values)
+    static_pairs = {(e["consumer"], e["producer"]) for e in graph["edges"]}
+    learned_pairs = {
+        (consumer, dep_op)
+        for consumer, locs in learned["table"].items()
+        for params in locs.values()
+        for deps in params.values()
+        for dep_op in deps
+    }
+    assert learned_pairs - static_pairs, "expected a runtime-discovered edge"
 
 
 def test_mock_report_counts_operations():

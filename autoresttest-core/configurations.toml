@@ -75,6 +75,12 @@ use_cached_table = false
 
 # Tip: Set either cache flag to false if you changed graph construction or table generation logic to regenerate the cache.
 
+[export]
+# Write the Semantic Operation Dependency Graph to data/<spec_name>/graph.json, and
+# the learned dependency Q-values to dependency_q_table.json, so tools outside the
+# engine can read the graph (it is otherwise only a pickle in cache/graphs/).
+dependency_graph = true
+
 [q_learning]
 # Q-learning agent hyperparameters.
 learning_rate = 0.1        # alpha

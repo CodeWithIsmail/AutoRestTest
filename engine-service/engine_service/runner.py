@@ -156,6 +156,13 @@ def render_config_toml(
     cache["use_cached_table"] = use_cache
     doc["cache"] = cache
 
+    # The dependency graph and learned Q-values are what the platform's graph
+    # view renders. Written on both the cache-hit and cache-miss paths, so a
+    # cached run still produces them.
+    export = tomlkit.table()
+    export["dependency_graph"] = True
+    doc["export"] = export
+
     q = tomlkit.table()
     q["learning_rate"] = 0.1
     q["discount_factor"] = 0.9
@@ -295,6 +302,15 @@ def collect_outputs(output_dir: Path, spec_text: str) -> Dict[str, Any]:
     result = normalize_report(report, op_status, server_errors)
     index = build_operation_index(spec_text)
     result["operations"] = build_operations(op_status, index, server_errors)
+    # The two halves of the dependency graph: `static` is the semantic graph the
+    # engine derives from the spec, `learned` the Q-values the MARL loop put on
+    # those edges (plus any it discovered at run time). Both default to None
+    # rather than {} so a run from an engine predating the export is
+    # distinguishable from one that genuinely found no dependencies.
+    result["dependencyGraph"] = {
+        "static": _read_json(output_dir / "graph.json", None),
+        "learned": _read_json(output_dir / "dependency_q_table.json", None),
+    }
     return result
 
 
@@ -333,6 +349,96 @@ def _mock_report(spec_text: str, time_duration: int) -> Dict[str, Any]:
     }
 
 
+def _mock_dependency_graph(spec_text: str) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Fabricate a structurally realistic graph + learned table for mock mode.
+
+    Not an imitation of the embedding pass — it just wires each parameterised
+    path to the collection it hangs off (`GET /users/{id}` consumes an `id` that
+    `GET /users` and `POST /users` produce), which is the shape real specs
+    produce anyway. The point is that every edge kind the UI renders —
+    predicted, confirmed, penalized, discovered — is present offline, so the
+    whole frontend path is exercisable without an LLM key.
+    """
+    index = build_operation_index(spec_text)
+
+    nodes = []
+    for op_id, meta in index.items():
+        path = meta["path"] or ""
+        params = re.findall(r"\{([^}]+)\}", path)
+        nodes.append(
+            {
+                "operationId": op_id,
+                "method": meta["method"],
+                "path": meta["path"],
+                "summary": None,
+                "parameters": [f"{name}|path" for name in params],
+                "hasRequestBody": meta["method"] in ("POST", "PUT", "PATCH"),
+            }
+        )
+
+    edges = []
+    for op_id, meta in index.items():
+        path = meta["path"] or ""
+        params = re.findall(r"\{([^}]+)\}", path)
+        if not params:
+            continue
+        # The collection this item path hangs off, e.g. /users/{id} -> /users
+        collection = path.rsplit("/{", 1)[0]
+        for other_id, other in index.items():
+            if other_id == op_id or other["path"] != collection:
+                continue
+            edges.append(
+                {
+                    "consumer": op_id,
+                    "producer": other_id,
+                    "tentative": False,
+                    "maxSimilarity": 1.0,
+                    "matches": [
+                        {
+                            "param": f"{params[0]}|path",
+                            "paramIn": "params",
+                            "producedBy": params[0],
+                            "producedIn": "response",
+                            "similarity": 1.0,
+                        }
+                    ],
+                }
+            )
+
+    # Give the first few edges learned values so the UI has confirmed (positive)
+    # and penalized (negative) edges to draw, and append one edge that is absent
+    # from the static graph so the "discovered at runtime" branch renders too.
+    table: Dict[str, Any] = {}
+    for i, edge in enumerate(edges[:4]):
+        match = edge["matches"][0]
+        q = round(0.8 - i * 0.35, 2)  # 0.8, 0.45, 0.1, -0.25
+        table.setdefault(edge["consumer"], {}).setdefault("params", {}).setdefault(
+            match["param"], {}
+        ).setdefault(edge["producer"], {}).setdefault(match["producedIn"], {})[
+            match["producedBy"]
+        ] = q
+
+    static_pairs = {(e["consumer"], e["producer"]) for e in edges}
+    discovered = next(
+        (
+            (consumer, producer)
+            for consumer in index
+            for producer in index
+            if consumer != producer and (consumer, producer) not in static_pairs
+        ),
+        None,
+    )
+    if discovered is not None:
+        consumer, producer = discovered
+        table.setdefault(consumer, {}).setdefault("body", {}).setdefault(
+            "mockDiscoveredField", {}
+        ).setdefault(producer, {}).setdefault("response", {})["id"] = 0.6
+
+    graph = {"specName": "mock", "nodes": nodes, "edges": edges}
+    learned = {"specName": "mock", "dependenciesDiscovered": 1, "table": table}
+    return graph, learned
+
+
 def run_mock(output_dir: Path, spec_text: str, time_duration: int) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     time.sleep(0.2)  # simulate a brief run so status transitions are observable
@@ -355,6 +461,12 @@ def run_mock(output_dir: Path, spec_text: str, time_duration: int) -> None:
         json.dump(op_status, f)
     with (output_dir / "server_errors.json").open("w", encoding="utf-8") as f:
         json.dump(server_errors, f)
+
+    graph, learned = _mock_dependency_graph(spec_text)
+    with (output_dir / "graph.json").open("w", encoding="utf-8") as f:
+        json.dump(graph, f)
+    with (output_dir / "dependency_q_table.json").open("w", encoding="utf-8") as f:
+        json.dump(learned, f)
 
 
 def _kill_tree(proc: "subprocess.Popen[Any]") -> None:

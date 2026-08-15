@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { DependencyGraphView } from "@/components/graph/DependencyGraphView";
 import { EndpointFilterBar } from "@/components/projects/EndpointFilterBar";
 import type { OutcomeFilter } from "@/components/projects/EndpointFilterBar";
 import { useProject } from "@/components/projects/project-context";
@@ -15,10 +16,16 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api";
+import { getSuiteGraph } from "@/lib/graph";
 import { downloadReport, explainFailures, getReport } from "@/lib/reports";
 import { getSuite, runSuite } from "@/lib/test-suites";
 import { useApi } from "@/lib/useApi";
-import type { ReportEndpoint, SuiteReport, TestSuiteDetail } from "@/lib/types";
+import type {
+  DependencyGraph,
+  ReportEndpoint,
+  SuiteReport,
+  TestSuiteDetail,
+} from "@/lib/types";
 
 const POLL_MS = 3000;
 
@@ -157,6 +164,16 @@ export default function SuiteDetailPage() {
     () =>
       status === "completed"
         ? getReport(project.id, suiteId)
+        : Promise.resolve(null),
+    [suiteId, status],
+  );
+
+  // The graph snapshotted for this run. Fetched separately from the report
+  // because it is large and only this one section reads it.
+  const { data: suiteGraph } = useApi<DependencyGraph | null>(
+    () =>
+      status === "completed"
+        ? getSuiteGraph(project.id, suiteId).then((r) => r.graph)
         : Promise.resolve(null),
     [suiteId, status],
   );
@@ -625,6 +642,37 @@ export default function SuiteDetailPage() {
                 </table>
               )}
             </Card>
+
+            {suiteGraph && suiteGraph.nodes.length > 0 && (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-200">
+                    Dependency graph
+                  </h3>
+                  <p className="mt-1 max-w-3xl text-xs text-zinc-500">
+                    Which operations the engine believed depend on each other,
+                    and which of those the reinforcement-learning agent actually
+                    used during this run.
+                  </p>
+                </div>
+                <DependencyGraphView
+                  graph={suiteGraph}
+                  requestsHref={(operationId) => {
+                    // The graph is keyed by operationId; the requests view is
+                    // keyed by our Endpoint row, so match on method + path.
+                    const node = suiteGraph.nodes.find(
+                      (n) => n.id === operationId,
+                    );
+                    const match = report.endpoints.find(
+                      (e) => e.method === node?.method && e.path === node?.path,
+                    );
+                    return match
+                      ? `${backLink}/${suite.id}/requests/${match.endpointId}`
+                      : null;
+                  }}
+                />
+              </div>
+            )}
           </>
         ))}
     </div>

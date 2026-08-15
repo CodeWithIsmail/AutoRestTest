@@ -83,6 +83,16 @@ class ApiConfig(BaseModel):
     port: int = 8080
 
 
+class ExportConfig(BaseModel):
+    """Optional extra artifacts written to data/<spec_name>/.
+
+    Defaulted (unlike CacheConfig, whose fields are required) so an existing
+    configurations.toml with no [export] section keeps working untouched.
+    """
+
+    dependency_graph: bool = True
+
+
 class CustomHeadersConfig(BaseModel):
     """Custom static headers. Supports ${VAR_NAME} env var interpolation."""
 
@@ -109,6 +119,7 @@ class Config(BaseModel):
     q_learning: QLearningConfig
     request_generation: RequestGenerationConfig
     api: ApiConfig = ApiConfig()
+    export: ExportConfig = ExportConfig()
     custom_headers: CustomHeadersConfig = CustomHeadersConfig()
 
     model_config = ConfigDict(frozen=True)
