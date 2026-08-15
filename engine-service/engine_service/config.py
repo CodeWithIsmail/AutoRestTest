@@ -46,6 +46,8 @@ class Config:
     service_token: str
     port: int
     job_timeout_buffer: int
+    engine_value_workers: int
+    engine_use_cache: bool
     # -- OOPS spec generation (codebase -> OpenAPI) ------------------------- #
     oops_dir: Path
     oops_python: Path
@@ -83,6 +85,19 @@ class Config:
             service_token=os.environ.get("SERVICE_TOKEN", ""),
             port=int(os.environ.get("PORT", "5000")),
             job_timeout_buffer=int(os.environ.get("JOB_TIMEOUT_BUFFER", "1800")),
+            # Value-agent concurrency. The un-timed Q-table phase makes two LLM
+            # calls per operation, so this is the biggest lever on how long a run
+            # takes to start testing -- but only up to a point. NVIDIA NIM's free
+            # tier was measured returning 429s and 500s at 8 workers even well
+            # under its 40 RPM limit, because the ceiling it enforces is on
+            # *concurrent* requests, which LLM_RPM_LIMIT does nothing about. A
+            # failed call yields an empty value table, so over-parallelizing buys
+            # speed with test quality. Raise this only against a paid endpoint.
+            engine_value_workers=int(os.environ.get("ENGINE_VALUE_WORKERS", "3")),
+            # Reuse the cached dependency graph and Q-tables when the same spec
+            # is run again, skipping the un-timed phases entirely. Requires the
+            # stable, content-derived spec name assigned in jobs.py.
+            engine_use_cache=_bool("ENGINE_USE_CACHE", True),
             oops_dir=oops_dir,
             oops_python=oops_python,
             # Measured on the NVIDIA NIM free tier in OOPS-core/run_careerstory.py:

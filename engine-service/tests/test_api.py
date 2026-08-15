@@ -33,6 +33,8 @@ def make_config(tmp_path, **overrides) -> Config:
         service_token="",
         port=5000,
         job_timeout_buffer=60,
+        engine_value_workers=2,
+        engine_use_cache=False,
         oops_dir=tmp_path / "oops",
         oops_python=tmp_path / "oops" / "python",
         oops_model="test/model",

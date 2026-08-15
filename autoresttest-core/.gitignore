@@ -60,3 +60,8 @@ cp.txt
 evomaster-benchmark-cs-rest-artificial-news.iml
 evomaster.jar
 test.py
+
+# Transient copy of configurations.toml taken by engine-service around a run
+# (restored when the run ends). Never a source file -- committing it once was
+# how a per-job config got latched in as the repo default.
+configurations.toml.engine-service.bak

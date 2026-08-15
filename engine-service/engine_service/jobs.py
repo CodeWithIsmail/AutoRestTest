@@ -4,6 +4,7 @@ configurations.toml, so runs must be serialized)."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import queue
@@ -21,6 +22,12 @@ from . import proxy, runner
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _spec_name(spec_text: str) -> str:
+    """Stable, filesystem-safe name for a spec, used as the engine's cache key."""
+    digest = hashlib.sha256(spec_text.encode("utf-8")).hexdigest()[:16]
+    return f"spec_{digest}"
 
 
 @dataclass
@@ -171,7 +178,13 @@ class JobManager:
 
         self._transition(job, status="running", started_at=_now())
 
-        spec_name = f"job_{job_id[:12]}"
+        # The engine keys its graph and Q-table caches on the spec file's stem,
+        # so a per-job name (the old `job_<id>`) guaranteed a cache miss on every
+        # run. Deriving the name from the spec's content instead lets a re-run of
+        # the same API skip the two un-timed setup phases entirely. Hashed from
+        # the *original* spec, before the per-job proxy URL is injected into
+        # `servers` — otherwise every run would still be unique.
+        spec_name = _spec_name(params["spec"])
         job_dir = self._job_dir(job_id)
         job_dir.mkdir(parents=True, exist_ok=True)
 
@@ -180,6 +193,11 @@ class JobManager:
 
         time_budget = int(params["timeBudget"])
         output_dir = self.cfg.core_dir / "data" / spec_name
+        # Now that `spec_name` is stable across runs, this directory is shared by
+        # every run of the same spec. Clear it first so a run that dies before
+        # writing its report can't have the previous run's results collected as
+        # if they were its own.
+        shutil.rmtree(output_dir, ignore_errors=True)
 
         try:
             if self.cfg.is_mock:
@@ -204,6 +222,8 @@ class JobManager:
                     llm_engine=params.get("llmEngine") or self.cfg.llm_engine,
                     llm_api_base=self.cfg.llm_api_base,
                     llm_rpm_limit=self.cfg.llm_rpm_limit,
+                    value_workers=self.cfg.engine_value_workers,
+                    use_cache=self.cfg.engine_use_cache,
                     # Per-run authHeader wins; then a service-wide TEST_AUTH_HEADER
                     # env var; then a JWT_TOKEN from the core's own .env (mirrors
                     # the core CLI's [custom_headers] bearer auth). All are
@@ -214,7 +234,13 @@ class JobManager:
                         or runner.default_auth_header(self.cfg.core_dir)
                     ),
                 )
-                runner.run_real(self.cfg, spec_path, time_budget, toml_text)
+                runner.run_real(
+                    self.cfg,
+                    spec_path,
+                    time_budget,
+                    toml_text,
+                    log_path=job_dir / "stdout.log",
+                )
         finally:
             # Stop accepting proxy traffic for this job once the engine exits.
             with self._lock:

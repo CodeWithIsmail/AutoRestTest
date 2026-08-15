@@ -14,9 +14,12 @@ The engine (autoresttest-core) is treated as a black box:
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -93,6 +96,8 @@ def render_config_toml(
     auth_header: Optional[str],
     recursion_limit: int = 50,
     llm_rpm_limit: int = 0,
+    value_workers: int = 8,
+    use_cache: bool = True,
 ) -> str:
     """Render a per-run configurations.toml for the engine."""
     doc = tomlkit.document()
@@ -132,17 +137,23 @@ def render_config_toml(
     agent["max_total_combinations"] = 3000
     agent["base_samples_per_size"] = 200
     agent["combination_seed"] = 42
-    # Low value-generation concurrency keeps the RPM throttle smooth and avoids
-    # tripping rate-limited providers' concurrent-request ceilings.
+    # Value-table generation is the un-timed phase that dominates a cold run:
+    # two LLM calls per operation, and on a queued free tier each one takes
+    # minutes. Concurrency is what makes it bearable — the core's own RPM
+    # throttle (llm.rpm_limit above) is what actually protects the provider,
+    # so workers can go well past 2 without tripping a rate limit.
     value = tomlkit.table()
     value["parallelize"] = True
-    value["max_workers"] = 2
+    value["max_workers"] = value_workers
     agent["value"] = value
     doc["agent"] = agent
 
+    # Keyed by the spec file's stem, which jobs.py derives from a hash of the
+    # spec text. Re-running the same spec then skips graph construction and
+    # Q-table initialization outright and goes straight to the timed loop.
     cache = tomlkit.table()
-    cache["use_cached_graph"] = False
-    cache["use_cached_table"] = False
+    cache["use_cached_graph"] = use_cache
+    cache["use_cached_table"] = use_cache
     doc["cache"] = cache
 
     q = tomlkit.table()
@@ -346,14 +357,172 @@ def run_mock(output_dir: Path, spec_text: str, time_duration: int) -> None:
         json.dump(server_errors, f)
 
 
+def _kill_tree(proc: "subprocess.Popen[Any]") -> None:
+    """Kill the engine *and everything it spawned*.
+
+    `Popen.kill()` only terminates the direct child. `poetry run autoresttest`
+    is three processes deep (poetry -> cmd.exe -> launcher -> engine), so
+    killing the child leaves the engine orphaned: it keeps hammering the target
+    API with nothing watching it, and — because the orphans still hold the
+    inherited stdout/stderr handles — anything waiting on those pipes blocks
+    forever. On Windows `taskkill /T` walks the tree; elsewhere the child is its
+    own process group leader (see `_popen_kwargs`) so the group can be signalled.
+    """
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+                check=False,
+            )
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=30)
+    except Exception:
+        proc.kill()
+
+
+def _popen_kwargs() -> Dict[str, Any]:
+    """Put the engine in its own process group/job so the whole tree is killable."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+# --------------------------------------------------------------------------- #
+# Tying the engine's lifetime to this service's
+# --------------------------------------------------------------------------- #
+# Runs are serialized (one global configurations.toml), so a single slot holds
+# whichever engine is live. `shutdown_active_engine` is what the entry point
+# calls on the way out.
+_active_lock = threading.Lock()
+_active_proc: Optional["subprocess.Popen[Any]"] = None
+# Windows job handles, kept alive deliberately: closing the last handle to a
+# kill-on-close job is precisely what terminates its processes.
+_active_job: Any = None
+
+
+def _assign_kill_on_close_job(proc: "subprocess.Popen[Any]") -> Any:
+    """Tie the engine's lifetime to ours through a Windows Job Object.
+
+    Handlers are not enough on their own. `Stop-Process`, Task Manager and any
+    other TerminateProcess caller give this process no chance to run `atexit` or
+    a signal handler, and the engine is then orphaned — still running, still
+    driving traffic at the target API, with nothing left to reap it. A job object
+    with KILL_ON_JOB_CLOSE is enforced by the kernel instead: when our last
+    handle to the job goes away — including because we died abruptly — every
+    process in the job is terminated with us.
+
+    Returns the job handle, which the caller must keep referenced for as long as
+    the engine should live. Best-effort: on failure the engine still runs, it
+    just reverts to being orphanable, so this never raises.
+    """
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+        JobObjectExtendedLimitInformation = 9
+
+        class BASIC_LIMIT(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_int64),
+                ("PerJobUserTimeLimit", ctypes.c_int64),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class IO_COUNTERS(ctypes.Structure):
+            _fields_ = [(n, ctypes.c_uint64) for n in (
+                "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+                "ReadTransferCount", "WriteTransferCount", "OtherTransferCount",
+            )]
+
+        class EXTENDED_LIMIT(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", BASIC_LIMIT),
+                ("IoInfo", IO_COUNTERS),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateJobObjectW.restype = wintypes.HANDLE
+        k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+
+        job = k32.CreateJobObjectW(None, None)
+        if not job:
+            return None
+        info = EXTENDED_LIMIT()
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not k32.SetInformationJobObject(
+            job, JobObjectExtendedLimitInformation,
+            ctypes.byref(info), ctypes.sizeof(info),
+        ):
+            return None
+        # Grandchildren of a job member join the job automatically, so this one
+        # call covers the engine's whole tree.
+        if not k32.AssignProcessToJobObject(job, int(proc._handle)):  # type: ignore[attr-defined]
+            return None
+        return job
+    except Exception:
+        return None
+
+
+def shutdown_active_engine() -> None:
+    """Kill the running engine, if any. Safe to call when nothing is running."""
+    global _active_job
+    with _active_lock:
+        proc, _active_job = _active_proc, None
+    if proc is not None:
+        _kill_tree(proc)
+
+
 def run_real(
-    cfg: Config, spec_path: Path, time_duration: int, toml_text: str
+    cfg: Config,
+    spec_path: Path,
+    time_duration: int,
+    toml_text: str,
+    log_path: Optional[Path] = None,
 ) -> None:
     """Overwrite the core's configurations.toml (restoring it afterwards), then
-    shell out to the engine with stdin closed to auto-confirm the prompt."""
+    shell out to the engine with stdin closed to auto-confirm the prompt.
+
+    Output goes to `log_path` rather than a pipe. Pipes are what made a timed-out
+    run unrecoverable: `subprocess.run` kills the child on timeout and then, on
+    Windows, calls `communicate()` with no timeout to drain the pipe — which
+    never returns while a surviving grandchild still holds the write handle. A
+    file has no such reader, and it also leaves the engine's TUI output on disk
+    for debugging, which a captured-then-discarded pipe did not.
+    """
     core_toml = cfg.core_dir / "configurations.toml"
     backup = cfg.core_dir / "configurations.toml.engine-service.bak"
 
+    # A backup already on disk is the residue of a run that died before it could
+    # restore -- killed engine, killed service, crash. What it holds is the
+    # genuine user config, and what `configurations.toml` holds is that dead
+    # run's job config. Putting it back before taking a new copy is what stops
+    # the job config from being latched in as the "original" for every run
+    # afterwards, which is how the checked-in config came to point at a job
+    # spec path that no longer exists.
+    if backup.exists():
+        shutil.move(str(backup), str(core_toml))
     if core_toml.exists():
         shutil.copy2(core_toml, backup)
     core_toml.write_text(toml_text, encoding="utf-8")
@@ -366,31 +535,86 @@ def run_real(
         "-t",
         str(time_duration),
     ]
+    timeout = time_duration + cfg.job_timeout_buffer
+    log_path = log_path or (spec_path.parent / "stdout.log")
+
+    global _active_proc, _active_job
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(cfg.core_dir),
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=time_duration + cfg.job_timeout_buffer,
-            env=env,
-        )
-        if result.returncode != 0:
-            tail = (result.stderr or result.stdout or "")[-2000:]
-            raise RuntimeError(
-                f"Engine exited with code {result.returncode}: {tail}"
+        with log_path.open("w", encoding="utf-8", errors="replace") as log:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(cfg.core_dir),
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                env=env,
+                **_popen_kwargs(),
             )
+            with _active_lock:
+                _active_proc = proc
+                _active_job = _assign_kill_on_close_job(proc)
+            try:
+                returncode = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _kill_tree(proc)
+                raise RuntimeError(
+                    f"Engine exceeded its {timeout}s budget "
+                    f"({time_duration}s time budget + {cfg.job_timeout_buffer}s "
+                    f"for the un-timed setup phases) and was terminated. "
+                    f"See {log_path.name}."
+                ) from None
+
+        if returncode != 0:
+            tail = _log_tail(log_path)
+            raise RuntimeError(f"Engine exited with code {returncode}: {tail}")
     finally:
+        # Releasing the job handle here is what lets the engine outlive nothing:
+        # the process has already exited by this point, so closing it is a no-op
+        # rather than a kill.
+        with _active_lock:
+            _active_proc = None
+            _active_job = None
         if backup.exists():
             shutil.move(str(backup), str(core_toml))
 
 
-def _engine_env(cfg: Config) -> Dict[str, str]:
-    import os
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
+# Rich redraws its progress panels continuously, so the raw tail of a log is
+# almost entirely box-drawing. Those frames are what an error message must not
+# be made of: they crowd out the actual cause and are what the user ends up
+# reading in the UI.
+_TUI_FRAME = re.compile(r"^[\s│┃╭╮╰╯┌┐└┘├┤┬┴┼─━╌┄┈▁▂▃▄▅▆▇█▏▎▍▌▋▊▉]*$")
 
+
+def _log_tail(log_path: Path, limit: int = 2000) -> str:
+    """Last `limit` characters of real output, with the TUI chrome removed."""
+    try:
+        raw = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "(no output captured)"
+
+    lines: List[str] = []
+    seen: set[str] = set()
+    for line in _ANSI.sub("", raw).splitlines():
+        # Strip the panel borders as well as whitespace, so a heading is
+        # compared on its text rather than on the box drawn around it.
+        stripped = line.strip().strip("│┃╎┆║").strip()
+        if not stripped or _TUI_FRAME.match(stripped):
+            continue
+        # Global, not consecutive: a live panel cycles through a handful of
+        # distinct lines, so only deduplicating neighbours leaves the tail full
+        # of the same four rows. Keeping first occurrences preserves order and
+        # pushes the repeated chrome up out of the tail window.
+        if stripped in seen:
+            continue
+        seen.add(stripped)
+        lines.append(stripped)
+
+    tail = "\n".join(lines)[-limit:]
+    return tail or "(no output captured)"
+
+
+def _engine_env(cfg: Config) -> Dict[str, str]:
     env = os.environ.copy()
     if cfg.api_key:
         env["API_KEY"] = cfg.api_key  # python-dotenv won't override an existing var
@@ -399,4 +623,7 @@ def _engine_env(cfg: Config) -> Dict[str, str]:
     # and crashes with UnicodeEncodeError. Force UTF-8 I/O so the TUI can render.
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
+    # stdout is a file here, not a terminal, so Python block-buffers it and the
+    # log stays empty for the entire run -- exactly when it is most wanted.
+    env["PYTHONUNBUFFERED"] = "1"
     return env

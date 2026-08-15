@@ -65,6 +65,29 @@ Set `ENGINE_MODE=mock` in `engine-service/.env` to exercise both job types
 offline in seconds — no LLM key, no engine, no OOPS run. This is the fast loop
 for anything touching the backend or frontend job flows.
 
+**Why a real run takes far longer than its `timeBudget`.** The budget bounds
+only the engine's MARL loop (phase 4). Graph construction and Q-table
+initialization are explicitly *not* time-bounded and cost two LLM calls per
+operation — on a queued free tier (NVIDIA NIM at ~2-4 min/call) that alone is
+tens of minutes before the first timed request. Three things keep it in hand,
+all in `runner.py`/`jobs.py`: `ENGINE_VALUE_WORKERS` parallelizes those calls
+(the core's `LLM_RPM_LIMIT` throttle, not the worker count, is what protects the
+provider); `ENGINE_USE_CACHE` reuses the graph and Q-tables so a second run of
+the same spec skips both phases; and the spec is named `spec_<sha256>` rather
+than per-job, because the engine keys those caches on the spec file's stem — a
+per-job name meant a guaranteed cache miss every time. The flip side is that
+`autoresttest-core/data/<spec_name>/` is now shared between runs of the same
+spec, so `jobs.py` clears it before each run.
+
+**Killing a run must kill the tree.** The engine is launched with `Popen` into
+its own process group, output redirected to `jobs/<id>/stdout.log`, and killed
+via `taskkill /T` (POSIX: `killpg`). Neither detail is cosmetic: `poetry run`
+puts three processes above the engine, so `subprocess.run(timeout=)` killed only
+the wrapper and orphaned an engine that kept hammering the target API — and then
+hung forever, because its post-kill `communicate()` waits on pipe handles the
+orphans still hold. Prefer `ENGINE_CMD=<venv>/python -m autoresttest.autoresttest`
+over `poetry run` to avoid the extra layers entirely.
+
 ## Spec generation from source code (OOPS)
 
 A project's OpenAPI spec can either be uploaded as a file or **generated from a
