@@ -124,6 +124,53 @@ Things to know before touching this path:
 - Generation is slow (hours on a mid-size backend) and LLM-bound. Watch
   `engine-service/jobs/<id>/stdout.log` and `progress.json` while a run is live.
 
+## Dependency graph (SPDG) visualization
+
+The engine's defining feature — the Semantic Property Dependency Graph — used to
+be invisible, built in phase 2 of every run and never leaving the engine host.
+It is now surfaced on a project tab (static, spec-derived) and on each completed
+run (static plus the MARL Q-values layered over it).
+
+The pipeline: `autoresttest-core` writes `data/<spec>/graph.json` and
+`dependency_q_table.json` → `engine-service` returns them on the run result
+**and** can build one standalone via `POST /graphs` → the backend merges the two
+halves in `src/graph/graph-merge.ts` → the frontend draws it as hand-rolled
+inline SVG (`components/graph/`).
+
+Things that will bite whoever touches this next, each one a bug that was
+actually hit:
+
+- **Edge direction is stored backwards from how it reads.**
+  `add_operation_edge(operation_id, dependent_operation_id)` means "this
+  operation's parameters can be filled from that one's response" — consumer →
+  producer. `graph-merge.ts` flips it **exactly once** so `from` is the producer
+  and arrows read as execution order. Nothing downstream re-flips.
+- **Export from `operation_nodes[*].outgoing_edges`, not the flat
+  `operation_edges` list.** `determine_dependencies` promotes tentative edges
+  into the per-node list and never appends them to the flat one, and the
+  Dependency Agent reads the per-node list — iterate the flat list and the graph
+  disagrees with the Q-table.
+- **Phantom edges exist.** `update_operation_dependencies` creates an edge
+  whenever `similar_parameters` is a non-empty dict, even when every value is an
+  empty list. The exporter skips those; the sample API has 48 raw edges and 40
+  real ones.
+- **The export call sits outside the `shelve` block on purpose.** With
+  `ENGINE_USE_CACHE=true` the cache hit is the common path, so exporting inside
+  the rebuild branch would silently produce nothing on almost every run.
+- **`graph_worker.py` writes to `jobs/<id>/graph.json`, never
+  `data/<spec_name>/`** — `jobs.py` rmtree's that directory before every run.
+  It also must not touch the shelve cache: `dbm` is not concurrency-safe and a
+  test run may be holding it.
+- **Layered layout degenerates on dense graphs.** After cycle-breaking, a
+  near-complete graph's precedence relation is a total order, so longest-path
+  layering produces one node per layer. `layout.ts` falls back to BFS depth past
+  a threshold; width-capping does not help, because the chain is the precedence
+  itself. Past ~70 edges the matrix view is the default — it has zero occlusion.
+- **Back edges are real information, not a rendering artifact.** They are
+  dependency cycles, inherent to symmetric field-name matching; on a real
+  17-operation spec, 39 of 78 edges were cyclic. They are drawn dotted and bowed
+  out to the side, anchored to node faces rather than centres.
+
 ## Backend architecture & conventions
 
 The backend has no per-subproject CLAUDE.md, so the important bits live here.

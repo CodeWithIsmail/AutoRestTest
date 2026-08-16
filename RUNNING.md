@@ -120,7 +120,20 @@ uv sync --index-url https://pypi.org/simple
 
 ---
 
-## 2. Daily run — three terminals
+## 2. Daily run
+
+**Windows shortcut.** From the repo root:
+
+```powershell
+.\start-dev.ps1
+```
+
+It writes `scripts/start-{engine,backend,frontend}.ps1` and opens one PowerShell
+window per service, started in dependency order. `-GenerateOnly` writes the
+scripts without launching; `-SkipEngine` runs backend + frontend only. Each
+window preflights its own dependencies and stays open on a crash.
+
+Otherwise, three terminals by hand:
 
 **Terminal 1 — engine-service**
 
