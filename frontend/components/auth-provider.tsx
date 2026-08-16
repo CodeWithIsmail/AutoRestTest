@@ -19,13 +19,27 @@ interface AuthContextValue {
   user: User | null;
   /** True while the initial "am I logged in?" check is running. */
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  /** `identifier` is the account's email address or its username. */
+  login: (identifier: string, password: string) => Promise<void>;
+  /**
+   * Starts a signup. Does **not** sign anyone in: no account exists until the
+   * emailed code is entered. Resolves with whether that step is required, since
+   * the server can have it switched off.
+   */
   register: (
     username: string,
     email: string,
     password: string,
-  ) => Promise<void>;
+  ) => Promise<{ verificationRequired: boolean }>;
   logout: () => void;
+  /**
+   * Replace the cached user with a row the server just returned. The settings
+   * page changes fields the shell renders (display name, avatar), so without
+   * this the header goes stale until reload.
+   */
+  applyUser: (user: User) => void;
+  /** Adopt a session handed back by something other than login — i.e. signup. */
+  applySession: (accessToken: string, user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -59,11 +73,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (identifier: string, password: string) => {
     const res = await apiFetch<AuthResponse>("/auth/login", {
       method: "POST",
       auth: false,
-      body: { email, password },
+      body: { identifier, password },
     });
     setToken(res.accessToken);
     setUser(res.user);
@@ -71,19 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(
     async (username: string, email: string, password: string) => {
-      // Register does not return a token, so log in immediately afterwards.
-      await apiFetch<RegisterResponse>("/auth/register", {
+      // Deliberately does not log in afterwards. Registration only parks a
+      // pending signup — creating the account here is what used to let anyone
+      // permanently claim an email address they did not own.
+      const res = await apiFetch<RegisterResponse>("/auth/register", {
         method: "POST",
         auth: false,
         body: { username, email, password },
       });
-      const res = await apiFetch<AuthResponse>("/auth/login", {
-        method: "POST",
-        auth: false,
-        body: { email, password },
-      });
-      setToken(res.accessToken);
-      setUser(res.user);
+      return { verificationRequired: res.verificationRequired };
     },
     [],
   );
@@ -93,8 +103,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const applyUser = useCallback((next: User) => setUser(next), []);
+
+  const applySession = useCallback((accessToken: string, next: User) => {
+    setToken(accessToken);
+    setUser(next);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        applyUser,
+        applySession,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

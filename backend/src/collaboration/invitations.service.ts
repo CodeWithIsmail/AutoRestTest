@@ -266,6 +266,21 @@ export class InvitationsService {
     expiresAt: Date;
   }): Promise<boolean> {
     try {
+      // Respect the opt-out, but only for people who already have an account:
+      // a brand-new invitee has no row and no way to have opted out, and
+      // silently dropping their only notification would strand the invitation.
+      // Members who opt out still see it on the in-app Invitations page.
+      const invitee = await this.prisma.user.findUnique({
+        where: { email: args.to.toLowerCase() },
+        select: { notifyInvitations: true },
+      });
+      if (invitee && !invitee.notifyInvitations) {
+        this.logger.log(
+          `Skipping the invitation email to ${args.to}: they have opted out.`,
+        );
+        return false;
+      }
+
       return await this.email.sendProjectInvitation(args);
     } catch (err) {
       this.logger.error(

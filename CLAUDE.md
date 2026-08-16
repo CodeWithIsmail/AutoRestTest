@@ -148,4 +148,58 @@ The backend has no per-subproject CLAUDE.md, so the important bits live here.
 
 **Env vars (backend, see `.env.example`):** `DATABASE_URL` (Postgres connection string), `JWT_SECRET`, `PORT`. Both `PrismaService` and `JwtStrategy` throw clear errors at startup if their required var is missing. Prisma CLI reads `DATABASE_URL` via `prisma.config.ts` (`dotenv/config`).
 
+**Accounts (`src/auth/` + `src/users/`):** identity is split across two modules on
+purpose. `auth/` owns everything that establishes a session — register, login,
+email verification, password reset — and `users/` owns what a signed-in user
+does to their own account (profile, password change, notification preferences,
+deletion). Reads stay on `GET /auth/me`, the frontend's bootstrap call, so there
+is only ever one "who am I" endpoint. The shared `PublicUser` shape and
+`PUBLIC_USER_SELECT` live in `users/user.types.ts` rather than in either
+service, because `JwtStrategy` needs them and must not import the service it
+guards.
+
+Four things here are easy to break:
+
+- **`login` takes `identifier`, not `email`** — one field accepting either an
+  email address or a username. They are told apart by the `@`, which usernames
+  forbid. That also makes the **username immutable**: `PATCH /users/me` accepts
+  only `name` and `avatarColor`, and the global `forbidNonWhitelisted` pipe
+  turns an attempt at `username`/`email` into a 400 for free.
+- **`passwordChangedAt` is the app's only session revocation.** `JwtStrategy`
+  rejects any token whose `iat` predates it. Compare **whole seconds** on both
+  sides — `iat` has one-second resolution, and comparing it against the
+  millisecond timestamp rejects the token minted by "reset, then sign in".
+- **Every `User` row is verified — rely on this.** `POST /auth/register` does
+  **not** create an account. It writes a `PendingSignup` (email unique,
+  password already hashed, sha256 of a six-digit code) and returns a message,
+  no session. `POST /auth/verify-signup` — public, because there is no account
+  to authenticate against yet — validates the code, creates the user inside a
+  transaction, deletes the pending row, and returns `{ accessToken, user }` in
+  the same shape as login.
+  This exists because the earlier design created the row up front, and
+  `User.email` is unique: **registering with an address you did not own claimed
+  it permanently.** An unproven address must never reserve anything.
+  The anti-squatting mechanism is one line — `pendingSignup.upsert` keyed on
+  email, so a second registration *overwrites* the first. Whoever can read the
+  inbox wins. Do not "fix" that into a 409.
+  A consequence worth keeping in mind: there is no unverified state to guard,
+  so `EmailVerifiedGuard`, `mustVerifyEmail` and the client-side wall are all
+  gone. Do not reintroduce a route guard for verification — closing the old
+  `POST /invitations/:token/accept` hole needed no guard, just the absence of
+  unverified accounts. `REQUIRE_EMAIL_VERIFICATION=false` skips the pending
+  step entirely and creates the account outright (marked verified, since with
+  the check off it never otherwise could be).
+- **Rate limiting is per-controller, never global.** `ThrottlerModule.forRoot`
+  is registered with **no `APP_GUARD`**; `ThrottlerGuard` is applied on
+  `AuthController` and `UsersController` only. A global limit would also cover
+  the run-status and graph endpoints the frontend polls every three seconds.
+  `main.ts` sets `trust proxy` so the limits are per-caller behind Render.
+
+`AuthToken` (one table, both flows) stores a **sha256 of the secret**, unlike
+`ProjectInvitation`, which stores its token in plaintext because it is meant to
+be copied out of the UI. Reset tokens are looked up by hash; six-digit codes are
+looked up by `(userId, type)` and only then hash-compared, since two users can
+legitimately hold the same code. The attempt counter, not the TTL, is what makes
+a six-digit code safe — it burns the row at five wrong guesses.
+
 **Email (`src/email/`):** transactional mail goes through Resend — an HTTPS API, chosen because Render's free tier blocks outbound SMTP, so a Nodemailer/SMTP setup would work locally and then fail in deployment. `EmailService` is `@Global` and sends three messages: project invitation (on create and on `POST …/invitations/:id/resend`), welcome on registration, and run-finished from the test-suite poller. Two things to know: **`send()` never throws** — it returns a boolean, because none of its callers should fail when mail does, and two of them run in a background poller with no request to fail into; and **`EMAIL_MODE=mock` (the default) logs the rendered message to the console** and never touches the network, mirroring `LLM_MODE`. Set `EMAIL_DEV_REDIRECT_TO` to demo real sends — Resend refuses recipients other than your own account address until a domain is verified. Templates live in `email/templates.ts` as pure functions; everything interpolated is HTML-escaped and all styling is inline, since mail clients strip stylesheets.

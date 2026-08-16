@@ -3,11 +3,45 @@
 
 export type Role = "admin" | "tester" | "viewer";
 
+/** Accent colours offered for the generated initial avatar. */
+export const AVATAR_COLORS = [
+  "emerald",
+  "blue",
+  "purple",
+  "amber",
+  "rose",
+  "cyan",
+  "zinc",
+] as const;
+
+export type AvatarColor = (typeof AVATAR_COLORS)[number];
+
 /** The public user profile returned by the backend (never includes a password). */
 export interface User {
   id: string;
   username: string;
   email: string;
+  /** Display name. Null means "fall back to the username". */
+  name: string | null;
+  avatarColor: string | null;
+  /**
+   * Always true: an account cannot be created until its address has been
+   * proven, so there is no unverified user to guard against anywhere in the UI.
+   */
+  emailVerified: boolean;
+  notifyRunFinished: boolean;
+  notifyInvitations: boolean;
+  createdAt: string;
+}
+
+export interface UpdateProfileInput {
+  name?: string;
+  avatarColor?: string;
+}
+
+export interface UpdateNotificationsInput {
+  notifyRunFinished?: boolean;
+  notifyInvitations?: boolean;
 }
 
 /** Response of POST /auth/login. */
@@ -16,10 +50,17 @@ export interface AuthResponse {
   user: User;
 }
 
-/** Response of POST /auth/register (no token — the client logs in afterwards). */
+/**
+ * Response of POST /auth/register.
+ *
+ * No token and no user: registration only parks a pending signup, so there is
+ * no account to be signed in to until the emailed code comes back. When
+ * `verificationRequired` is false the server has the check switched off and
+ * created the account outright — the client should send the user to sign in.
+ */
 export interface RegisterResponse {
   message: string;
-  user: User;
+  verificationRequired: boolean;
 }
 
 // --- projects ---------------------------------------------------------------

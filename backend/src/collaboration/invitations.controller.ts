@@ -25,7 +25,13 @@ interface AuthenticatedRequest extends Request {
 export class InvitationsController {
   constructor(private readonly invitations: InvitationsService) {}
 
-  /** POST /projects/:projectId/invitations — invite by email. Owner/admin. */
+  /**
+   * POST /projects/:projectId/invitations — invite by email. Owner/admin.
+   *
+   * This sends mail to a third party in the caller's name, which used to need
+   * its own verification guard. It no longer does: an account cannot exist
+   * until its own address has been proven.
+   */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(

@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import {
+  emailVerificationEmail,
   invitationEmail,
+  passwordChangedEmail,
+  passwordResetEmail,
   runFinishedEmail,
   welcomeEmail,
   type RenderedEmail,
@@ -93,11 +96,54 @@ export class EmailService {
     });
   }
 
-  /** Sent once, when an account is created. */
+  /**
+   * Sent once the address has been confirmed — that is the point at which the
+   * account is fully live, and it keeps sign-up to one message per step.
+   */
   async sendWelcome(to: string, username: string): Promise<boolean> {
     return this.send({
       to,
       ...welcomeEmail({ username, projectsUrl: this.link('/projects') }),
+    });
+  }
+
+  /** The six-digit code issued at sign-up and on every resend. */
+  async sendEmailVerification(
+    to: string,
+    opts: { username: string; code: string; expiresMinutes: number },
+  ): Promise<boolean> {
+    return this.send({ to, ...emailVerificationEmail(opts) });
+  }
+
+  /** One-time reset link. The token goes in the URL, never in the body text. */
+  async sendPasswordReset(
+    to: string,
+    opts: { username: string; token: string; expiresMinutes: number },
+  ): Promise<boolean> {
+    return this.send({
+      to,
+      ...passwordResetEmail({
+        username: opts.username,
+        expiresMinutes: opts.expiresMinutes,
+        resetUrl: this.link(
+          `/reset-password?token=${encodeURIComponent(opts.token)}`,
+        ),
+      }),
+    });
+  }
+
+  /**
+   * Security notice after a change or reset. Sent unconditionally — it is how a
+   * user finds out somebody else changed their password, so it is deliberately
+   * not covered by the notification preferences.
+   */
+  async sendPasswordChanged(to: string, username: string): Promise<boolean> {
+    return this.send({
+      to,
+      ...passwordChangedEmail({
+        username,
+        resetUrl: this.link('/forgot-password'),
+      }),
     });
   }
 

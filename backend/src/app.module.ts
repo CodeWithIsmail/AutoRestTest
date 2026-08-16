@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +15,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { ReportsModule } from './reports/reports.module';
 import { SpecsModule } from './specs/specs.module';
 import { TestSuitesModule } from './test-suites/test-suites.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -36,8 +38,16 @@ import { TestSuitesModule } from './test-suites/test-suites.module';
     // EmailModule is @Global so the mailer is injectable anywhere.
     EmailModule,
 
+    // Rate-limit storage. Note there is NO APP_GUARD here: ThrottlerGuard is
+    // applied per-controller (auth, users) instead. A global limit would also
+    // cover the run-status and graph endpoints the frontend polls every three
+    // seconds, and any limit strict enough to matter for logins would break
+    // that polling for a user with two tabs open.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
+
     // Feature modules
     AuthModule,
+    UsersModule,
     ProjectsModule,
     SpecsModule,
     EndpointsModule,

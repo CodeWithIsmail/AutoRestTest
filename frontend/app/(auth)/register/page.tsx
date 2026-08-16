@@ -24,9 +24,18 @@ export default function RegisterPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await register(username, email, password);
-      toast.success("Account created — welcome!");
-      router.replace("/projects");
+      const { verificationRequired } = await register(username, email, password);
+
+      if (!verificationRequired) {
+        // Server has verification switched off, so the account already exists.
+        toast.success("Account created — sign in to continue.");
+        router.replace("/login");
+        return;
+      }
+
+      // No session yet: the account is created when the code comes back. The
+      // address rides along so the next screen knows who is verifying.
+      router.replace(`/verify-signup?email=${encodeURIComponent(email)}`);
     } catch (err) {
       toast.error(
         err instanceof ApiError ? err.message : "Something went wrong",

@@ -7,22 +7,32 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { Prisma } from '../../generated/prisma/client';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  emailVerificationRequired,
+  PUBLIC_USER_SELECT,
+  toPublicUser,
+  type PublicUser,
+} from '../users/user.types';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifySignupDto } from './dto/verify-signup.dto';
+import { hashPassword, verifyPassword } from './password';
+import { SignupService } from './signup.service';
+import { RESET_TTL_MINUTES, TokensService } from './tokens.service';
 
-const BCRYPT_SALT_ROUNDS = 10;
 const JWT_EXPIRES_IN = '7d';
 
-/** Public-safe projection of a User row. Never includes the password hash. */
-export interface PublicUser {
-  id: string;
-  username: string;
-  email: string;
-}
+/**
+ * Re-exported so the many call sites that already import `PublicUser` from here
+ * keep working. The definition itself lives in `users/user.types.ts`, which
+ * JwtStrategy can import without depending on the service it guards.
+ */
+export type { PublicUser };
 
 @Injectable()
 export class AuthService {
@@ -33,71 +43,102 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly email: EmailService,
+    private readonly tokens: TokensService,
+    private readonly signup: SignupService,
   ) {}
 
   // --------------------------------------------------------------------------
   // register
   // --------------------------------------------------------------------------
-  async register(dto: RegisterDto): Promise<{
-    message: string;
-    user: PublicUser;
-  }> {
-    // Normalize inputs
+  /**
+   * Starts registration. Returns a message, deliberately **not** a session:
+   * no account exists yet, and none will until the emailed code comes back.
+   *
+   * `REQUIRE_EMAIL_VERIFICATION=false` short-circuits the whole pending step
+   * and creates the account outright. That is the escape hatch for demos and
+   * for local runs where mail cannot be delivered.
+   */
+  async register(
+    dto: RegisterDto,
+  ): Promise<{ message: string; verificationRequired: boolean }> {
+    if (emailVerificationRequired()) {
+      const { message } = await this.signup.start(dto);
+      return { message, verificationRequired: true };
+    }
+
+    await this.createVerifiedUser(dto);
+    return {
+      message: 'Account created successfully',
+      verificationRequired: false,
+    };
+  }
+
+  /**
+   * Finishes registration: validates the code, creates the account, and signs
+   * the new user straight in.
+   *
+   * Returns the same `{ accessToken, user }` shape as `login`, so the client
+   * has one code path for "I am now signed in" rather than two.
+   */
+  async completeSignup(
+    dto: VerifySignupDto,
+  ): Promise<{ accessToken: string; user: PublicUser }> {
+    const user = await this.signup.complete(dto.email, dto.code);
+    const accessToken = await this.signAccessToken({
+      sub: user.id,
+      email: user.email,
+      username: user.username,
+    });
+    return { accessToken, user };
+  }
+
+  /** Reissues the signup code. Always 200, registered address or not. */
+  async resendSignupCode(email: string): Promise<{ message: string }> {
+    return this.signup.resend(email);
+  }
+
+  /**
+   * The verification-free path, used only when the feature is switched off.
+   * Kept here rather than in SignupService because nothing about it is pending.
+   */
+  private async createVerifiedUser(dto: RegisterDto): Promise<void> {
     const username = dto.username.trim();
     const email = dto.email.trim().toLowerCase();
 
-    // Pre-check to give a friendly 409 with the specific field in conflict.
     const existing = await this.prisma.user.findFirst({
       where: { OR: [{ username }, { email }] },
-      select: { username: true, email: true },
+      select: { username: true },
     });
-
     if (existing) {
-      if (existing.username === username) {
-        throw new ConflictException('Username is already taken');
-      }
-      throw new ConflictException('Email is already registered');
+      throw new ConflictException(
+        existing.username === username
+          ? 'Username is already taken'
+          : 'Email is already registered',
+      );
     }
-
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_SALT_ROUNDS);
 
     try {
       const user = await this.prisma.user.create({
         data: {
           username,
           email,
-          password: passwordHash,
+          password: await hashPassword(dto.password),
+          // Marked verified because with the check disabled there is no other
+          // way it ever could be, and a permanently unverifiable account is
+          // worse than an honestly-labelled one.
+          emailVerifiedAt: new Date(),
         },
-        select: { id: true, username: true, email: true },
+        select: PUBLIC_USER_SELECT,
       });
 
-      // The account is created either way — a mailer problem must not turn a
-      // successful sign-up into an error the visitor sees.
-      try {
-        await this.email.sendWelcome(user.email, user.username);
-      } catch (err) {
-        this.logger.warn(
-          `Could not send the welcome email to ${user.email}: ${String(err)}`,
-        );
-      }
-
-      return {
-        message: 'Account created successfully',
-        user,
-      };
+      await this.trySend(() =>
+        this.email.sendWelcome(user.email, user.username),
+      );
     } catch (err) {
-      // Race-condition fallback: unique constraint on username / email.
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       ) {
-        const target = (err.meta?.['target'] as string[] | undefined) ?? [];
-        if (target.includes('username')) {
-          throw new ConflictException('Username is already taken');
-        }
-        if (target.includes('email')) {
-          throw new ConflictException('Email is already registered');
-        }
         throw new ConflictException('User already exists');
       }
       throw new InternalServerErrorException(
@@ -112,38 +153,44 @@ export class AuthService {
   async login(
     dto: LoginDto,
   ): Promise<{ accessToken: string; user: PublicUser }> {
-    const email = dto.email.trim().toLowerCase();
+    const identifier = dto.identifier.trim();
 
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-      select: { id: true, username: true, email: true, password: true },
+    // An '@' is the only thing that distinguishes the two identifier kinds, and
+    // `username` forbids it (letters, digits and underscores only), so this is
+    // unambiguous. Emails are stored lowercased; usernames are matched exactly,
+    // because `username` is a case-sensitive unique column and a
+    // case-insensitive lookup could genuinely match two different accounts.
+    const where = identifier.includes('@')
+      ? { email: identifier.toLowerCase() }
+      : { username: identifier };
+
+    const user = await this.prisma.user.findFirst({
+      where,
+      select: { ...PUBLIC_USER_SELECT, password: true },
     });
 
     // Same error message whether the user does not exist or the password
     // is wrong — prevents user-enumeration attacks.
     if (!user) {
-      throw new UnauthorizedException('Invalid email or password.');
+      throw new UnauthorizedException('Invalid credentials.');
     }
 
-    const passwordMatches = await bcrypt.compare(dto.password, user.password);
+    // Split the hash off the row here: `toPublicUser` spreads whatever it is
+    // given, so anything left on the object would be handed to the client.
+    const { password: storedHash, ...row } = user;
+
+    const passwordMatches = await verifyPassword(dto.password, storedHash);
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid email or password.');
+      throw new UnauthorizedException('Invalid credentials.');
     }
 
     const accessToken = await this.signAccessToken({
-      sub: user.id,
-      email: user.email,
-      username: user.username,
+      sub: row.id,
+      email: row.email,
+      username: row.username,
     });
 
-    return {
-      accessToken,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      },
-    };
+    return { accessToken, user: toPublicUser(row) };
   }
 
   // --------------------------------------------------------------------------
@@ -152,7 +199,7 @@ export class AuthService {
   async getMe(userId: string): Promise<PublicUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, username: true, email: true },
+      select: PUBLIC_USER_SELECT,
     });
 
     if (!user) {
@@ -160,12 +207,85 @@ export class AuthService {
       throw new UnauthorizedException('User no longer exists');
     }
 
-    return user;
+    return toPublicUser(user);
+  }
+
+  // --------------------------------------------------------------------------
+  // password reset
+  // --------------------------------------------------------------------------
+
+  /**
+   * Starts the reset flow.
+   *
+   * Always reports success, whether or not the address is registered. Telling
+   * the caller which addresses exist would turn this endpoint into an account
+   * enumerator, and it is public and unauthenticated.
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
+    const message =
+      'If an account exists for that address, a reset link is on its way.';
+    const email = dto.email.trim().toLowerCase();
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, username: true },
+    });
+
+    if (user) {
+      const token = await this.tokens.issueResetToken(user.id);
+      await this.trySend(() =>
+        this.email.sendPasswordReset(user.email, {
+          username: user.username,
+          token,
+          expiresMinutes: RESET_TTL_MINUTES,
+        }),
+      );
+    }
+
+    return { message };
+  }
+
+  /** Completes the reset flow: burns the token, sets the new password. */
+  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
+    const userId = await this.tokens.consumeResetToken(dto.token.trim());
+    const passwordHash = await hashPassword(dto.password);
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: passwordHash,
+        // Invalidates every JWT minted before now — see JwtStrategy. Resetting
+        // a password is pointless if whoever took the account keeps their
+        // session.
+        passwordChangedAt: new Date(),
+      },
+      select: { email: true, username: true },
+    });
+
+    await this.trySend(() =>
+      this.email.sendPasswordChanged(user.email, user.username),
+    );
+
+    return { message: 'Your password has been reset. Please sign in.' };
   }
 
   // --------------------------------------------------------------------------
   // private helpers
   // --------------------------------------------------------------------------
+
+  /**
+   * `EmailService.send` already swallows delivery failures and returns false;
+   * this guards against the rarer case of it throwing outright. No caller in
+   * this service should fail because the mailer did.
+   */
+  private async trySend(fn: () => Promise<boolean>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      this.logger.warn(`Could not send an account email: ${String(err)}`);
+    }
+  }
+
   private async signAccessToken(payload: {
     sub: string;
     email: string;

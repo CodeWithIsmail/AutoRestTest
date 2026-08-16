@@ -560,7 +560,11 @@ describe('TestSuitesService', () => {
         passedTestCases: 21,
         failedTestCases: 9,
         project: { name: 'Petstore API' },
-        triggeredBy: { email: 'alice@example.com', username: 'alice' },
+        triggeredBy: {
+          email: 'alice@example.com',
+          username: 'alice',
+          notifyRunFinished: true,
+        },
       });
 
       await (

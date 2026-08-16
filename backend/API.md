@@ -16,6 +16,7 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 | # | Module | Base path | Status |
 |---|--------|-----------|:------:|
 | 1 | Authentication | `/auth` | ✅ |
+| 1b | Profile / Account | `/users/me` | ✅ |
 | 2 | Projects | `/projects` | ✅ |
 | 3 | API Specification | `/projects/:projectId/spec` | ✅ |
 | 4 | Endpoints | `/projects/:projectId/endpoints` | ✅ |
@@ -29,9 +30,17 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 
 | # | Method | Endpoint | Auth | Who can access | Description |
 |---|--------|----------|:----:|----------------|-------------|
-| 1 | `POST` | `/auth/register` | 🔓 Public | Anyone | Create a new user account |
-| 2 | `POST` | `/auth/login` | 🔓 Public | Anyone | Log in, returns a JWT access token |
+| 1 | `POST` | `/auth/register` | 🔓 Public | Anyone | Start signup + email a code (creates no account yet) |
+| 2 | `POST` | `/auth/login` | 🔓 Public | Anyone | Log in with an **email or username**, returns a JWT |
 | 3 | `GET` | `/auth/me` | 🔒 | Logged-in user | Get the current user's profile |
+| 3a | `POST` | `/auth/verify-signup` | 🔓 Public | Anyone with the code | Finish signup: creates the account, returns a JWT |
+| 3b | `POST` | `/auth/signup/resend` | 🔓 Public | Anyone | Reissue the signup code |
+| 3c | `POST` | `/auth/forgot-password` | 🔓 Public | Anyone | Email a one-time reset link |
+| 3d | `POST` | `/auth/reset-password` | 🔓 Public | Anyone with the token | Set a new password, ends all sessions |
+| 3e | `PATCH` | `/users/me` | 🔒 | Logged-in user | Update display name / avatar colour |
+| 3f | `PATCH` | `/users/me/notifications` | 🔒 | Logged-in user | Toggle the recurring emails |
+| 3g | `POST` | `/users/me/password` | 🔒 | Logged-in user | Change password, ends all sessions |
+| 3h | `DELETE` | `/users/me` | 🔒 | Logged-in user | Delete the account and everything it owns |
 | 4 | `POST` | `/projects` | 🔒 | Logged-in user | Create a project (caller becomes owner) |
 | 5 | `GET` | `/projects` | 🔒 | Logged-in user | List projects the user owns or is a member of |
 | 6 | `GET` | `/projects/:id` | 🔒 | Owner / member | Get one project with owner + members |
@@ -89,7 +98,23 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 }
 ```
 
-**Response `201 Created`** — the created user (password never returned).
+**Response `201 Created`** — `{ message, verificationRequired }`.
+
+**No account is created here and no token is returned.** The details are parked
+in `pending_signups` and a six-digit code is emailed; the account comes into
+existence at `POST /auth/verify-signup`. Writing to `users` up front meant that
+registering with an address you did not own claimed it forever, since
+`User.email` is unique and nobody would ever verify it.
+
+Registering the **same email twice overwrites** the pending signup rather than
+returning 409 — a pending row reserves nothing, so whoever can actually read
+the inbox ends up with the account. `409` is returned only once a *real*
+account holds the email or username.
+
+When `verificationRequired` is `false` the server has verification switched off
+and the account was created outright; send the user to sign in.
+
+Rate limited to **5 per hour** per IP.
 
 ---
 
@@ -99,12 +124,12 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 
 | Field | Type | Required | Rules |
 |-------|------|:--------:|-------|
-| `email` | string | ✅ | Valid email |
-| `password` | string | ✅ | Minimum 8 characters |
+| `identifier` | string | ✅ | The account's **email address or username** |
+| `password` | string | ✅ | — |
 
 ```json
 {
-  "email": "ismail@example.com",
+  "identifier": "ismail",
   "password": "secret123"
 }
 ```
@@ -114,11 +139,23 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
-  "user": { "id": "…", "username": "ismail", "email": "ismail@example.com" }
+  "user": {
+    "id": "…",
+    "username": "ismail",
+    "email": "ismail@example.com",
+    "name": null,
+    "avatarColor": null,
+    "emailVerified": true,
+    "notifyRunFinished": true,
+    "notifyInvitations": true,
+    "createdAt": "2026-08-16T…"
+  }
 }
 ```
 
 Save `accessToken` and send it as `Authorization: Bearer <accessToken>` on protected routes.
+A wrong password and an unknown account return the same `401 Invalid credentials.`
+Rate limited to **10 per 5 minutes** per IP.
 
 ---
 
@@ -126,7 +163,84 @@ Save `accessToken` and send it as `Authorization: Bearer <accessToken>` on prote
 
 **Headers:** `Authorization: Bearer <access_token>`
 
-**Response `200 OK`** — the authenticated user's profile.
+**Response `200 OK`** — the authenticated user's profile, in the shape shown above.
+
+---
+
+### 3a–3b. Finish signing up  🔓
+
+`POST /auth/verify-signup` with `{ "email": "…", "code": "418302" }` → `200`
+with `{ accessToken, user }`. **This is where the account is created**, so the
+response is a full session, identical in shape to login.
+
+Public by necessity: there is no account yet, so the address in the body is
+what identifies the pending signup. That is safe here in a way a public login
+gate would not be — a pending signup is disposable, so a failed delivery means
+"register again", never a locked account.
+
+Errors: `401` no pending signup or wrong code (the message reports attempts
+remaining), `410` expired, `409` if the username or email was taken by someone
+else while the code sat unread. **Five wrong codes destroy the pending signup**
+— the attempt counter, not the 24-hour expiry, is what makes six digits safe.
+
+`POST /auth/signup/resend` with `{ "email": "…" }` → always `200 { message }`,
+pending signup or not. Issues a new code, retires the old one, and resets the
+attempt counter. **3 per 15 minutes.**
+
+Because no unverified account can exist, nothing else in the API needs a
+verification check. Set `REQUIRE_EMAIL_VERIFICATION=false` to skip the pending
+step altogether.
+
+---
+
+### 3c–3d. Password reset  🔓
+
+`POST /auth/forgot-password` with `{ "email": "…" }` → **always** `200` with the
+same message, registered or not. A registered address is emailed a one-time link
+to `APP_URL/reset-password?token=…`, valid for 30 minutes. **3 per 15 minutes.**
+
+`POST /auth/reset-password` with `{ "token": "…", "password": "…" }` → `200`.
+The token is single-use: `401` unknown, `409` already used, `410` expired.
+Succeeding **invalidates every existing JWT for that account** — including the
+attacker's, which is the point.
+
+---
+
+## Module 1b — Profile / Account
+
+> All routes require `Authorization: Bearer <access_token>`.
+
+### 3e. Update profile — `PATCH /users/me`
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `name` | string | Optional, ≤60 chars. `""` clears it back to the username. |
+| `avatarColor` | string | Optional, one of `emerald` `blue` `purple` `amber` `rose` `cyan` `zinc` |
+
+`username` and `email` are **not** accepted — the username is a login
+identifier and is immutable; sending either returns `400`.
+
+**Response `200 OK`** — the updated user.
+
+### 3f. Notification preferences — `PATCH /users/me/notifications`
+
+`{ "notifyRunFinished": bool?, "notifyInvitations": bool? }` → `200` with the
+updated user. Covers only the recurring mail; verification codes, reset links
+and the password-changed notice are always sent.
+
+### 3g. Change password — `POST /users/me/password`
+
+`{ "currentPassword": "…", "newPassword": "…" }` → `200 { message }`.
+`401` if the current password is wrong, `400` if the new one is unchanged.
+Ends every session, this one included, so the client must sign in again.
+**5 per 15 minutes.**
+
+### 3h. Delete account — `DELETE /users/me`
+
+`{ "password": "…" }` → `200 { message }`. Irreversible. Removes the user, their
+memberships, the invitations they sent, and **every project they own** with all
+its specs, endpoints, runs and logs. Runs they triggered inside other people's
+projects survive with a null `triggeredById`. **5 per 15 minutes.**
 
 ---
 

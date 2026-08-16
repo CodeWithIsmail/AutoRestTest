@@ -49,7 +49,14 @@ describe('InvitationsService', () => {
         deleteMany: jest.fn(),
       },
       projectMember: { upsert: jest.fn() },
-      user: { findUnique: jest.fn().mockResolvedValue({ username: 'alice' }) },
+      // Serves two lookups: the inviter's name for the email, and the
+      // invitee's notification preference. The union of both shapes keeps the
+      // default path "inviter exists, invitee has not opted out".
+      user: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ username: 'alice', notifyInvitations: true }),
+      },
       $transaction: jest.fn((cb: (tx: typeof prisma) => unknown) => cb(prisma)),
     };
     access = { assertAccess: jest.fn().mockResolvedValue(undefined) };

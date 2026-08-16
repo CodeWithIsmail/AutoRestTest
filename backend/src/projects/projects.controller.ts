@@ -31,6 +31,9 @@ export class ProjectsController {
   /**
    * POST /projects
    * Creates a new project with the authenticated user as owner.
+   *
+   * No verification guard: an account cannot exist until its address has been
+   * proven, so every authenticated caller is already verified.
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)

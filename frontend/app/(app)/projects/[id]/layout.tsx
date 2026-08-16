@@ -93,18 +93,13 @@ export default function ProjectLayout({
     <ProjectContext.Provider
       value={{ project, isOwner, canManage, canRun, reload }}
     >
-      <div className="mx-auto max-w-5xl">
-        {/* Breadcrumb */}
-        <nav className="text-sm text-zinc-500">
-          <Link href="/projects" className="hover:text-zinc-300">
-            Projects
-          </Link>
-          <span className="px-2">›</span>
-          <span className="text-zinc-300">{project.name}</span>
-        </nav>
-
-        {/* Header */}
-        <div className="mt-3 flex items-start justify-between gap-4">
+      {/* Wider than the 5xl the rest of the app uses: with the sidebar gone,
+          this is where the reclaimed width actually pays off — the dependency
+          graph canvas and the request-log tables are the widest things here. */}
+      <div className="mx-auto max-w-7xl">
+        {/* No breadcrumb: the top bar's project switcher already names the
+            project and carries the way back out to the list. */}
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-zinc-50">
               {project.name}

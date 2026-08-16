@@ -69,14 +69,47 @@ enum InvitationStatus {
   expired
 }
 
+// What a single-use AuthToken row is for.
+//
+// `email_verification` is no longer issued: verification moved into the signup
+// flow, and a PendingSignup carries its own code. The variant stays because
+// dropping a value from a Postgres enum is a table rewrite, and an unused one
+// costs nothing.
+enum AuthTokenType {
+  email_verification
+  password_reset
+}
+
 // ----------------------------------------------------------------------------
 // User model — owns credentials for the AutoRestTest platform
 // ----------------------------------------------------------------------------
 model User {
-  id        String   @id @default(uuid())
-  username  String   @unique
-  email     String   @unique
-  password  String
+  id       String @id @default(uuid())
+  // `username` doubles as a login identifier alongside `email`, which is why
+  // it is immutable once chosen — see UsersService.updateProfile.
+  username String @unique
+  email    String @unique
+  password String
+
+  // Editable profile. `name` is a display name and falls back to `username`
+  // everywhere in the UI; `avatarColor` is a key from AVATAR_COLORS (a palette
+  // name, never a hex value) tinting the generated initial avatar.
+  name        String?
+  avatarColor String?
+
+  // Null until the address is proven by a verification code. The gate is soft:
+  // only project creation and sending invitations check it.
+  emailVerifiedAt DateTime?
+
+  // Set on every password change or reset. JwtStrategy rejects any token minted
+  // before this instant, which is the app's only session-revocation mechanism —
+  // without it a password reset would leave the attacker's JWT working.
+  passwordChangedAt DateTime?
+
+  // Opt-outs for the two transactional emails a user can receive repeatedly.
+  notifyRunFinished Boolean @default(true)
+  notifyInvitations Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -92,7 +125,83 @@ model User {
   // Invitations this user has sent to others
   sentInvitations ProjectInvitation[] @relation("SentInvitations")
 
+  // Email-verification codes and password-reset tokens
+  authTokens AuthToken[]
+
   @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// AuthToken — single-use secrets for email verification and password reset.
+//
+// Three deliberate differences from ProjectInvitation, the other token model:
+//
+//  1. `tokenHash` holds a sha256 of the secret, never the secret itself. An
+//     invitation token is meant to be copied out of the UI; a reset token must
+//     not survive a database leak.
+//  2. The User relation cascades — the only one in this schema that does. These
+//     rows are worthless without their user, and account deletion must not trip
+//     over them.
+//  3. `tokenHash` is indexed but NOT unique: a six-digit code hashes
+//     deterministically, so two users can legitimately hold the same hash.
+//     Reset tokens are found by hash; codes are found by (userId, type) and
+//     only then hash-compared, which sidesteps the collision entirely.
+// ----------------------------------------------------------------------------
+model AuthToken {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      AuthTokenType
+  tokenHash String
+
+  expiresAt  DateTime
+  consumedAt DateTime?
+  // Wrong-guess counter. A six-digit code is brute-forceable in 10^6 tries, so
+  // this — not the expiry — is what actually protects it.
+  attempts   Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+  @@index([tokenHash])
+  @@map("auth_tokens")
+}
+
+// ----------------------------------------------------------------------------
+// PendingSignup — a registration that has not proven its email address yet.
+//
+// The reason this table exists is account squatting. When registration wrote
+// straight to `users`, signing up with an address you did not own claimed it
+// permanently: `User.email` is unique, the row was never verified, and the real
+// owner could never register. Parking the attempt here instead means an
+// unproven address claims nothing at all.
+//
+// `email` is unique so a second attempt for the same address OVERWRITES the
+// first rather than stacking beside it. That is the whole anti-squatting
+// mechanism: a squatter's row is not a reservation, and whoever actually
+// receives the code is the one who ends up with the account.
+//
+// `username` is deliberately NOT unique here — a pending signup reserves
+// nothing. Uniqueness is checked against `users` on the way in (for a fast 409)
+// and again inside the promote transaction, which is the authoritative check.
+// ----------------------------------------------------------------------------
+model PendingSignup {
+  id       String @id @default(uuid())
+  email    String @unique
+  username String
+  // Already bcrypt-hashed on arrival; the plaintext never reaches this table.
+  password String
+  // sha256, the same treatment AuthToken gives its secrets.
+  codeHash String
+
+  // Wrong-guess counter, and the reason a six-digit code is safe. Five misses
+  // destroy the row; re-registering is the way back.
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("pending_signups")
 }
 
 // ----------------------------------------------------------------------------
@@ -299,8 +408,11 @@ model TestSuite {
   passedTestCases  Int @default(0)
   failedTestCases  Int @default(0)
 
-  triggeredById String
-  triggeredBy   User   @relation("TriggeredSuites", fields: [triggeredById], references: [id])
+  // Nullable so that deleting an account does not have to delete the run
+  // history it left behind in other people's projects. Every existing row has
+  // a value; only a deleted user produces a null here.
+  triggeredById String?
+  triggeredBy   User?   @relation("TriggeredSuites", fields: [triggeredById], references: [id], onDelete: SetNull)
 
   // Snapshot of the dependency graph as it stood for this run: the semantic
   // edges plus the Q-values the MARL loop put on them. Stored per-run rather

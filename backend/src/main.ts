@@ -1,9 +1,15 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Behind a reverse proxy (Render, and any local tunnel) every request arrives
+  // from the proxy's address. Without this the rate limiter on /auth sees one
+  // IP for the whole internet and the per-caller limits become global ones.
+  app.set('trust proxy', 1);
 
   // Allow the browser-based frontend (different origin/port) to call the API.
   // Auth is JWT Bearer in a header, so credentials/cookies are not required.

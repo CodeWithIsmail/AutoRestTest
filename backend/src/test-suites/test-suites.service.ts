@@ -44,7 +44,8 @@ export interface TestSuiteSummary {
 /** A single run with the extra async-job fields exposed. */
 export interface TestSuiteDetail extends TestSuiteSummary {
   jobId: string | null;
-  triggeredById: string;
+  /** Null when the account that triggered the run has since been deleted. */
+  triggeredById: string | null;
 }
 
 /** A persisted per-endpoint result row for a completed run. */
@@ -872,13 +873,24 @@ export class TestSuitesService {
           passedTestCases: true,
           failedTestCases: true,
           project: { select: { name: true } },
-          triggeredBy: { select: { email: true, username: true } },
+          triggeredBy: {
+            select: {
+              email: true,
+              username: true,
+              notifyRunFinished: true,
+            },
+          },
         },
       });
       if (!suite) return;
 
-      await this.email.sendRunFinished(suite.triggeredBy.email, {
-        username: suite.triggeredBy.username,
+      // Null once the triggering account has been deleted; the run itself
+      // outlives them, but there is nobody left to tell.
+      const recipient = suite.triggeredBy;
+      if (!recipient || !recipient.notifyRunFinished) return;
+
+      await this.email.sendRunFinished(recipient.email, {
+        username: recipient.username,
         projectName: suite.project.name,
         // Suites are optionally named; fall back to something recognisable.
         suiteName: suite.name ?? 'Untitled run',

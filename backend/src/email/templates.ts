@@ -45,19 +45,37 @@ interface LayoutOptions {
   heading: string;
   /** Already-escaped HTML fragments, one per paragraph. */
   paragraphs: string[];
+  /** A short secret to read off and type in, shown large and monospaced. */
+  code?: string;
   cta?: { label: string; url: string };
   /** Small print under the button. Already-escaped HTML. */
   footnote?: string;
 }
 
-/** Shared chrome: header, white card, optional button, sign-off. */
-function layout({ heading, paragraphs, cta, footnote }: LayoutOptions): string {
+/** Shared chrome: header, white card, optional code block / button, sign-off. */
+function layout({
+  heading,
+  paragraphs,
+  code,
+  cta,
+  footnote,
+}: LayoutOptions): string {
   const body = paragraphs
     .map(
       (p) =>
         `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:${COLORS.body};">${p}</p>`,
     )
     .join('');
+
+  // Letter-spaced and oversized because the whole job of this block is to be
+  // read off a phone screen and retyped without transposing two digits.
+  const codeBlock = code
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+         <tr><td style="border:1px solid ${COLORS.border};border-radius:8px;background:${COLORS.page};padding:16px 28px;">
+           <span style="font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:30px;font-weight:700;letter-spacing:0.28em;color:${COLORS.heading};">${escapeHtml(code)}</span>
+         </td></tr>
+       </table>`
+    : '';
 
   const button = cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
@@ -86,7 +104,7 @@ function layout({ heading, paragraphs, cta, footnote }: LayoutOptions): string {
       </td></tr>
       <tr><td style="padding:12px 32px 32px;">
         <h1 style="margin:0 0 16px;font-size:20px;line-height:1.35;color:${COLORS.heading};">${heading}</h1>
-        ${body}${button}${fallback}${note}
+        ${body}${codeBlock}${button}${fallback}${note}
       </td></tr>
     </table>
     <p style="margin:20px 0 0;font-size:12px;color:${COLORS.muted};">Sent by ${BRAND} — automated REST API testing.</p>
@@ -171,6 +189,115 @@ export function welcomeEmail(m: WelcomeModel): RenderedEmail {
       `Your ${BRAND} account is ready. Create a project, upload an OpenAPI specification, and the engine will explore your API and report what breaks.`,
       '',
       `Get started: ${m.projectsUrl}`,
+    ]),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Email verification
+// ---------------------------------------------------------------------------
+
+export interface EmailVerificationModel {
+  username: string;
+  /** Six digits. Rendered as a code block, not a link. */
+  code: string;
+  expiresMinutes: number;
+}
+
+export function emailVerificationEmail(
+  m: EmailVerificationModel,
+): RenderedEmail {
+  const name = escapeHtml(m.username);
+
+  return {
+    // The code is in the subject too: on a phone, that is often the only line
+    // visible, and it saves opening the message at all.
+    subject: `${m.code} is your ${BRAND} verification code`,
+    html: layout({
+      heading: `Welcome, ${name} — confirm your email`,
+      paragraphs: [
+        `Enter this code in ${BRAND} to confirm that this address belongs to you.`,
+      ],
+      code: m.code,
+      footnote: `The code expires in ${m.expiresMinutes} minutes. If you didn't create an account, you can ignore this message.`,
+    }),
+    text: textBody([
+      `Welcome, ${m.username}.`,
+      '',
+      `Your ${BRAND} verification code is: ${m.code}`,
+      '',
+      `It expires in ${m.expiresMinutes} minutes. If you didn't create an account, you can ignore this message.`,
+    ]),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Password reset
+// ---------------------------------------------------------------------------
+
+export interface PasswordResetModel {
+  username: string;
+  /** Absolute link to the frontend reset page, carrying the token. */
+  resetUrl: string;
+  expiresMinutes: number;
+}
+
+export function passwordResetEmail(m: PasswordResetModel): RenderedEmail {
+  const name = escapeHtml(m.username);
+
+  return {
+    subject: `Reset your ${BRAND} password`,
+    html: layout({
+      heading: `Reset your password`,
+      paragraphs: [
+        `Hi ${name}, we received a request to reset the password on your ${BRAND} account.`,
+        `Choosing a new password signs you out everywhere else.`,
+      ],
+      cta: { label: 'Choose a new password', url: m.resetUrl },
+      footnote: `This link works once and expires in ${m.expiresMinutes} minutes. If you didn't ask for it, no action is needed — your password has not changed.`,
+    }),
+    text: textBody([
+      `Hi ${m.username},`,
+      '',
+      `We received a request to reset the password on your ${BRAND} account.`,
+      '',
+      `Choose a new password here: ${m.resetUrl}`,
+      '',
+      `This link works once and expires in ${m.expiresMinutes} minutes. If you didn't ask for it, no action is needed — your password has not changed.`,
+    ]),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Password changed — a security notice, not an action
+// ---------------------------------------------------------------------------
+
+export interface PasswordChangedModel {
+  username: string;
+  /** Where to go if this wasn't them. */
+  resetUrl: string;
+}
+
+export function passwordChangedEmail(m: PasswordChangedModel): RenderedEmail {
+  const name = escapeHtml(m.username);
+
+  return {
+    subject: `Your ${BRAND} password was changed`,
+    html: layout({
+      heading: `Your password was changed`,
+      paragraphs: [
+        `Hi ${name}, the password on your ${BRAND} account has just been changed, and every other session has been signed out.`,
+        `If that was you, there's nothing to do.`,
+      ],
+      cta: { label: "This wasn't me — reset it", url: m.resetUrl },
+      footnote: `If you didn't make this change, reset your password immediately using the link above.`,
+    }),
+    text: textBody([
+      `Hi ${m.username},`,
+      '',
+      `The password on your ${BRAND} account has just been changed, and every other session has been signed out.`,
+      '',
+      `If that was you, there's nothing to do. If it wasn't, reset your password immediately: ${m.resetUrl}`,
     ]),
   };
 }

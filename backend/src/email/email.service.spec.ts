@@ -1,6 +1,11 @@
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from './email.service';
-import { invitationEmail, runFinishedEmail } from './templates';
+import {
+  emailVerificationEmail,
+  invitationEmail,
+  passwordChangedEmail,
+  runFinishedEmail,
+} from './templates';
 
 // Stands in for `resend.emails.send`. The `mock` prefix is what lets the
 // jest.mock factory below close over it.
@@ -199,5 +204,45 @@ describe('templates', () => {
 
     expect(subject).toBe('Test run failed — Petstore API');
     expect(text).toContain('Polling timed out');
+  });
+
+  it('puts the verification code in the subject as well as the body', () => {
+    const { subject, html, text } = emailVerificationEmail({
+      username: 'alice',
+      code: '418302',
+      expiresMinutes: 15,
+    });
+
+    // On a phone the subject line is often all that is visible.
+    expect(subject).toBe('418302 is your AutoRestTest verification code');
+    expect(html).toContain('418302');
+    expect(text).toContain('418302');
+  });
+
+  it('builds the reset link against APP_URL and escapes the token', async () => {
+    const service = serviceWith(REAL_ENV);
+
+    await service.sendPasswordReset('bob@example.com', {
+      username: 'bob',
+      token: 'abc/123',
+      expiresMinutes: 30,
+    });
+
+    const { html, text } = lastPayload();
+    const encoded = 'https://app.example.com/reset-password?token=abc%2F123';
+    expect(text).toContain(encoded);
+    expect(html).toContain(encoded.replace(/&/g, '&amp;'));
+  });
+
+  it('offers a reset route on the password-changed notice', () => {
+    const { subject, text } = passwordChangedEmail({
+      username: 'alice',
+      resetUrl: 'https://app.example.com/forgot-password',
+    });
+
+    // The whole point of this message is reaching someone whose account was
+    // just taken, so it has to carry a way to act.
+    expect(subject).toBe('Your AutoRestTest password was changed');
+    expect(text).toContain('https://app.example.com/forgot-password');
   });
 });

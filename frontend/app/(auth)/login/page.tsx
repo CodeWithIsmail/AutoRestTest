@@ -15,7 +15,9 @@ export default function LoginPage() {
   const { login } = useAuth();
   const toast = useToast();
 
-  const [email, setEmail] = useState("");
+  // One field for both an email address and a username — the backend tells
+  // them apart by the '@', which usernames may not contain.
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -23,7 +25,7 @@ export default function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(identifier, password);
       toast.success("Signed in successfully.");
       router.replace("/projects");
     } catch (err) {
@@ -43,25 +45,34 @@ export default function LoginPage() {
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <FormField
-          label="Email"
-          name="email"
-          type="email"
-          autoComplete="email"
+          label="Email or username"
+          name="identifier"
+          autoComplete="username"
           placeholder="you@example.com"
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
         />
-        <FormField
-          label="Password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          placeholder="••••••••"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div>
+          <FormField
+            label="Password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <div className="mt-1.5 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-xs font-medium text-zinc-400 transition-colors hover:text-emerald-400"
+            >
+              Forgot your password?
+            </Link>
+          </div>
+        </div>
 
         <Button type="submit" loading={submitting} className="w-full">
           Sign in
