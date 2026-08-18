@@ -106,7 +106,7 @@ export function StatusDonut({
         </svg>
         {/* Center hero number — total requests */}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-semibold text-zinc-50">
+          <span className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
             {total.toLocaleString()}
           </span>
           <span className="text-xs text-zinc-500">requests</span>
@@ -118,8 +118,8 @@ export function StatusDonut({
         {arcs.map((a) => (
           <li key={a.key} className="flex items-center gap-2 text-sm">
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${a.dot}`} />
-            <span className="text-zinc-400">{a.label}</span>
-            <span className="ml-auto font-medium text-zinc-200">
+            <span className="text-zinc-600 dark:text-zinc-400">{a.label}</span>
+            <span className="ml-auto font-medium text-zinc-800 dark:text-zinc-200">
               {a.count.toLocaleString()}
             </span>
             <span className="w-10 text-right text-xs text-zinc-500">

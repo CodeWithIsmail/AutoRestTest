@@ -1,0 +1,50 @@
+[project]
+
+version = "1.0.0"
+name = "oops"
+author = "crt"
+series = "crt"
+requires-python = ">=3.12"
+dependencies = [
+    "agno>=2.3.14",
+    "dotenv>=0.9.9",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "json-repair>=0.54.3",
+    "jsonref>=1.1.0",
+    "matplotlib>=3.10.8",
+    "networkx>=3.6.1",
+    "openai>=2.13.0",
+    "openapi-pydantic>=0.5.1",
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
+    "scipy>=1.16.3",  # required by networkx.kamada_kawai_layout, used in core/shared/dep_graph.py
+]
+
+[dependency-groups]
+
+dev = [
+    "yapf>=0.43.0",
+    "autoflake>=2.3.1",
+    "isort>=7.0.0",
+    "pylint>=4.0.4",
+]
+
+lint = [
+    "yapf>=0.43.0",
+    "autoflake>=2.3.1",
+    "isort>=7.0.0",
+    "pylint>=4.0.4",
+]
+
+test = [
+    "yapf>=0.43.0",
+    "autoflake>=2.3.1",
+    "isort>=7.0.0",
+    "pylint>=4.0.4",
+]
+
+[[tool.uv.index]]
+
+url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+default = true

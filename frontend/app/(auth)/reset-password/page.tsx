@@ -22,7 +22,7 @@ export default function ResetPasswordPage() {
     <Suspense
       fallback={
         <Card className="flex items-center justify-center p-10">
-          <Spinner className="h-6 w-6 text-emerald-500" />
+          <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
         </Card>
       }
     >
@@ -44,16 +44,16 @@ function ResetPasswordForm() {
   if (!token) {
     return (
       <Card className="p-6">
-        <h2 className="mb-1 text-lg font-semibold text-zinc-50">
+        <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           This link is incomplete
         </h2>
-        <p className="mb-6 text-sm text-zinc-400">
+        <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
           The reset link is missing its token. Some mail clients split long
           URLs — try copying the whole link, or request a fresh one.
         </p>
         <Link
           href="/forgot-password"
-          className="text-sm font-medium text-emerald-500 hover:text-emerald-400"
+          className="text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Request a new link
         </Link>
@@ -83,10 +83,10 @@ function ResetPasswordForm() {
 
   return (
     <Card className="p-6">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-50">
+      <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         Choose a new password
       </h2>
-      <p className="mb-6 text-sm text-zinc-400">
+      <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
         This signs you out everywhere else.
       </p>
 
@@ -120,11 +120,11 @@ function ResetPasswordForm() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-400">
+      <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
         Link expired?{" "}
         <Link
           href="/forgot-password"
-          className="font-medium text-emerald-500 hover:text-emerald-400"
+          className="font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Request a new one
         </Link>

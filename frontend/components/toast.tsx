@@ -28,7 +28,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 const AUTO_DISMISS_MS = 4000;
 
 const STYLES: Record<ToastVariant, { bar: string; icon: string }> = {
-  success: { bar: "border-l-emerald-500", icon: "text-emerald-500" },
+  success: { bar: "border-l-emerald-500", icon: "text-emerald-600 dark:text-emerald-500" },
   error: { bar: "border-l-red-500", icon: "text-red-500" },
   info: { bar: "border-l-indigo-500", icon: "text-indigo-500" },
 };
@@ -70,7 +70,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <div
               key={t.id}
               role="status"
-              className={`pointer-events-auto flex items-start gap-3 rounded-lg border border-l-4 border-zinc-700 bg-zinc-900 px-4 py-3 shadow-lg shadow-black/40 ${style.bar}`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-lg border border-l-4 border-zinc-300 bg-white px-4 py-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40 ${style.bar}`}
             >
               <svg
                 className={`mt-0.5 h-5 w-5 shrink-0 ${style.icon}`}
@@ -86,11 +86,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   d={ICONS[t.variant]}
                 />
               </svg>
-              <p className="flex-1 text-sm text-zinc-100">{t.message}</p>
+              <p className="flex-1 text-sm text-zinc-900 dark:text-zinc-100">{t.message}</p>
               <button
                 onClick={() => dismiss(t.id)}
                 aria-label="Dismiss"
-                className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+                className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
               >
                 <svg
                   className="h-4 w-4"

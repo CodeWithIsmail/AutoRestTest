@@ -60,8 +60,8 @@ function HeadersBlock({
     <div className="flex flex-col gap-0.5 font-mono text-xs">
       {entries.map(([k, v]) => (
         <div key={k} className="break-all">
-          <span className="text-zinc-400">{k}:</span>{" "}
-          <span className="text-zinc-300">{v}</span>
+          <span className="text-zinc-600 dark:text-zinc-400">{k}:</span>{" "}
+          <span className="text-zinc-700 dark:text-zinc-300">{v}</span>
         </div>
       ))}
     </div>
@@ -78,11 +78,11 @@ function BodyBlock({
   if (!body) return <p className="text-xs text-zinc-500">Empty body.</p>;
   return (
     <div>
-      <pre className="max-h-96 overflow-auto rounded-md bg-zinc-950 p-3 font-mono text-xs text-zinc-300 ring-1 ring-zinc-800">
+      <pre className="max-h-96 overflow-auto rounded-md bg-white dark:bg-zinc-950 p-3 font-mono text-xs text-zinc-700 dark:text-zinc-300 ring-1 ring-zinc-200 dark:ring-zinc-800">
         {pretty(body)}
       </pre>
       {truncated && (
-        <p className="mt-1 text-xs text-amber-400">
+        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
           Body was truncated for storage.
         </p>
       )}
@@ -92,11 +92,11 @@ function BodyBlock({
 
 function DetailPanel({ detail }: { detail: RequestLogDetail }) {
   return (
-    <div className="grid gap-5 border-t border-zinc-800 bg-zinc-900/40 p-5 lg:grid-cols-2">
+    <div className="grid gap-5 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 lg:grid-cols-2">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <MethodBadge method={detail.method} />
-          <span className="font-mono text-xs text-zinc-400 break-all">
+          <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400 break-all">
             {detail.url}
           </span>
         </div>
@@ -245,16 +245,16 @@ export default function CapturedRequestsPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link href={suiteLink} className="text-sm text-zinc-500 hover:text-zinc-300">
+        <Link href={suiteLink} className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
           ← Back to run
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           {endpointMeta && <MethodBadge method={endpointMeta.method ?? ""} />}
-          <h2 className="font-mono text-lg font-semibold text-zinc-50">
+          <h2 className="font-mono text-lg font-semibold text-zinc-900 dark:text-zinc-50">
             {title}
           </h2>
         </div>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Every request the engine sent{" "}
           {endpointId === "all" ? "during this run" : "to this endpoint"}, with
           the full request and response.
@@ -291,8 +291,8 @@ export default function CapturedRequestsPage() {
               aria-pressed={status === f.key}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 status === f.key
-                  ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
-                  : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200"
               }`}
             >
               {f.label}
@@ -318,15 +318,15 @@ export default function CapturedRequestsPage() {
 
       {loading && !data ? (
         <div className="flex justify-center py-16">
-          <Spinner className="h-6 w-6 text-emerald-500" />
+          <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
         </div>
       ) : error ? (
         <Card className="p-8 text-center">
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </Card>
       ) : !data || data.items.length === 0 ? (
         <Card className="p-10 text-center">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
             No captured requests
             {status
               ? EXACT_CODE.test(status)
@@ -341,7 +341,7 @@ export default function CapturedRequestsPage() {
           <Card className="overflow-hidden">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
+                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                   <th className="px-4 py-3 font-medium">#</th>
                   <th className="px-4 py-3 font-medium">Method</th>
                   <th className="px-4 py-3 font-medium">Path</th>
@@ -357,8 +357,8 @@ export default function CapturedRequestsPage() {
                     <Fragment key={r.id}>
                       <tr
                         onClick={() => toggle(r.id)}
-                        className={`cursor-pointer border-b border-zinc-800/60 last:border-0 hover:bg-zinc-800/40 ${
-                          open ? "bg-zinc-800/40" : ""
+                        className={`cursor-pointer border-b border-zinc-200 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/40 ${
+                          open ? "bg-zinc-100 dark:bg-zinc-800/40" : ""
                         }`}
                       >
                         <td className="px-4 py-3 font-mono text-xs text-zinc-500">
@@ -367,7 +367,7 @@ export default function CapturedRequestsPage() {
                         <td className="px-4 py-3">
                           <MethodBadge method={r.method} />
                         </td>
-                        <td className="px-4 py-3 font-mono text-zinc-200 break-all">
+                        <td className="px-4 py-3 font-mono text-zinc-800 dark:text-zinc-200 break-all">
                           {r.path}
                         </td>
                         <td className="px-4 py-3">
@@ -387,10 +387,10 @@ export default function CapturedRequestsPage() {
                           <td colSpan={6} className="p-0">
                             {detailLoading && !details[r.id] ? (
                               <div className="flex justify-center py-8">
-                                <Spinner className="h-5 w-5 text-emerald-500" />
+                                <Spinner className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
                               </div>
                             ) : detailError && !details[r.id] ? (
-                              <p className="p-5 text-sm text-red-400">
+                              <p className="p-5 text-sm text-red-600 dark:text-red-400">
                                 {detailError}
                               </p>
                             ) : details[r.id] ? (
@@ -407,7 +407,7 @@ export default function CapturedRequestsPage() {
           </Card>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between text-sm text-zinc-400">
+          <div className="flex items-center justify-between text-sm text-zinc-600 dark:text-zinc-400">
             <span>
               Showing {rangeStart}–{rangeEnd} of {total}
             </span>

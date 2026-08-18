@@ -18,7 +18,7 @@ function Section({
       <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
         {title}
         {count !== undefined && (
-          <span className="font-mono text-zinc-600">{count}</span>
+          <span className="font-mono text-zinc-400 dark:text-zinc-600">{count}</span>
         )}
       </p>
       {children}
@@ -43,14 +43,14 @@ const KIND_LABEL = {
 function MatchRow({ match }: { match: GraphMatch }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1 text-xs">
-      <span className="font-mono text-zinc-200">{match.param}</span>
-      <span className="text-zinc-600">←</span>
-      <span className="font-mono text-zinc-300">{match.producedBy}</span>
-      <span className="text-zinc-600">({match.producedIn})</span>
+      <span className="font-mono text-zinc-800 dark:text-zinc-200">{match.param}</span>
+      <span className="text-zinc-400 dark:text-zinc-600">←</span>
+      <span className="font-mono text-zinc-700 dark:text-zinc-300">{match.producedBy}</span>
+      <span className="text-zinc-400 dark:text-zinc-600">({match.producedIn})</span>
       <span className="ml-auto flex gap-2 font-mono text-zinc-500">
         {match.similarity !== null && <span>sim {match.similarity.toFixed(2)}</span>}
         {match.q !== null && (
-          <span className={match.q > 0 ? "text-emerald-400" : "text-amber-400"}>
+          <span className={match.q > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}>
             q {match.q.toFixed(2)}
           </span>
         )}
@@ -75,9 +75,9 @@ function EdgeRow({
       <button
         type="button"
         onClick={() => onSelect(otherId)}
-        className="flex w-full flex-wrap items-baseline gap-x-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-800/60"
+        className="flex w-full flex-wrap items-baseline gap-x-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
       >
-        <span className="font-medium text-zinc-200">{otherId}</span>
+        <span className="font-medium text-zinc-800 dark:text-zinc-200">{otherId}</span>
         {top && (
           <span className="font-mono text-zinc-500">
             {top.param} ← {top.producedBy}
@@ -86,7 +86,7 @@ function EdgeRow({
         <span className="ml-auto flex items-center gap-2">
           {edge.maxQ !== null && (
             <span
-              className={`font-mono ${edge.maxQ > 0 ? "text-emerald-400" : "text-amber-400"}`}
+              className={`font-mono ${edge.maxQ > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
             >
               {edge.maxQ.toFixed(2)}
             </span>
@@ -129,14 +129,14 @@ export function GraphInspector({
           </Badge>
           {selectedEdge.tentative && <Badge tone="zinc">tentative</Badge>}
         </div>
-        <p className="text-xs leading-relaxed text-zinc-400">
-          <span className="font-medium text-zinc-300">{selectedEdge.to}</span>{" "}
+        <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">{selectedEdge.to}</span>{" "}
           needs values that{" "}
-          <span className="font-medium text-zinc-300">{selectedEdge.from}</span>{" "}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">{selectedEdge.from}</span>{" "}
           supplies.
         </p>
         <Section title="Matched fields" count={selectedEdge.matches.length}>
-          <ul className="divide-y divide-zinc-800/60">
+          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
             {selectedEdge.matches.map((m, i) => (
               <MatchRow key={`${m.param}-${m.producedBy}-${i}`} match={m} />
             ))}
@@ -164,7 +164,7 @@ export function GraphInspector({
     >
       <div className="flex items-center gap-2">
         {node.method && <MethodBadge method={node.method} />}
-        <span className="font-mono text-xs text-zinc-400">{node.path}</span>
+        <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400">{node.path}</span>
       </div>
 
       {node.statusCodes && (
@@ -173,7 +173,7 @@ export function GraphInspector({
             {Object.entries(node.statusCodes).map(([code, n]) => (
               <span
                 key={code}
-                className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300"
+                className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-700 dark:text-zinc-300"
               >
                 {code}×{n}
               </span>
@@ -221,7 +221,7 @@ export function GraphInspector({
       {href && (
         <Link
           href={href}
-          className="text-xs font-medium text-emerald-500 hover:text-emerald-400"
+          className="text-xs font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           View captured requests →
         </Link>
@@ -242,10 +242,10 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/95 shadow-xl shadow-black/40 backdrop-blur">
-      <div className="flex items-start justify-between gap-2 border-b border-zinc-800 px-4 py-3">
+    <div className="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/95 shadow-xl shadow-black/40 backdrop-blur">
+      <div className="flex items-start justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-zinc-100">
+          <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {title}
           </h3>
           {subtitle && (
@@ -256,7 +256,7 @@ function Panel({
           type="button"
           onClick={onClose}
           aria-label="Close details"
-          className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
+          className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-800 dark:hover:text-zinc-200"
         >
           <svg
             width="16"

@@ -2,11 +2,11 @@
 
 This script is NOT imported by the Flask service. It is spawned as a subprocess
 by ``engine_service.oops_runner`` using OOPS's own interpreter
-(``OOPS-core/.venv``), because OOPS requires Python >= 3.12 while
+(``OOPS-final/.venv``), because OOPS requires Python >= 3.12 while
 autoresttest-core — and possibly this service — run on older interpreters.
 
 It is therefore the single point of contact with ``core.*``, which is what lets
-OOPS-core stay an unmodified vendored research tool. Only the standard library
+OOPS-final stay an unmodified vendored research tool. Only the standard library
 and OOPS's own dependencies may be imported here.
 
 Usage:  python oops_worker.py <job-dir>
@@ -45,26 +45,21 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 # core.* is absolute-imported throughout OOPS, and the vendored swagger-codegen
 # jar is resolved relative to the package, so the project root has to be both on
 # sys.path and the working directory.
-_OOPS_DIR = Path(__file__).resolve().parent.parent / "OOPS-core"
+_OOPS_DIR = Path(__file__).resolve().parent.parent / "OOPS-final"
 _OOPS_DIR = Path(os.environ.get("OOPS_DIR", _OOPS_DIR)).resolve()
 sys.path.insert(0, str(_OOPS_DIR))
 os.chdir(_OOPS_DIR)
 
-# OOPS ships with LLM_RATE_LIMIT_RPM = 120, sized for a paid endpoint. On a
-# free tier that allows ~40 rpm the pipeline burns through the window in about
-# 30 seconds, and the 429s it then collects each trigger a retry that spends
-# more of the same budget — a feedback loop that took down step one of the
-# pipeline before it produced a single result.
-#
-# The limit has to be overridden *before* core.shared.llm_factory is imported,
-# because its shared RateLimiter is built at class-definition time. Patching
-# core.constants here means every module that later does
-# `from core.constants import *` picks up the new value, which keeps OOPS-core
-# itself unmodified. core/__init__.py only prints a banner, so importing
-# core.constants triggers nothing else.
+# core.__init__ only prints a banner, so importing core.constants triggers
+# nothing else. LLM_BATCH_SEMAPHORE (how many pipeline conversations run
+# concurrently) is still a plain module constant here, so it can be overridden
+# the same way as before -- OOPS-final's own default (16) is already sized for
+# Gemini's higher-throughput tier, so this is a no-op unless OOPS_BATCH_SEMAPHORE
+# is explicitly set lower. Unlike OOPS-core, there is no LLM_RATE_LIMIT_RPM
+# constant to patch anymore: rate limiting is now opt-in per LLMFactory instance
+# via its `rpm_limit=` kwarg, applied below where each client is constructed.
 import core.constants  # noqa: E402  (must follow the sys.path setup)
 
-core.constants.LLM_RATE_LIMIT_RPM = int(os.environ.get("OOPS_RPM_LIMIT", "35"))
 core.constants.LLM_BATCH_SEMAPHORE = int(
     os.environ.get("OOPS_BATCH_SEMAPHORE", core.constants.LLM_BATCH_SEMAPHORE)
 )
@@ -72,10 +67,20 @@ core.constants.LLM_BATCH_SEMAPHORE = int(
 from core.pipeline import MainPipeline  # noqa: E402  (must follow the patch above)
 from core.shared import LLMFactory  # noqa: E402
 
-# nemotron reasons before answering and the reasoning comes out of the completion
-# budget, which starves short extractions. Disabling it is what makes the
-# pipeline usable — see the measurements in OOPS-core/run_careerstory.py.
-NO_THINKING = {"chat_template_kwargs": {"thinking": False}}
+# Gemini's free tier caps requests per minute; pace every LLMFactory client
+# against it explicitly (OOPS-final has no global rate limiter of its own).
+# 12 matches OOPS-final/main.py's own sample -- ~20% headroom below the 15 rpm
+# free-tier cap.
+OOPS_RPM_LIMIT = int(os.environ.get("OOPS_RPM_LIMIT", "12"))
+
+# Reactive backoff for 429s, threaded through to every agno Agent call via
+# MainPipeline.Config.llm_extra_kwargs -- mirrors OOPS-final/main.py's own
+# sample configuration.
+AGENT_RETRY_KWARGS = {
+    "retries": 3,
+    "delay_between_retries": 5,
+    "exponential_backoff": True,
+}
 
 # The swagger-generation stage emits a full request/response schema per operation
 # (6k+ tokens) and does not fit the 3-minute default: at that timeout it loses
@@ -137,7 +142,7 @@ async def main() -> int:
     params = json.loads((job_dir / "params.json").read_text(encoding="utf-8"))
 
     progress_path = job_dir / "progress.json"
-    model = os.environ.get("OOPS_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
+    model = os.environ.get("OOPS_MODEL", "gemini-3.5-flash-lite")
 
     # LLMFactory asserts on empty credentials deep inside its constructor; check
     # here so a misconfigured service reports the cause instead of an
@@ -145,7 +150,8 @@ async def main() -> int:
     if not os.environ.get("LLM_API_KEY") or not os.environ.get("LLM_API_URL"):
         (job_dir / "error.txt").write_text(
             "LLM_API_KEY and LLM_API_URL must be set for spec generation "
-            "(engine-service supplies these from API_KEY and LLM_API_BASE).",
+            "(engine-service supplies these from OOPS_API_KEY and "
+            "OOPS_LLM_API_URL).",
             encoding="utf-8",
         )
         return 1
@@ -167,27 +173,32 @@ async def main() -> int:
     progress(STEPS[0][0])
 
     log_base = str(job_dir / "oops-log")
+    # MainPipeline no longer creates log_base/upg_base itself (OOPS-core did);
+    # the first dependency-graph PNG render inside pipeline.run() asserts the
+    # directory exists.
+    os.makedirs(log_base, exist_ok=True)
 
     pipeline = MainPipeline(
         title=params.get("title") or "Generated API",
         version=params.get("version") or "1.0.0",
         project=params["sourceDir"],
         # The reference runners use relative log/ and run/ paths, which resolve
-        # against OOPS-core. Keep every artifact inside the job directory so a
+        # against OOPS-final. Keep every artifact inside the job directory so a
         # generation leaves no trace in the vendored project.
         log_base=log_base,
         upg_base=log_base,
         config=MainPipeline.Config(
-            default_llm_worker_client=LLMFactory(model, extra_body=NO_THINKING),
-            default_llm_parser_client=LLMFactory(model, extra_body=NO_THINKING),
+            default_llm_worker_client=LLMFactory(model, rpm_limit=OOPS_RPM_LIMIT),
+            default_llm_parser_client=LLMFactory(model, rpm_limit=OOPS_RPM_LIMIT),
             swagger_generation_worker_client=LLMFactory(
-                model, extra_body=NO_THINKING, timeout=SWAGGER_STAGE_TIMEOUT
+                model, rpm_limit=OOPS_RPM_LIMIT, timeout=SWAGGER_STAGE_TIMEOUT
             ),
             swagger_generation_parser_client=LLMFactory(
-                model, extra_body=NO_THINKING, timeout=SWAGGER_STAGE_TIMEOUT
+                model, rpm_limit=OOPS_RPM_LIMIT, timeout=SWAGGER_STAGE_TIMEOUT
             ),
             ignore_sufx=params.get("ignoreSufx") or ["env"],
             ignore_path=params.get("ignorePath") or [],
+            llm_extra_kwargs=AGENT_RETRY_KWARGS,
         ),
     )
 

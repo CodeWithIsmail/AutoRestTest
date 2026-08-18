@@ -165,7 +165,7 @@ export function GenerateSpecPanel({
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Spinner className="h-6 w-6 text-emerald-500" />
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
       </div>
     );
   }
@@ -176,8 +176,8 @@ export function GenerateSpecPanel({
     const pct = stepTotal > 0 ? Math.round((stepIndex / stepTotal) * 100) : 0;
     return (
       <Card className="flex flex-col items-center gap-3 p-10 text-center">
-        <Spinner className="h-6 w-6 text-emerald-500" />
-        <p className="text-sm font-medium text-zinc-200">
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
+        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
           {step ?? "Preparing the analysis"}
         </p>
         <p className="text-xs text-zinc-500">
@@ -187,7 +187,7 @@ export function GenerateSpecPanel({
             : ""}
           <span className="hidden">{tick}</span>
         </p>
-        <div className="mt-1 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-zinc-800">
+        <div className="mt-1 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div
             className="h-full rounded-full bg-emerald-500 transition-all duration-500"
             style={{ width: `${pct}%` }}
@@ -216,10 +216,10 @@ export function GenerateSpecPanel({
   if (generation?.status === "failed") {
     return (
       <Card className="p-6">
-        <h3 className="text-sm font-semibold text-zinc-100">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           Generation failed
         </h3>
-        <p className="mt-2 text-sm text-red-400">
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
           {generation.error ?? "The analysis did not complete."}
         </p>
         {canManage && (
@@ -245,12 +245,12 @@ export function GenerateSpecPanel({
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-zinc-50">
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
                   Specification ready for review
                 </h3>
                 <Badge tone="purple">AI-generated</Badge>
               </div>
-              <p className="mt-1 text-sm text-zinc-400">
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                 Generated from {generation.sourceName} ·{" "}
                 {generation.operationCount} operations found
               </p>
@@ -279,11 +279,11 @@ export function GenerateSpecPanel({
           </div>
 
           {generation.warnings.length > 0 && (
-            <ul className="mt-4 flex flex-col gap-2 border-t border-zinc-800 pt-4">
+            <ul className="mt-4 flex flex-col gap-2 border-t border-zinc-200 dark:border-zinc-800 pt-4">
               {generation.warnings.map((warning) => (
                 <li key={warning} className="flex items-start gap-2">
                   <Badge tone="amber">Note</Badge>
-                  <span className="text-xs text-zinc-400">{warning}</span>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">{warning}</span>
                 </li>
               ))}
             </ul>
@@ -293,12 +293,12 @@ export function GenerateSpecPanel({
         <Card className="p-5">
           <button
             onClick={() => setShowRaw((s) => !s)}
-            className="text-sm font-medium text-emerald-500 hover:text-emerald-400"
+            className="text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
           >
             {showRaw ? "Hide generated spec" : "Review generated spec"}
           </button>
           {showRaw && (
-            <pre className="mt-3 max-h-96 overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-300">
+            <pre className="mt-3 max-h-96 overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-xs text-zinc-700 dark:text-zinc-300">
               {generation.generatedSpec}
             </pre>
           )}
@@ -321,7 +321,7 @@ export function GenerateSpecPanel({
   if (!canManage) {
     return (
       <Card className="p-10 text-center">
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Only project owners and admins can generate a specification.
         </p>
       </Card>
@@ -387,14 +387,14 @@ export function GenerateSpecPanel({
         className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-16 text-center transition-colors ${
           dragging
             ? "border-emerald-500 bg-emerald-500/5"
-            : "border-zinc-700 hover:border-zinc-600 hover:bg-zinc-900/50"
+            : "border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600 hover:bg-white dark:hover:bg-zinc-900/50"
         }`}
       >
         {starting ? (
-          <Spinner className="h-6 w-6 text-emerald-500" />
+          <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
         ) : (
           <>
-            <p className="text-sm font-medium text-zinc-200">
+            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
               Drop your source code here, or click to browse
             </p>
             <p className="mt-1 text-xs text-zinc-500">

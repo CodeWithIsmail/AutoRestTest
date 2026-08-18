@@ -60,7 +60,7 @@ export default function TestSuitesPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Configure and run AI-generated test suites against a live API.
         </p>
         {canRun && (
@@ -68,14 +68,14 @@ export default function TestSuitesPage() {
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         {loading ? (
           <div className="flex justify-center py-16">
-            <Spinner className="h-6 w-6 text-emerald-500" />
+            <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           </div>
         ) : error ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             <Button
               variant="secondary"
               size="sm"
@@ -87,7 +87,7 @@ export default function TestSuitesPage() {
           </div>
         ) : !suites || suites.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               No runs yet — create one to start testing your API.
             </p>
             {canRun && (
@@ -99,7 +99,7 @@ export default function TestSuitesPage() {
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                 <th className="px-5 py-3 font-medium">Run</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Target</th>
@@ -113,21 +113,21 @@ export default function TestSuitesPage() {
                 <tr
                   key={s.id}
                   onClick={() => router.push(`${base}/${s.id}`)}
-                  className="cursor-pointer border-b border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-800/40"
+                  className="cursor-pointer border-b border-zinc-200 dark:border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/40"
                 >
-                  <td className="px-5 py-3 font-medium text-zinc-100">
+                  <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">
                     {suiteLabel(s)}
                   </td>
                   <td className="px-5 py-3">
                     <StatusBadge status={s.status} />
                   </td>
-                  <td className="max-w-xs truncate px-5 py-3 font-mono text-xs text-zinc-400">
+                  <td className="max-w-xs truncate px-5 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400">
                     {s.targetUrl}
                   </td>
-                  <td className="px-5 py-3 text-zinc-400">
+                  <td className="px-5 py-3 text-zinc-600 dark:text-zinc-400">
                     {s.status === "completed" ? (
                       <span>
-                        <span className="text-emerald-400">
+                        <span className="text-emerald-600 dark:text-emerald-400">
                           {s.passedTestCases}
                         </span>
                         {" / "}
@@ -137,7 +137,7 @@ export default function TestSuitesPage() {
                       "—"
                     )}
                   </td>
-                  <td className="px-5 py-3 text-zinc-400">
+                  <td className="px-5 py-3 text-zinc-600 dark:text-zinc-400">
                     {formatDate(s.createdAt)}
                   </td>
                   {canManage && (
@@ -181,7 +181,7 @@ export default function TestSuitesPage() {
         message={
           <>
             Delete{" "}
-            <span className="font-medium text-zinc-100">
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">
               {deleteTarget ? suiteLabel(deleteTarget) : ""}
             </span>
             ? This removes the run and all its test cases.

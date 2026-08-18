@@ -155,10 +155,21 @@ if (Test-Path $backendEnv) {
 }
 
 # ---------------------------------------------------------------------------
-# Launch, in dependency order
+# Launch in tabs using Windows Terminal (wt.exe)
 # ---------------------------------------------------------------------------
 
-Write-Host "`nOpening a window per service..." -ForegroundColor Cyan
+# Check if Windows Terminal is available
+$wtPath = Get-Command wt.exe -ErrorAction SilentlyContinue
+if (-not $wtPath) {
+    Write-Host "Windows Terminal (wt.exe) not found on PATH" -ForegroundColor Red
+    Write-Host "Install Windows Terminal from the Microsoft Store or GitHub:" -ForegroundColor Yellow
+    Write-Host "https://github.com/microsoft/terminal" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "`nOpening services in Windows Terminal tabs..." -ForegroundColor Cyan
+
+$launchCommands = @()
 
 foreach ($svc in $services) {
     if ($SkipEngine -and $svc.Name -eq 'engine-service') {
@@ -167,23 +178,22 @@ foreach ($svc in $services) {
     }
 
     $path = Join-Path $scriptsDir $svc.File
-
-    # -NoExit keeps the window up after a crash so the stack trace is readable.
-    # -ExecutionPolicy Bypass applies to the child only and avoids the generated
-    # scripts being blocked on a machine with a restrictive default policy.
-    Start-Process -FilePath 'powershell.exe' -ArgumentList @(
-        '-NoExit'
-        '-ExecutionPolicy', 'Bypass'
-        '-File', "`"$path`""
-    ) | Out-Null
-
+    $launchCommands += "wt -w 0 nt -p `"PowerShell`" -d `"$root`" powershell -NoExit -ExecutionPolicy Bypass -File `"$path`""
+    
     Write-Host "  $($svc.Name) -> port $($svc.Port)" -ForegroundColor Green
-
-    # Staggered: the backend polls engine-service and the frontend calls the
-    # backend, so starting them in order avoids a burst of connection errors
-    # in the logs while the earlier service is still binding its port.
-    if ($svc.Delay -gt 0) { Start-Sleep -Seconds $svc.Delay }
 }
 
-Write-Host "`nAll set. Open http://localhost:3001" -ForegroundColor Green
-Write-Host "Stop a service with Ctrl+C in its own window." -ForegroundColor DarkGray
+# Launch the first service (creates the window), then add tabs for the others
+if ($launchCommands.Count -gt 0) {
+    Invoke-Expression $launchCommands[0]
+    Start-Sleep -Seconds 1  # Give first window time to open
+    
+    # Add remaining services as tabs
+    for ($i = 1; $i -lt $launchCommands.Count; $i++) {
+        Invoke-Expression $launchCommands[$i]
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+Write-Host "`nAll set. Switch between tabs in Windows Terminal." -ForegroundColor Green
+Write-Host "Stop a service with Ctrl+C in its tab." -ForegroundColor DarkGray

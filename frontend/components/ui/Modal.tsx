@@ -32,15 +32,15 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 shadow-xl shadow-black/50"
+        className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
-          <h3 className="text-base font-semibold text-zinc-50">{title}</h3>
+        <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+            className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           >
             <svg
               className="h-5 w-5"
@@ -59,7 +59,7 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
         </div>
         <div className="px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-zinc-800 px-5 py-4">
+          <div className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
             {footer}
           </div>
         )}

@@ -73,8 +73,8 @@ export default function ProjectsPage() {
     <div className="mx-auto max-w-5xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-50">Projects</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Projects</h1>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             Your API testing projects.
           </p>
         </div>
@@ -88,19 +88,19 @@ export default function ProjectsPage() {
           placeholder="Search projects…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-10 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          className="h-10 w-full max-w-xs rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
         />
       </div>
 
       {/* Body */}
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Spinner className="h-6 w-6 text-emerald-500" />
+            <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           </div>
         ) : error ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             <Button
               variant="secondary"
               size="sm"
@@ -112,7 +112,7 @@ export default function ProjectsPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               {projects && projects.length === 0
                 ? "No projects yet — create your first."
                 : "No projects match your search."}
@@ -126,7 +126,7 @@ export default function ProjectsPage() {
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                 <th className="px-5 py-3 font-medium">Name</th>
                 <th className="px-5 py-3 font-medium">Members</th>
                 <th className="px-5 py-3 font-medium">Role</th>
@@ -142,21 +142,21 @@ export default function ProjectsPage() {
                   <tr
                     key={p.id}
                     onClick={() => router.push(`/projects/${p.id}`)}
-                    className="cursor-pointer border-b border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-800/40"
+                    className="cursor-pointer border-b border-zinc-200 dark:border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/40"
                   >
                     <td className="px-5 py-3">
-                      <div className="font-medium text-zinc-100">{p.name}</div>
+                      <div className="font-medium text-zinc-900 dark:text-zinc-100">{p.name}</div>
                       {p.description && (
                         <div className="mt-0.5 max-w-md truncate text-xs text-zinc-500">
                           {p.description}
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-zinc-400">{p.memberCount}</td>
+                    <td className="px-5 py-3 text-zinc-600 dark:text-zinc-400">{p.memberCount}</td>
                     <td className="px-5 py-3">
                       <Badge tone={roleTone(roleLabel)}>{roleLabel}</Badge>
                     </td>
-                    <td className="px-5 py-3 text-zinc-400">
+                    <td className="px-5 py-3 text-zinc-600 dark:text-zinc-400">
                       {formatDate(p.createdAt)}
                     </td>
                     <td className="px-5 py-3 text-right">
@@ -221,7 +221,7 @@ export default function ProjectsPage() {
         title="Delete project"
         message={
           <>
-            Delete <span className="font-medium text-zinc-100">
+            Delete <span className="font-medium text-zinc-900 dark:text-zinc-100">
               {deleteTarget?.name}
             </span>
             ? This permanently removes the project and all its data.

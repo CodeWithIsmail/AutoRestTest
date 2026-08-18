@@ -41,7 +41,7 @@ export function ProfileCard({ user }: { user: User }) {
 
   return (
     <Card className="p-6">
-      <h2 className="text-base font-semibold text-zinc-100">Profile</h2>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Profile</h2>
       <p className="mt-0.5 text-sm text-zinc-500">
         How you appear to your teammates.
       </p>
@@ -54,7 +54,7 @@ export function ProfileCard({ user }: { user: User }) {
             size="lg"
           />
           <div>
-            <p className="text-sm font-medium text-zinc-300">Avatar colour</p>
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Avatar colour</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {AVATAR_COLORS.map((c) => (
                 <button
@@ -67,7 +67,7 @@ export function ProfileCard({ user }: { user: User }) {
                     c,
                   )} ${
                     color === c
-                      ? "scale-110 ring-2 ring-zinc-100 ring-offset-2 ring-offset-zinc-900"
+                      ? "scale-110 ring-2 ring-zinc-900 ring-offset-2 ring-offset-white dark:ring-zinc-100 dark:ring-offset-zinc-900"
                       : "hover:scale-105"
                   }`}
                 />
@@ -126,9 +126,9 @@ function ReadOnly({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-zinc-300">{label}</span>
-      <div className="flex h-10 items-center justify-between gap-2 rounded-md border border-zinc-800 bg-zinc-950/50 px-3">
-        <span className="truncate text-sm text-zinc-400" title={value}>
+      <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
+      <div className="flex h-10 items-center justify-between gap-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/50 px-3">
+        <span className="truncate text-sm text-zinc-600 dark:text-zinc-400" title={value}>
           {value}
         </span>
         {badge}

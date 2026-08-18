@@ -112,7 +112,7 @@ export default function SpecPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Spinner className="h-6 w-6 text-emerald-500" />
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
       </div>
     );
   }
@@ -120,7 +120,7 @@ export default function SpecPage() {
   if (error) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>
           Retry
         </Button>
@@ -176,7 +176,7 @@ export default function SpecPage() {
     if (!canManage) {
       return (
         <Card className="p-10 text-center">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
             No API specification has been uploaded for this project yet.
           </p>
         </Card>
@@ -201,14 +201,14 @@ export default function SpecPage() {
           className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-16 text-center transition-colors ${
             dragging
               ? "border-emerald-500 bg-emerald-500/5"
-              : "border-zinc-700 hover:border-zinc-600 hover:bg-zinc-900/50"
+              : "border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600 hover:bg-white dark:hover:bg-zinc-900/50"
           }`}
         >
           {uploading ? (
-            <Spinner className="h-6 w-6 text-emerald-500" />
+            <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           ) : (
             <>
-              <p className="text-sm font-medium text-zinc-200">
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                 Drop an OpenAPI file here, or click to browse
               </p>
               <p className="mt-1 text-xs text-zinc-500">
@@ -233,13 +233,13 @@ export default function SpecPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-zinc-50">
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
                 {spec.title || spec.fileName}
               </h2>
               <Badge tone="blue">OpenAPI {spec.openapiVersion}</Badge>
               {spec.generatedByAI && <Badge tone="purple">AI-generated</Badge>}
             </div>
-            <p className="mt-1 text-sm text-zinc-400">{spec.fileName}</p>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{spec.fileName}</p>
           </div>
           {canManage && (
             <div className="flex shrink-0 gap-2">
@@ -262,20 +262,20 @@ export default function SpecPage() {
           )}
         </div>
 
-        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-zinc-800 pt-4 text-sm sm:grid-cols-3">
+        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-zinc-200 dark:border-zinc-800 pt-4 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-zinc-500">Endpoints</dt>
-            <dd className="mt-0.5 text-zinc-200">{spec.endpointCount}</dd>
+            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{spec.endpointCount}</dd>
           </div>
           <div>
             <dt className="text-zinc-500">Uploaded</dt>
-            <dd className="mt-0.5 text-zinc-200">
+            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
               {formatDate(spec.uploadedAt)}
             </dd>
           </div>
           <div>
             <dt className="text-zinc-500">Version</dt>
-            <dd className="mt-0.5 text-zinc-200">{spec.openapiVersion}</dd>
+            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{spec.openapiVersion}</dd>
           </div>
         </dl>
       </Card>
@@ -283,12 +283,12 @@ export default function SpecPage() {
       <Card className="p-5">
         <button
           onClick={() => setShowRaw((s) => !s)}
-          className="text-sm font-medium text-emerald-500 hover:text-emerald-400"
+          className="text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           {showRaw ? "Hide raw spec" : "View raw spec"}
         </button>
         {showRaw && (
-          <pre className="mt-3 max-h-96 overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-300">
+          <pre className="mt-3 max-h-96 overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-xs text-zinc-700 dark:text-zinc-300">
             {spec.fileContent}
           </pre>
         )}

@@ -64,7 +64,7 @@ export function DropdownMenu({
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`rounded text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 ${triggerClassName}`}
+        className={`rounded text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 ${triggerClassName}`}
       >
         {trigger ?? (
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
@@ -78,7 +78,7 @@ export function DropdownMenu({
       {open && (
         <div
           role="menu"
-          className={`absolute z-20 mt-1 max-h-80 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-900 py-1 shadow-lg shadow-black/40 ${
+          className={`absolute z-20 mt-1 max-h-80 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/40 ${
             align === "left" ? "left-0" : "right-0"
           } ${menuClassName}`}
         >
@@ -91,20 +91,20 @@ export function DropdownMenu({
                 setOpen(false);
                 item.onClick();
               }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-800 ${
-                item.separated ? "mt-1 border-t border-zinc-800 pt-2.5" : ""
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                item.separated ? "mt-1 border-t border-zinc-200 pt-2.5 dark:border-zinc-800" : ""
               } ${
                 item.danger
-                  ? "text-red-400"
+                  ? "text-red-600 dark:text-red-400"
                   : item.active
-                    ? "text-emerald-400"
-                    : "text-zinc-200"
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-zinc-800 dark:text-zinc-200"
               }`}
             >
               {/* Fixed-width gutter so labels line up whether or not the row
                   is the active one. */}
               {item.active !== undefined && (
-                <span className="w-3.5 shrink-0 text-emerald-400" aria-hidden>
+                <span className="w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden>
                   {item.active ? "✓" : ""}
                 </span>
               )}

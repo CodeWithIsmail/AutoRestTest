@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
       <Card className="p-6">
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
           <svg
-            className="h-5 w-5 text-emerald-500"
+            className="h-5 w-5 text-emerald-600 dark:text-emerald-500"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={2}
@@ -52,19 +52,19 @@ export default function ForgotPasswordPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="m3.5 6.5 8.5 6 8.5-6" />
           </svg>
         </div>
-        <h2 className="mb-1 text-lg font-semibold text-zinc-50">
+        <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Check your inbox
         </h2>
         {/* Deliberately hedged: confirming that the address is registered would
             turn this page into an account enumerator. */}
-        <p className="mb-6 text-sm text-zinc-400">
+        <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
           If an account exists for{" "}
-          <span className="font-medium text-zinc-200">{email}</span>, a reset
+          <span className="font-medium text-zinc-800 dark:text-zinc-200">{email}</span>, a reset
           link is on its way. It works once and expires in 30 minutes.
         </p>
         <Link
           href="/login"
-          className="text-sm font-medium text-emerald-500 hover:text-emerald-400"
+          className="text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Back to sign in
         </Link>
@@ -74,10 +74,10 @@ export default function ForgotPasswordPage() {
 
   return (
     <Card className="p-6">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-50">
+      <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         Reset your password
       </h2>
-      <p className="mb-6 text-sm text-zinc-400">
+      <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
         Enter the email address on your account and we&apos;ll send you a link
         to choose a new password.
       </p>
@@ -100,11 +100,11 @@ export default function ForgotPasswordPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-400">
+      <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
         Remembered it?{" "}
         <Link
           href="/login"
-          className="font-medium text-emerald-500 hover:text-emerald-400"
+          className="font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Sign in
         </Link>

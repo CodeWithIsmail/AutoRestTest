@@ -65,7 +65,7 @@ export function GraphControls({
   const hidden = stats.dependencies - visibleEdges;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
       <Toggle
         options={[
           { value: "graph", label: "Graph" },
@@ -75,9 +75,9 @@ export function GraphControls({
         onChange={onViewChange}
       />
 
-      <div className="h-5 w-px bg-zinc-800" aria-hidden />
+      <div className="h-5 w-px bg-zinc-100 dark:bg-zinc-800" aria-hidden />
 
-      <label className="flex items-center gap-2 text-xs text-zinc-400">
+      <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
         Show
         <Select
           aria-label="Which dependencies to show"
@@ -97,7 +97,7 @@ export function GraphControls({
       </label>
 
       {filter !== "all" && (
-        <label className="flex items-center gap-2 text-xs text-zinc-400">
+        <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
           Similarity ≥
           <input
             type="range"
@@ -109,7 +109,7 @@ export function GraphControls({
             aria-label="Minimum similarity"
             className="w-24 accent-emerald-500"
           />
-          <span className="w-8 font-mono text-zinc-300">
+          <span className="w-8 font-mono text-zinc-700 dark:text-zinc-300">
             {minSimilarity.toFixed(2)}
           </span>
         </label>
@@ -126,7 +126,7 @@ export function GraphControls({
         />
       )}
 
-      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-400">
+      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
         <input
           type="checkbox"
           checked={hideIsolated}
@@ -143,21 +143,21 @@ export function GraphControls({
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder="Search  /"
         aria-label="Search operations"
-        className="ml-auto h-8 w-44 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+        className="ml-auto h-8 w-44 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
       />
 
       <div className="flex w-full items-center gap-2 text-xs text-zinc-500">
         <span>
-          <span className="font-medium text-zinc-300">{stats.operations}</span>{" "}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">{stats.operations}</span>{" "}
           operations ·{" "}
-          <span className="font-medium text-zinc-300">{visibleEdges}</span> of{" "}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">{visibleEdges}</span> of{" "}
           {stats.dependencies} dependencies
         </span>
         {hidden > 0 && filter !== "all" && (
           <button
             type="button"
             onClick={() => onFilterChange("all")}
-            className="font-medium text-emerald-500 transition-colors hover:text-emerald-400"
+            className="font-medium text-emerald-600 dark:text-emerald-500 transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
           >
             show {hidden} hidden
           </button>
@@ -177,7 +177,7 @@ function Toggle<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex gap-0.5 rounded-md bg-zinc-950 p-0.5" role="group">
+    <div className="flex gap-0.5 rounded-md bg-white dark:bg-zinc-950 p-0.5" role="group">
       {options.map((option) => (
         <button
           key={option.value}
@@ -186,8 +186,8 @@ function Toggle<T extends string>({
           onClick={() => onChange(option.value)}
           className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
             value === option.value
-              ? "bg-emerald-500/15 text-emerald-400"
-              : "text-zinc-400 hover:text-zinc-200"
+              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
           }`}
         >
           {option.label}
@@ -242,7 +242,7 @@ export function GraphLegend({
             Tried and penalized
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-[26px] text-center text-emerald-400" aria-hidden>
+            <span className="w-[26px] text-center text-emerald-600 dark:text-emerald-400" aria-hidden>
               ✦
             </span>
             Discovered at run time

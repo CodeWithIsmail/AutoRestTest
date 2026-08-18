@@ -77,6 +77,8 @@ class Config:
     oops_max_zip_bytes: int
     oops_max_source_bytes: int
     oops_max_files: int
+    oops_api_key: str
+    oops_llm_api_url: str
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -85,7 +87,7 @@ class Config:
         ).resolve()
         jobs_dir = Path(os.environ.get("JOBS_DIR", _SERVICE_ROOT / "jobs")).resolve()
         oops_dir = Path(
-            os.environ.get("OOPS_DIR", _SERVICE_ROOT.parent / "OOPS-core")
+            os.environ.get("OOPS_DIR", _SERVICE_ROOT.parent / "OOPS-final")
         ).resolve()
         oops_python = Path(
             os.environ.get("OOPS_PYTHON", _default_oops_python(oops_dir))
@@ -129,17 +131,21 @@ class Config:
             graph_timeout=int(os.environ.get("GRAPH_TIMEOUT", "900")),
             oops_dir=oops_dir,
             oops_python=oops_python,
-            # Measured on the NVIDIA NIM free tier in OOPS-core/run_careerstory.py:
-            # the llama deployments are degraded and the larger nemotron earns an
-            # account-level cooldown, so nemotron-nano is the one that finishes.
-            oops_model=os.environ.get("OOPS_MODEL", "nvidia/nemotron-3-nano-30b-a3b"),
-            # Generation is LLM-bound and runs for hours on a mid-size backend.
-            oops_timeout=int(os.environ.get("OOPS_TIMEOUT", str(4 * 60 * 60))),
-            # OOPS defaults to 120 rpm, which is ~3x the NVIDIA free tier and
-            # collapses into a 429 retry storm. Kept just under the ~40 rpm
-            # ceiling; raise it only against a paid endpoint.
-            oops_rpm_limit=int(os.environ.get("OOPS_RPM_LIMIT", "35")),
-            oops_batch_semaphore=int(os.environ.get("OOPS_BATCH_SEMAPHORE", "3")),
+            # OOPS-final targets Gemini 3.5 Flash Lite via its OpenAI-compatible
+            # endpoint -- measured at 15-20 min end-to-end, versus 1h+ on the
+            # NVIDIA NIM nemotron setup the previous OOPS-core integration used.
+            oops_model=os.environ.get("OOPS_MODEL", "gemini-3.5-flash-lite"),
+            # Generation is LLM-bound; sized with headroom over the ~15-20 min
+            # measured runtime rather than the multi-hour ceiling the slower
+            # nemotron setup needed.
+            oops_timeout=int(os.environ.get("OOPS_TIMEOUT", str(40 * 60))),
+            # Gemini's free tier allows 15 rpm; kept just under it with headroom,
+            # matching OOPS-final/main.py's own sample configuration. Raise it
+            # only against a paid endpoint.
+            oops_rpm_limit=int(os.environ.get("OOPS_RPM_LIMIT", "12")),
+            # Matches OOPS-final's own built-in LLM_BATCH_SEMAPHORE default, so
+            # leaving this unset is a no-op rather than silently throttling it.
+            oops_batch_semaphore=int(os.environ.get("OOPS_BATCH_SEMAPHORE", "16")),
             oops_max_zip_bytes=int(
                 os.environ.get("OOPS_MAX_ZIP_BYTES", str(50 * 1024 * 1024))
             ),
@@ -147,6 +153,14 @@ class Config:
                 os.environ.get("OOPS_MAX_SOURCE_BYTES", str(200 * 1024 * 1024))
             ),
             oops_max_files=int(os.environ.get("OOPS_MAX_FILES", "5000")),
+            # Dedicated to spec generation, independent of the main engine's
+            # API_KEY/LLM_API_BASE above -- OOPS can run against a different
+            # provider (Gemini) than whatever the test-generation engine uses.
+            oops_api_key=os.environ.get("OOPS_API_KEY", ""),
+            oops_llm_api_url=os.environ.get(
+                "OOPS_LLM_API_URL",
+                "https://generativelanguage.googleapis.com/v1beta/openai/",
+            ),
         )
 
     @property

@@ -31,7 +31,7 @@ export function NotificationsCard({ user }: { user: User }) {
 
   return (
     <Card className="p-6">
-      <h2 className="text-base font-semibold text-zinc-100">Notifications</h2>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Notifications</h2>
       <p className="mt-0.5 text-sm text-zinc-500">
         Security messages — verification codes, reset links, and password
         changes — are always sent.
@@ -80,7 +80,7 @@ function Toggle({
         className="mt-0.5 h-4 w-4 accent-emerald-500"
       />
       <span>
-        <span className="block text-sm font-medium text-zinc-200">{label}</span>
+        <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">{label}</span>
         <span className="block text-xs text-zinc-500">{hint}</span>
       </span>
     </label>

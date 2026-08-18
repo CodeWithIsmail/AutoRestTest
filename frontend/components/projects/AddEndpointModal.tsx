@@ -69,14 +69,14 @@ export function AddEndpointModal({
         className="flex flex-col gap-4"
       >
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="method" className="text-sm font-medium text-zinc-300">
+          <label htmlFor="method" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Method
           </label>
           <select
             id="method"
             value={method}
             onChange={(e) => setMethod(e.target.value as HttpMethod)}
-            className="h-10 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            className="h-10 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           >
             {METHODS.map((m) => (
               <option key={m} value={m}>

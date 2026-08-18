@@ -78,14 +78,14 @@ export function InviteModal({
           onChange={(e) => setEmail(e.target.value)}
         />
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="role" className="text-sm font-medium text-zinc-300">
+          <label htmlFor="role" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Role
           </label>
           <select
             id="role"
             value={role}
             onChange={(e) => setRole(e.target.value as Role)}
-            className="h-10 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            className="h-10 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           >
             {ROLES.map((r) => (
               <option key={r} value={r}>
@@ -95,7 +95,7 @@ export function InviteModal({
           </select>
           <p className="text-xs text-zinc-500">{ROLE_HINT[role]}</p>
         </div>
-        <p className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-500">
+        <p className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-xs text-zinc-500">
           An invite link is emailed to this address. Your teammate can also
           accept it from their Invitations page after signing in with it.
         </p>

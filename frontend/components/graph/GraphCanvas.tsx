@@ -7,6 +7,8 @@ import { computeLayout, NODE_HEIGHT, NODE_WIDTH } from "./layout";
 
 // Hex values mirror the Tailwind classes used elsewhere, because SVG `fill` and
 // `stroke` cannot take a class. Same palette as StatusDonut/StatusDistribution.
+// The neutral/surface colours instead read the CSS custom properties in
+// globals.css, since those are the ones that must flip between light and dark.
 const EMERALD = "#10b981";
 const BLUE = "#3b82f6";
 const AMBER = "#f59e0b";
@@ -15,11 +17,11 @@ const EMERALD_LIGHT = "#34d399"; // emerald-400
 const PURPLE = "#a855f7";
 const ZINC = "#71717a";
 const ZINC_500 = "#71717a";
-const ZINC_700 = "#3f3f46";
-const SURFACE = "#1c1c1f"; // just above zinc-900, so nodes lift off the canvas
-const CANVAS = "#141416";
-const TEXT = "#f4f4f5"; // zinc-100
-const MUTED = "#a1a1aa"; // zinc-400
+const ZINC_700 = "var(--graph-neutral)";
+const SURFACE = "var(--graph-surface)";
+const CANVAS = "var(--graph-canvas)";
+const TEXT = "var(--graph-text)";
+const MUTED = "var(--graph-muted)";
 
 /** Matches `methodTone` in components/ui/Badge.tsx. */
 const METHOD_COLOR: Record<string, string> = {
@@ -472,7 +474,7 @@ export function GraphCanvas({
             title={btn.title}
             aria-label={btn.title}
             onClick={btn.onClick}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/90 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900/90 text-sm text-zinc-700 dark:text-zinc-300 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             {btn.label}
           </button>

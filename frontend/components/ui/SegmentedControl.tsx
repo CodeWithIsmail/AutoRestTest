@@ -24,7 +24,7 @@ export function SegmentedControl<T extends string>({
   className = "",
 }: SegmentedControlProps<T>) {
   return (
-    <div className={`flex gap-6 border-b border-zinc-800 ${className}`}>
+    <div className={`flex gap-6 border-b border-zinc-200 dark:border-zinc-800 ${className}`}>
       {segments.map((segment) => {
         const active = segment.value === value;
         return (
@@ -34,8 +34,8 @@ export function SegmentedControl<T extends string>({
             onClick={() => onChange(segment.value)}
             className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
               active
-                ? "border-emerald-500 text-emerald-400"
-                : "border-transparent text-zinc-400 hover:text-zinc-200"
+                ? "border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400"
+                : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
             }`}
           >
             {segment.label}

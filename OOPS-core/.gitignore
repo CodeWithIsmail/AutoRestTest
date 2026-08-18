@@ -1,7 +1,0 @@
-*venv
-log/**/priv*
-run/**/priv*
-sut/**/priv*
-*class*
-*cache*
-.env

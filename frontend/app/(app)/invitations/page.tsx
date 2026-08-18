@@ -32,7 +32,7 @@ export default function MyInvitationsPage() {
     <Suspense
       fallback={
         <div className="flex justify-center py-16">
-          <Spinner className="h-6 w-6 text-emerald-500" />
+          <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
         </div>
       }
     >
@@ -88,19 +88,19 @@ function MyInvitations() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold text-zinc-50">Invitations</h1>
-      <p className="mt-1 text-sm text-zinc-400">
+      <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Invitations</h1>
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Projects you&apos;ve been invited to collaborate on.
       </p>
 
       <div className="mt-6">
         {loading ? (
           <div className="flex justify-center py-16">
-            <Spinner className="h-6 w-6 text-emerald-500" />
+            <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           </div>
         ) : error ? (
           <div className="py-12 text-center">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             <Button
               variant="secondary"
               size="sm"
@@ -112,7 +112,7 @@ function MyInvitations() {
           </div>
         ) : !invitations || invitations.length === 0 ? (
           <Card className="p-10 text-center">
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               You have no pending invitations.
             </p>
           </Card>
@@ -129,7 +129,7 @@ function MyInvitations() {
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="truncate font-medium text-zinc-100">
+                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
                       {inv.projectName}
                     </p>
                     <Badge tone={roleTone(inv.role)}>{inv.role}</Badge>

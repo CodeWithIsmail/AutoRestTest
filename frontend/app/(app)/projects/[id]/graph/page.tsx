@@ -84,7 +84,7 @@ export default function ProjectGraphPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Spinner className="h-6 w-6 text-emerald-500" />
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
       </div>
     );
   }
@@ -92,7 +92,7 @@ export default function ProjectGraphPage() {
   if (error) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       </div>
     );
   }
@@ -101,10 +101,10 @@ export default function ProjectGraphPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-zinc-50">
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
             Dependency graph
           </h2>
-          <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+          <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
             How the engine thinks your operations relate: an edge means one
             operation produces a value another one needs. Built from the
             specification by matching field names semantically — no requests are
@@ -125,8 +125,8 @@ export default function ProjectGraphPage() {
 
       {state?.status === "running" ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
-          <Spinner className="h-6 w-6 text-emerald-500" />
-          <p className="text-sm text-zinc-300">Building the dependency graph…</p>
+          <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">Building the dependency graph…</p>
           <p className="max-w-md text-xs text-zinc-500">
             The engine is loading its word-embedding model and comparing every
             operation against every other. This takes a minute or so and does
@@ -135,7 +135,7 @@ export default function ProjectGraphPage() {
         </Card>
       ) : state?.status === "failed" ? (
         <Card className="p-10 text-center">
-          <p className="text-sm text-red-400">
+          <p className="text-sm text-red-600 dark:text-red-400">
             {state.error ?? "The graph build failed."}
           </p>
           {canRun && (
@@ -154,7 +154,7 @@ export default function ProjectGraphPage() {
         <DependencyGraphView graph={state.graph} />
       ) : (
         <Card className="p-10 text-center">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
             No dependency graph yet.
           </p>
           <p className="mx-auto mt-1 max-w-md text-xs text-zinc-500">

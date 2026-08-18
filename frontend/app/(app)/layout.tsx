@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ProjectSwitcher } from "@/components/project-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useToast } from "@/components/toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { DropdownMenu } from "@/components/ui/DropdownMenu";
@@ -70,7 +71,7 @@ export default function AppLayout({
   if (loading || !user) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <Spinner className="h-6 w-6 text-emerald-500" />
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
       </div>
     );
   }
@@ -79,12 +80,12 @@ export default function AppLayout({
   // address has been proven, so every user that reaches this shell is verified.
   return (
     <div className="flex flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-800 bg-zinc-900 px-4 sm:px-6">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-900 sm:px-6">
         <Link
           href="/projects"
-          className="shrink-0 text-base font-semibold tracking-tight text-zinc-50 transition-opacity hover:opacity-80"
+          className="shrink-0 text-base font-semibold tracking-tight text-zinc-900 transition-opacity hover:opacity-80 dark:text-zinc-50"
         >
-          Auto<span className="text-emerald-500">Rest</span>Test
+          Auto<span className="text-emerald-600 dark:text-emerald-500">Rest</span>Test
         </Link>
 
         <ProjectSwitcher />
@@ -98,7 +99,7 @@ export default function AppLayout({
             <Link
               href="/invitations"
               title={`${pendingInvites} pending invitation${pendingInvites === 1 ? "" : "s"}`}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <InvitationsIcon className="h-5 w-5" />
               <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-xs font-semibold text-white">
@@ -107,9 +108,11 @@ export default function AppLayout({
             </Link>
           )}
 
-          <span className="hidden text-sm text-zinc-400 sm:inline">
+          <span className="hidden text-sm text-zinc-600 dark:text-zinc-400 sm:inline">
             {user.name?.trim() || user.username}
           </span>
+
+          <ThemeToggle />
 
           <DropdownMenu
             label="Account menu"

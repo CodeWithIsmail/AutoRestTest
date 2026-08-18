@@ -7,14 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 AutoRestTest is an AI-powered platform for automated REST API testing. The repo is a **monorepo of independent subprojects** that are developed and run separately (each has its own dependencies, build, and lockfile):
 
 - **`autoresttest-core/`** — the Python testing engine. Parses an OpenAPI 3.0 spec, builds a semantic dependency graph between operations, and drives request generation with multi-agent reinforcement learning (MARL/Q-learning) plus LLM-backed value generation. This is the underlying research tool; the backend/frontend wrap it into a SaaS product.
-- **`OOPS-core/`** — a second, unmodified research tool: an LLM pipeline that reads a REST API project's **source code** and generates an OpenAPI spec for it. Vendored as-is — do not edit it. The platform drives it through `engine-service/oops_worker.py`.
+- **`OOPS-final/`** — a second, unmodified research tool: an LLM pipeline that reads a REST API project's **source code** and generates an OpenAPI spec for it. Vendored as-is — do not edit it. The platform drives it through `engine-service/oops_worker.py`.
 - **`engine-service/`** — Flask + waitress microservice that wraps both Python tools behind an async-job HTTP API (`/runs` for test runs, `/generations` for spec generation) and records engine traffic through a reverse proxy.
 - **`backend/`** — NestJS 11 + Prisma 7 + PostgreSQL REST API. The platform's application server (auth, projects, specs, endpoints, test suites, reports, collaboration).
 - **`frontend/`** — Next.js 16 + React 19 + Tailwind CSS 4 web client.
 
 Each subproject has its own agent docs — **read them before working in that subproject**:
 - `autoresttest-core/CLAUDE.md` — full architecture of the Python engine (pipeline phases, the seven Q-learning agents, caching, config).
-- `OOPS-core/CLAUDE.md` — architecture of the spec-generation pipeline (partly stale: it references a `main.py` and `core/ablate.py` that are absent).
+- `OOPS-final/CLAUDE.md` — architecture of the spec-generation pipeline.
 - `frontend/AGENTS.md` (referenced from `frontend/CLAUDE.md`) — **critical:** this is a non-standard Next.js version with breaking changes; consult `node_modules/next/dist/docs/` before writing frontend code rather than relying on training data.
 
 There is no root-level package manager or workspace tool — `cd` into the relevant subproject directory to run any command.
@@ -102,9 +102,16 @@ backend polls and stores it on SpecGeneration → user reviews → POST
 
 Things to know before touching this path:
 
-- **`OOPS-core/` is never modified.** `engine-service/oops_worker.py` is the
+- **`OOPS-final/` is never modified.** `engine-service/oops_worker.py` is the
   single point of contact with `core.*`. It runs under OOPS's own venv
-  (`OOPS_PYTHON`, Python ≥3.12) because autoresttest-core is on 3.10.
+  (`OOPS_PYTHON`, Python ≥3.12) because autoresttest-core is on 3.10. Spec
+  generation uses its own dedicated LLM credentials (`OOPS_API_KEY` /
+  `OOPS_LLM_API_URL`, mapped by `oops_runner.oops_env()` into the `LLM_API_KEY`
+  / `LLM_API_URL` names OOPS reads) — separate from the main engine's
+  `API_KEY` / `LLM_API_BASE`, so spec generation can run against a different
+  provider than test-generation. The current default is Gemini 3.5 Flash Lite
+  via its OpenAI-compatible endpoint, measured at ~15-20 min end-to-end versus
+  1h+ on the earlier NVIDIA NIM/nemotron setup.
 - **Generation has its own queue and worker thread** (`GenerationManager`),
   separate from `JobManager`. Test runs are serialized because the engine reads
   one global `configurations.toml`; a multi-hour generation must not block them.

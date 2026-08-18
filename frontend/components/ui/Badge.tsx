@@ -1,12 +1,12 @@
 type Tone = "emerald" | "zinc" | "blue" | "amber" | "purple" | "red";
 
 const TONES: Record<Tone, string> = {
-  emerald: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
-  zinc: "bg-zinc-500/10 text-zinc-300 ring-zinc-500/20",
-  blue: "bg-blue-500/10 text-blue-400 ring-blue-500/20",
-  amber: "bg-amber-500/10 text-amber-400 ring-amber-500/20",
-  purple: "bg-purple-500/10 text-purple-400 ring-purple-500/20",
-  red: "bg-red-500/10 text-red-400 ring-red-500/20",
+  emerald: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400",
+  zinc: "bg-zinc-500/10 text-zinc-700 ring-zinc-500/20 dark:text-zinc-300",
+  blue: "bg-blue-500/10 text-blue-700 ring-blue-500/20 dark:text-blue-400",
+  amber: "bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-400",
+  purple: "bg-purple-500/10 text-purple-700 ring-purple-500/20 dark:text-purple-400",
+  red: "bg-red-500/10 text-red-700 ring-red-500/20 dark:text-red-400",
 };
 
 export function Badge({

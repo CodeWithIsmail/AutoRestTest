@@ -112,21 +112,21 @@ export default function EndpointsPage() {
           placeholder="Search endpoints…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-10 w-full max-w-xs rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          className="h-10 w-full max-w-xs rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
         />
         {canManage && (
           <Button onClick={() => setAddOpen(true)}>+ Add endpoint</Button>
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         {loading ? (
           <div className="flex justify-center py-16">
-            <Spinner className="h-6 w-6 text-emerald-500" />
+            <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           </div>
         ) : error ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             <Button
               variant="secondary"
               size="sm"
@@ -138,7 +138,7 @@ export default function EndpointsPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               {endpoints && endpoints.length === 0 ? (
                 <>
                   No endpoints yet — upload an API spec to auto-extract them, or
@@ -151,7 +151,7 @@ export default function EndpointsPage() {
             {endpoints && endpoints.length === 0 && (
               <Link
                 href={`/projects/${project.id}/spec`}
-                className="mt-3 inline-block text-sm font-medium text-emerald-500 hover:text-emerald-400"
+                className="mt-3 inline-block text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
               >
                 Go to API Spec →
               </Link>
@@ -160,7 +160,7 @@ export default function EndpointsPage() {
         ) : (
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                 <th className="w-8 px-2 py-3" />
                 <th className="px-5 py-3 font-medium">Method</th>
                 <th className="px-5 py-3 font-medium">Path</th>
@@ -180,7 +180,7 @@ export default function EndpointsPage() {
                       onClick={() =>
                         setExpandedId(expanded ? null : e.id)
                       }
-                      className="cursor-pointer border-b border-zinc-800/60 last:border-0 hover:bg-zinc-800/30"
+                      className="cursor-pointer border-b border-zinc-200 dark:border-zinc-800/60 last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/30"
                     >
                       <td className="px-2 py-3 text-center">
                         <Chevron
@@ -193,7 +193,7 @@ export default function EndpointsPage() {
                         <MethodBadge method={e.method} />
                       </td>
                       <td className="px-5 py-3">
-                        <span className="flex flex-wrap items-center gap-2 font-mono text-zinc-200">
+                        <span className="flex flex-wrap items-center gap-2 font-mono text-zinc-800 dark:text-zinc-200">
                           {e.path}
                           {detail?.auth.required && (
                             <Badge tone="amber">🔒 Auth</Badge>
@@ -212,7 +212,7 @@ export default function EndpointsPage() {
                         </span>
                       </td>
                       <td className="max-w-md px-5 py-3">
-                        <span className="line-clamp-1 text-zinc-400">
+                        <span className="line-clamp-1 text-zinc-600 dark:text-zinc-400">
                           {e.description || "—"}
                         </span>
                       </td>
@@ -239,7 +239,7 @@ export default function EndpointsPage() {
                       )}
                     </tr>
                     {expanded && (
-                      <tr className="border-b border-zinc-800/60 bg-zinc-950/40">
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-950/40">
                         <td colSpan={colSpan} className="px-5 py-5">
                           {detail ? (
                             <EndpointDetailPanel detail={detail} />
@@ -281,7 +281,7 @@ export default function EndpointsPage() {
         message={
           <>
             Delete{" "}
-            <span className="font-mono text-zinc-100">
+            <span className="font-mono text-zinc-900 dark:text-zinc-100">
               {deleteTarget?.method} {deleteTarget?.path}
             </span>
             ?

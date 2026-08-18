@@ -25,29 +25,29 @@ export default function ProjectOverviewPage() {
     <div className="grid gap-6 md:grid-cols-3">
       {/* Details */}
       <Card className="p-5 md:col-span-2">
-        <h2 className="text-sm font-semibold text-zinc-200">Description</h2>
-        <p className="mt-2 text-sm text-zinc-400">
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Description</h2>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           {project.description || "No description provided."}
         </p>
 
-        <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-zinc-800 pt-4 text-sm">
+        <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-zinc-200 dark:border-zinc-800 pt-4 text-sm">
           <div>
             <dt className="text-zinc-500">Owner</dt>
-            <dd className="mt-0.5 text-zinc-200">{project.owner.username}</dd>
+            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{project.owner.username}</dd>
           </div>
           <div>
             <dt className="text-zinc-500">Members</dt>
-            <dd className="mt-0.5 text-zinc-200">{project.members.length}</dd>
+            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{project.members.length}</dd>
           </div>
           <div>
             <dt className="text-zinc-500">Created</dt>
-            <dd className="mt-0.5 text-zinc-200">
+            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
               {formatDate(project.createdAt)}
             </dd>
           </div>
           <div>
             <dt className="text-zinc-500">Last updated</dt>
-            <dd className="mt-0.5 text-zinc-200">
+            <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">
               {formatDate(project.updatedAt)}
             </dd>
           </div>
@@ -56,11 +56,11 @@ export default function ProjectOverviewPage() {
 
       {/* Members */}
       <Card className="p-5">
-        <h2 className="text-sm font-semibold text-zinc-200">Team</h2>
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Team</h2>
         <ul className="mt-3 flex flex-col gap-3">
           <li className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate text-sm text-zinc-200">
+              <p className="truncate text-sm text-zinc-800 dark:text-zinc-200">
                 {project.owner.username}
               </p>
               <p className="truncate text-xs text-zinc-500">
@@ -75,7 +75,7 @@ export default function ProjectOverviewPage() {
               className="flex items-center justify-between gap-2"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm text-zinc-200">{m.username}</p>
+                <p className="truncate text-sm text-zinc-800 dark:text-zinc-200">{m.username}</p>
                 <p className="truncate text-xs text-zinc-500">{m.email}</p>
               </div>
               <Badge tone={roleTone(m.role)}>{m.role}</Badge>

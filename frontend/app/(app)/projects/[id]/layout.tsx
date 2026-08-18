@@ -48,7 +48,7 @@ export default function ProjectLayout({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Spinner className="h-6 w-6 text-emerald-500" />
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
       </div>
     );
   }
@@ -56,10 +56,10 @@ export default function ProjectLayout({
   if (error || !project) {
     return (
       <div className="mx-auto max-w-3xl py-16 text-center">
-        <p className="text-sm text-red-400">{error ?? "Project not found."}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Project not found."}</p>
         <Link
           href="/projects"
-          className="mt-3 inline-block text-sm font-medium text-emerald-500 hover:text-emerald-400"
+          className="mt-3 inline-block text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           ← Back to projects
         </Link>
@@ -101,10 +101,10 @@ export default function ProjectLayout({
             project and carries the way back out to the list. */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-zinc-50">
+            <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {project.name}
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Owned by {project.owner.username}
             </p>
           </div>
@@ -129,7 +129,7 @@ export default function ProjectLayout({
         </div>
 
         {/* Tab nav */}
-        <div className="mt-5 border-b border-zinc-800">
+        <div className="mt-5 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex gap-6">
             {TABS.map((tab) => {
               const href = `${base}${tab.segment ? `/${tab.segment}` : ""}`;
@@ -144,8 +144,8 @@ export default function ProjectLayout({
                   href={href}
                   className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                     active
-                      ? "border-emerald-500 text-emerald-400"
-                      : "border-transparent text-zinc-400 hover:text-zinc-200"
+                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                      : "border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                   }`}
                 >
                   {tab.label}
@@ -178,7 +178,7 @@ export default function ProjectLayout({
         message={
           <>
             Delete{" "}
-            <span className="font-medium text-zinc-100">{project.name}</span>?
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">{project.name}</span>?
             This permanently removes the project and all its data.
           </>
         }

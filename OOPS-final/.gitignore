@@ -1,0 +1,6 @@
+*venv
+log/**/priv*
+*class*
+*cache*
+.env
+log

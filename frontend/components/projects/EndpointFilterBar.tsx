@@ -50,7 +50,7 @@ export function EndpointFilterBar({
   active,
 }: EndpointFilterBarProps) {
   return (
-    <div className="flex flex-col gap-3 border-t border-zinc-800 px-5 py-3">
+    <div className="flex flex-col gap-3 border-t border-zinc-200 dark:border-zinc-800 px-5 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <input
           type="search"
@@ -58,7 +58,7 @@ export function EndpointFilterBar({
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Filter by method or path…"
           aria-label="Filter endpoints by method or path"
-          className="h-8 w-56 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          className="h-8 w-56 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
         />
 
         {/* Outcome chips — styling matches the status filters on the captured
@@ -72,8 +72,8 @@ export function EndpointFilterBar({
               aria-pressed={outcome === o.value}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 outcome === o.value
-                  ? "bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20"
-                  : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200"
               }`}
             >
               {o.label}

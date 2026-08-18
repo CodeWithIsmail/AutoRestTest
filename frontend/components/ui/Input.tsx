@@ -5,7 +5,7 @@ import type {
 } from "react";
 
 const FIELD_CLASS =
-  "rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30";
+  "rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
 interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -23,11 +23,11 @@ export function FormField({
   const inputId = id ?? props.name;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={inputId} className="text-sm font-medium text-zinc-300">
+      <label htmlFor={inputId} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
         {label}
       </label>
       <input id={inputId} className={`h-10 ${FIELD_CLASS} ${className}`} {...props} />
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }
@@ -70,7 +70,7 @@ export function TextareaField({
   const inputId = id ?? props.name;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={inputId} className="text-sm font-medium text-zinc-300">
+      <label htmlFor={inputId} className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
         {label}
       </label>
       <textarea
@@ -79,7 +79,7 @@ export function TextareaField({
         className={`resize-y py-2 ${FIELD_CLASS} ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }

@@ -12,9 +12,9 @@ directory.
 | `backend/` | NestJS 11 + Prisma 7 | **3000** | everything |
 | `frontend/` | Next.js 16 | **3001** | the web UI |
 | `autoresttest-core/` | Python 3.10 (poetry) | — | invoked by engine-service |
-| `OOPS-core/` | Python ≥3.12 (uv) | — | invoked by engine-service |
+| `OOPS-final/` | Python ≥3.12 (uv) | — | invoked by engine-service |
 
-`autoresttest-core` and `OOPS-core` are **not** started by hand — engine-service
+`autoresttest-core` and `OOPS-final` are **not** started by hand — engine-service
 shells out to them per job. You only install their dependencies.
 
 Start order: **engine-service → backend → frontend**.
@@ -26,7 +26,7 @@ Start order: **engine-service → backend → frontend**.
 ### Prerequisites
 
 - Node.js 18+
-- Python 3.11 (engine-service), Python 3.10 (autoresttest-core), Python 3.12+ (OOPS-core)
+- Python 3.11 (engine-service), Python 3.10 (autoresttest-core), Python 3.12+ (OOPS-final)
 - [Poetry](https://python-poetry.org/) and [uv](https://docs.astral.sh/uv/)
 - A PostgreSQL database (the project uses NeonDB)
 - **A JRE (Temurin 17+) with `java` on PATH** — only for spec generation from
@@ -57,10 +57,15 @@ LLM_API_BASE=https://integrate.api.nvidia.com/v1
 LLM_ENGINE=meta/llama-3.3-70b-instruct
 LLM_RPM_LIMIT=40
 PORT=5000
+
+# Spec generation uses its own, separate LLM credentials:
+OOPS_API_KEY=<your Gemini API key>
+OOPS_LLM_API_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 ```
 
-The `OOPS_*` settings default correctly for this repo layout; only change them
-if OOPS-core lives elsewhere or you want a different generation model.
+The rest of the `OOPS_*` settings default correctly for this repo layout; only
+change them if `OOPS-final` lives elsewhere or you want a different generation
+model.
 
 ### backend
 
@@ -109,10 +114,10 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
 
 ```bash
 cd autoresttest-core && poetry install
-cd ../OOPS-core && uv sync
+cd ../OOPS-final && uv sync
 ```
 
-`OOPS-core` defaults to the Tsinghua PyPI mirror. If that is slow, override it:
+`OOPS-final` defaults to the Tsinghua PyPI mirror. If that is slow, override it:
 
 ```bash
 uv sync --index-url https://pypi.org/simple
@@ -180,11 +185,12 @@ anything in the backend or frontend.
 - **Test runs** call `autoresttest-core` against your target API. Wall time is
   `timeBudget` plus an un-timed LLM value-generation phase that often dominates.
   A run is killed at `timeBudget + JOB_TIMEOUT_BUFFER` seconds.
-- **Spec generation** calls `OOPS-core`, which reads the whole codebase with an
-  LLM. This takes **minutes to hours** depending on file count. Exclude
-  vendored directories in the UI to cut this down sharply.
+- **Spec generation** calls `OOPS-final`, which reads the whole codebase with an
+  LLM. This typically takes **15-20 minutes** on the default Gemini 3.5 Flash
+  Lite setup; exclude vendored directories in the UI to cut it down further.
 
-Both need a working `API_KEY` and `LLM_API_BASE`.
+Test runs need a working `API_KEY` and `LLM_API_BASE`. Spec generation needs
+its own `OOPS_API_KEY` and `OOPS_LLM_API_URL` — see setup above.
 
 ---
 
@@ -272,7 +278,7 @@ cd backend && npm run build && node dist/src/main
 | Frontend calls fail with CORS errors | `CORS_ORIGIN` in `backend/.env` must include `http://localhost:3001`. |
 | Test run takes far longer than `timeBudget` | Expected. Only the request-generation phase is time-boxed; graph building and LLM value generation are not. |
 | Spec generation warns "no Java runtime" | `java` isn't on PATH. The spec is still usable but has lower-fidelity schemas. Install Temurin 17+. |
-| Spec generation fails instantly | Check `jobs/<id>/error.txt`. Usually a missing `API_KEY`, or `OOPS_PYTHON` pointing at a venv that hasn't been created with `uv sync`. |
+| Spec generation fails instantly | Check `jobs/<id>/error.txt`. Usually a missing `OOPS_API_KEY`/`OOPS_LLM_API_URL`, or `OOPS_PYTHON` pointing at a venv that hasn't been created with `uv sync`. |
 | Archive rejected on upload | The zip is corrupt, over 50 MB, over 5000 files, or expands past 200 MB. Exclude `node_modules`/`venv`/build output before zipping. |
 | `Cannot find module dist/main` | The build emits `dist/src/main.js`. Use `node dist/src/main`. |
 | Port already in use | Change `PORT` in the relevant `.env` (and `ENGINE_SERVICE_URL` / `NEXT_PUBLIC_API_BASE_URL` to match). |

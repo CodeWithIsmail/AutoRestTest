@@ -161,7 +161,7 @@ export function DependencyGraphView({
                   setSelectedEdge(null);
                   setSearch("");
                 }}
-                className="block w-full rounded px-3 py-1.5 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
+                className="block w-full rounded px-3 py-1.5 text-left text-xs text-zinc-800 dark:text-zinc-200 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 {n.id}
                 <span className="ml-2 font-mono text-zinc-500">{n.path}</span>
@@ -173,7 +173,7 @@ export function DependencyGraphView({
 
       {graph.truncated && (
         <Card className="border-amber-500/20 bg-amber-500/5 p-3">
-          <p className="text-xs text-amber-300">
+          <p className="text-xs text-amber-800 dark:text-amber-300">
             This graph is large, so the weakest predicted dependencies were left
             out. Everything the agent confirmed is shown.
           </p>
@@ -255,12 +255,12 @@ function InsightsStrip({ graph }: { graph: DependencyGraph }) {
       {
         label: "Confirmed",
         value: String(stats.confirmed),
-        tone: "text-emerald-400",
+        tone: "text-emerald-600 dark:text-emerald-400",
       },
       {
         label: "Discovered at run time",
         value: String(stats.discovered),
-        tone: stats.discovered > 0 ? "text-emerald-400" : undefined,
+        tone: stats.discovered > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined,
       },
     );
   } else {
@@ -278,7 +278,7 @@ function InsightsStrip({ graph }: { graph: DependencyGraph }) {
             {item.label}
           </p>
           <p
-            className={`mt-1 truncate text-lg font-semibold ${item.tone ?? "text-zinc-100"}`}
+            className={`mt-1 truncate text-lg font-semibold ${item.tone ?? "text-zinc-900 dark:text-zinc-100"}`}
             title={item.value}
           >
             {item.value}

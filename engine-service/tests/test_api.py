@@ -46,6 +46,8 @@ def make_config(tmp_path, **overrides) -> Config:
         oops_max_zip_bytes=1024 * 1024,
         oops_max_source_bytes=4 * 1024 * 1024,
         oops_max_files=50,
+        oops_api_key="",
+        oops_llm_api_url="https://example/v1",
     )
     base.update(overrides)
     return Config(**base)

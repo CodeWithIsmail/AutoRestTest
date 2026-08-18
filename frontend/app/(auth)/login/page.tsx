@@ -38,8 +38,8 @@ export default function LoginPage() {
 
   return (
     <Card className="p-6">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-50">Sign in</h2>
-      <p className="mb-6 text-sm text-zinc-400">
+      <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">Sign in</h2>
+      <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
         Welcome back. Enter your credentials to continue.
       </p>
 
@@ -67,7 +67,7 @@ export default function LoginPage() {
           <div className="mt-1.5 text-right">
             <Link
               href="/forgot-password"
-              className="text-xs font-medium text-zinc-400 transition-colors hover:text-emerald-400"
+              className="text-xs font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
             >
               Forgot your password?
             </Link>
@@ -79,11 +79,11 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-400">
+      <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
         Don&apos;t have an account?{" "}
         <Link
           href="/register"
-          className="font-medium text-emerald-500 hover:text-emerald-400"
+          className="font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Create one
         </Link>

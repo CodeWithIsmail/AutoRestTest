@@ -45,7 +45,7 @@ export function PasswordCard() {
 
   return (
     <Card className="p-6">
-      <h2 className="text-base font-semibold text-zinc-100">Password</h2>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Password</h2>
       <p className="mt-0.5 text-sm text-zinc-500">
         Changing it signs you out on every device, including this one.
       </p>

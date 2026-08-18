@@ -55,7 +55,7 @@ export function ProjectSwitcher() {
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="text-zinc-600" aria-hidden>
+      <span className="text-zinc-400 dark:text-zinc-600" aria-hidden>
         /
       </span>
       <DropdownMenu
@@ -66,7 +66,7 @@ export function ProjectSwitcher() {
         items={items}
         trigger={
           <>
-            <span className="truncate text-sm font-medium text-zinc-100">
+            <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
               {current.name}
             </span>
             <svg

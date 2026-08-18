@@ -149,7 +149,7 @@ export default function TeamPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Spinner className="h-6 w-6 text-emerald-500" />
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
       </div>
     );
   }
@@ -157,7 +157,7 @@ export default function TeamPage() {
   if (error || !memberData) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-red-400">{error ?? "Failed to load team."}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Failed to load team."}</p>
       </div>
     );
   }
@@ -170,14 +170,14 @@ export default function TeamPage() {
     <div className="flex flex-col gap-6">
       {/* Members */}
       <Card className="overflow-hidden">
-        <div className="border-b border-zinc-800 px-5 py-3">
-          <h3 className="text-sm font-semibold text-zinc-200">Members</h3>
+        <div className="border-b border-zinc-200 dark:border-zinc-800 px-5 py-3">
+          <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Members</h3>
         </div>
         <ul>
           {/* Owner */}
-          <li className="flex items-center justify-between gap-3 border-b border-zinc-800/60 px-5 py-3">
+          <li className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3">
             <div className="min-w-0">
-              <p className="truncate text-sm text-zinc-100">
+              <p className="truncate text-sm text-zinc-900 dark:text-zinc-100">
                 {memberData.owner.username}
                 {memberData.owner.userId === user?.id && (
                   <span className="ml-1 text-zinc-500">(you)</span>
@@ -196,10 +196,10 @@ export default function TeamPage() {
             return (
               <li
                 key={m.userId}
-                className="flex items-center justify-between gap-3 border-b border-zinc-800/60 px-5 py-3 last:border-0"
+                className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3 last:border-0"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-zinc-100">
+                  <p className="truncate text-sm text-zinc-900 dark:text-zinc-100">
                     {m.username}
                     {isSelf && <span className="ml-1 text-zinc-500">(you)</span>}
                   </p>
@@ -211,7 +211,7 @@ export default function TeamPage() {
                       <select
                         value={m.role}
                         onChange={(e) => onChangeRole(m, e.target.value as Role)}
-                        className="h-8 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-xs text-zinc-100 focus:border-emerald-500 focus:outline-none"
+                        className="h-8 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none"
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
@@ -254,8 +254,8 @@ export default function TeamPage() {
       {/* Invitations (owner/admin) */}
       {canManage && (
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-            <h3 className="text-sm font-semibold text-zinc-200">Invitations</h3>
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-5 py-3">
+            <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Invitations</h3>
             <Button size="sm" onClick={() => setInviteOpen(true)}>
               + Invite
             </Button>
@@ -269,10 +269,10 @@ export default function TeamPage() {
               {invitations.map((inv) => (
                 <li
                   key={inv.id}
-                  className="flex items-center justify-between gap-3 border-b border-zinc-800/60 px-5 py-3 last:border-0"
+                  className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3 last:border-0"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm text-zinc-100">
+                    <p className="truncate text-sm text-zinc-900 dark:text-zinc-100">
                       {inv.email}
                     </p>
                     <p className="text-xs text-zinc-500">
@@ -332,7 +332,7 @@ export default function TeamPage() {
         message={
           <>
             Remove{" "}
-            <span className="font-medium text-zinc-100">
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">
               {removeTarget?.username}
             </span>{" "}
             from this project?
@@ -362,7 +362,7 @@ export default function TeamPage() {
         message={
           <>
             Revoke the invitation for{" "}
-            <span className="font-medium text-zinc-100">
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">
               {revokeTarget?.email}
             </span>
             ?

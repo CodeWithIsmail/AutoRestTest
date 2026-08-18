@@ -27,7 +27,7 @@ export default function VerifySignupPage() {
     <Suspense
       fallback={
         <Card className="flex items-center justify-center p-10">
-          <Spinner className="h-6 w-6 text-emerald-500" />
+          <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
         </Card>
       }
     >
@@ -59,16 +59,16 @@ function VerifySignupForm() {
   if (!email) {
     return (
       <Card className="p-6">
-        <h2 className="mb-1 text-lg font-semibold text-zinc-50">
+        <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Nothing to verify
         </h2>
-        <p className="mb-6 text-sm text-zinc-400">
+        <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
           We don&apos;t know which signup this is for. Start again and
           we&apos;ll send you a fresh code.
         </p>
         <Link
           href="/register"
-          className="text-sm font-medium text-emerald-500 hover:text-emerald-400"
+          className="text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Back to sign up
         </Link>
@@ -138,12 +138,12 @@ function VerifySignupForm() {
 
   return (
     <Card className="p-6">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-50">
+      <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         Confirm your email
       </h2>
-      <p className="mb-6 text-sm text-zinc-400">
+      <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
         We sent a six-digit code to{" "}
-        <span className="font-medium text-zinc-200">{email}</span>. Your account
+        <span className="font-medium text-zinc-800 dark:text-zinc-200">{email}</span>. Your account
         is created once you enter it.
       </p>
 
@@ -164,12 +164,12 @@ function VerifySignupForm() {
             aria-label={`Digit ${i + 1}`}
             maxLength={LENGTH}
             autoFocus={i === 0}
-            className="h-14 w-full rounded-md border border-zinc-700 bg-zinc-950 text-center font-mono text-xl text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50"
+            className="h-14 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-center font-mono text-xl text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50"
           />
         ))}
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <Button
         className="mt-5 w-full"
@@ -180,13 +180,13 @@ function VerifySignupForm() {
         Create my account
       </Button>
 
-      <div className="mt-6 flex items-center justify-between border-t border-zinc-800 pt-4 text-sm">
+      <div className="mt-6 flex items-center justify-between border-t border-zinc-200 dark:border-zinc-800 pt-4 text-sm">
         <span className="text-zinc-500">Didn&apos;t get it?</span>
         <button
           type="button"
           onClick={() => void onResend()}
           disabled={cooldown > 0}
-          className="font-medium text-emerald-500 transition-colors hover:text-emerald-400 disabled:cursor-not-allowed disabled:text-zinc-600"
+          className="font-medium text-emerald-600 dark:text-emerald-500 transition-colors hover:text-emerald-600 dark:hover:text-emerald-400 disabled:cursor-not-allowed disabled:text-zinc-400 dark:disabled:text-zinc-600"
         >
           {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend the code"}
         </button>
@@ -194,11 +194,11 @@ function VerifySignupForm() {
 
       {/* Mistyping your own address is the common failure here, and there is no
           session to sign out of — so the way back has to be an explicit link. */}
-      <p className="mt-6 text-center text-sm text-zinc-400">
+      <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
         Wrong address?{" "}
         <Link
           href="/register"
-          className="font-medium text-emerald-500 hover:text-emerald-400"
+          className="font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Sign up again
         </Link>

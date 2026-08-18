@@ -68,9 +68,9 @@ export function StatusDistribution({
         {segments.map((s) => (
           <div key={s.key} className="flex items-center gap-1.5 text-xs">
             <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-            <span className="text-zinc-400">
+            <span className="text-zinc-600 dark:text-zinc-400">
               {s.label}
-              <span className="ml-1 font-medium text-zinc-200">{s.count}</span>
+              <span className="ml-1 font-medium text-zinc-800 dark:text-zinc-200">{s.count}</span>
             </span>
           </div>
         ))}
@@ -83,7 +83,7 @@ export function StatusDistribution({
           .map(([code, n]) => (
             <span
               key={code}
-              className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300"
+              className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-700 dark:text-zinc-300"
             >
               {code}×{n}
             </span>

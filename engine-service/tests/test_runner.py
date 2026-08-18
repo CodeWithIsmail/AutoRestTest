@@ -39,6 +39,8 @@ def make_runner_config(tmp_path, core_dir, engine_cmd, timeout_buffer=60) -> Con
         oops_max_zip_bytes=1,
         oops_max_source_bytes=1,
         oops_max_files=1,
+        oops_api_key="",
+        oops_llm_api_url="b",
     )
 
 

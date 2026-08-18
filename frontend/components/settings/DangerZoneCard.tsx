@@ -27,7 +27,7 @@ export function DangerZoneCard({ userId }: { userId: string }) {
   return (
     <>
       <Card className="border-red-500/25 p-6">
-        <h2 className="text-base font-semibold text-red-400">Danger zone</h2>
+        <h2 className="text-base font-semibold text-red-600 dark:text-red-400">Danger zone</h2>
         <p className="mt-0.5 text-sm text-zinc-500">
           Deleting your account is permanent and cannot be undone.
         </p>
@@ -102,13 +102,13 @@ function DeleteAccountModal({
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-zinc-300">
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
           This permanently removes your account
           {ownedCount > 0 && (
             <>
               {" "}
               and the{" "}
-              <span className="font-medium text-red-400">
+              <span className="font-medium text-red-600 dark:text-red-400">
                 {ownedCount} project{ownedCount === 1 ? "" : "s"} you own
               </span>
               , including every specification, test run and captured request in

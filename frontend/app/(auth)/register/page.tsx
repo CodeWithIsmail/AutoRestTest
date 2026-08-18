@@ -46,10 +46,10 @@ export default function RegisterPage() {
 
   return (
     <Card className="p-6">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-50">
+      <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         Create your account
       </h2>
-      <p className="mb-6 text-sm text-zinc-400">
+      <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
         Start testing your REST APIs in minutes.
       </p>
 
@@ -92,11 +92,11 @@ export default function RegisterPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-400">
+      <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
         Already have an account?{" "}
         <Link
           href="/login"
-          className="font-medium text-emerald-500 hover:text-emerald-400"
+          className="font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           Sign in
         </Link>

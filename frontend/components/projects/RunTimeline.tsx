@@ -110,7 +110,7 @@ export function RunTimeline({
           {/* Connector line to the next step */}
           {i < steps.length - 1 && (
             <span
-              className="absolute left-[5px] top-4 h-[calc(100%+4px)] w-px bg-zinc-800"
+              className="absolute left-[5px] top-4 h-[calc(100%+4px)] w-px bg-zinc-100 dark:bg-zinc-800"
               aria-hidden
             />
           )}
@@ -119,11 +119,11 @@ export function RunTimeline({
             aria-hidden
           />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-zinc-200">{step.label}</p>
+            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{step.label}</p>
             <p className="text-xs text-zinc-500">
               {step.time ? formatTime(step.time) : "—"}
               {step.note && (
-                <span className="ml-2 text-zinc-400">· {step.note}</span>
+                <span className="ml-2 text-zinc-600 dark:text-zinc-400">· {step.note}</span>
               )}
             </p>
           </div>

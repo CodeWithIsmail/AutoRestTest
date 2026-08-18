@@ -15,7 +15,7 @@ export default function SettingsPage() {
   if (!user) {
     return (
       <div className="flex justify-center py-16">
-        <Spinner className="h-6 w-6 text-emerald-500" />
+        <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
       </div>
     );
   }
@@ -23,8 +23,8 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-50">Account settings</h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Account settings</h1>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Manage your profile, password and notifications.
         </p>
       </div>

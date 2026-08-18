@@ -103,8 +103,8 @@ export function GraphMatrix({
               <span
                 className={`whitespace-nowrap font-mono text-[10px] transition-colors ${
                   hover?.col === col.id || selectedId === col.id
-                    ? "text-emerald-400"
-                    : "text-zinc-400"
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-zinc-600 dark:text-zinc-400"
                 }`}
                 style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
               >
@@ -124,8 +124,8 @@ export function GraphMatrix({
                   onSelectNode(selectedId === row.id ? null : row.id)
                 }
                 className={`flex shrink-0 items-center gap-2 truncate rounded px-2 py-0.5 text-left text-xs transition-colors ${
-                  rowActive ? "text-emerald-400" : "text-zinc-300"
-                } hover:bg-zinc-800/60`}
+                  rowActive ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-300"
+                } hover:bg-zinc-100 dark:hover:bg-zinc-800/60`}
                 style={{ width: LABEL_W, height: CELL }}
               >
                 <span
@@ -153,7 +153,7 @@ export function GraphMatrix({
                   >
                     {self ? (
                       <span
-                        className="h-1 w-1 rounded-full bg-zinc-700"
+                        className="h-1 w-1 rounded-full bg-zinc-200 dark:bg-zinc-700"
                         aria-hidden
                       />
                     ) : edge ? (
@@ -175,7 +175,7 @@ export function GraphMatrix({
                     ) : (
                       <span
                         className={`h-[18px] w-[18px] rounded-[3px] transition-colors ${
-                          crosshair ? "bg-zinc-800/80" : "bg-zinc-800/25"
+                          crosshair ? "bg-zinc-100 dark:bg-zinc-800/80" : "bg-zinc-100 dark:bg-zinc-800/25"
                         }`}
                         aria-hidden
                       />
@@ -189,11 +189,11 @@ export function GraphMatrix({
 
         <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 pl-2 text-xs text-zinc-500">
           <span>
-            Rows <span className="text-zinc-300">need</span> · columns{" "}
-            <span className="text-zinc-300">provide</span>
+            Rows <span className="text-zinc-700 dark:text-zinc-300">need</span> · columns{" "}
+            <span className="text-zinc-700 dark:text-zinc-300">provide</span>
           </span>
           {hover && hover.row !== hover.col && (
-            <span className="font-mono text-zinc-400">
+            <span className="font-mono text-zinc-600 dark:text-zinc-400">
               {hover.row} ← {hover.col}
             </span>
           )}

@@ -1,9 +1,37 @@
 @import "tailwindcss";
 
-/* Dark + emerald theme (KushoAI-inspired). Charcoal surfaces, emerald accent. */
+/* `dark:` utilities apply when the nearest `data-theme` ancestor is "dark".
+   Toggled on <html> — see ThemeToggle and the inline anti-flash script in
+   app/layout.tsx. Charcoal + emerald dark theme (KushoAI-inspired) stays the
+   default; light mode is additive. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
+  --background: #fafafa; /* zinc-50, light mode */
+  --foreground: #18181b; /* zinc-900 */
+}
+
+[data-theme="dark"] {
   --background: #09090b; /* zinc-950 */
-  --foreground: #fafafa; /* zinc-50  */
+  --foreground: #fafafa; /* zinc-50 */
+}
+
+/* The dependency-graph canvas is plain SVG (fill/stroke can't take a
+   Tailwind class), so its palette is themed through these instead. */
+:root {
+  --graph-canvas: #fafafa; /* zinc-50 */
+  --graph-surface: #ffffff;
+  --graph-text: #18181b; /* zinc-900 */
+  --graph-muted: #52525b; /* zinc-600 */
+  --graph-neutral: #d4d4d8; /* zinc-300 */
+}
+
+[data-theme="dark"] {
+  --graph-canvas: #141416;
+  --graph-surface: #1c1c1f; /* just above zinc-900, so nodes lift off the canvas */
+  --graph-text: #f4f4f5; /* zinc-100 */
+  --graph-muted: #a1a1aa; /* zinc-400 */
+  --graph-neutral: #3f3f46; /* zinc-700 */
 }
 
 @theme inline {
@@ -19,7 +47,7 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Emerald selection + thin dark scrollbars to match the theme. */
+/* Emerald selection + thin scrollbars to match the theme. */
 ::selection {
   background: #059669; /* emerald-600 */
   color: #ffffff;
@@ -27,5 +55,9 @@ body {
 
 * {
   scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 transparent; /* zinc-300 */
+}
+
+[data-theme="dark"] * {
   scrollbar-color: #3f3f46 transparent; /* zinc-700 */
 }

@@ -50,14 +50,17 @@ def java_available() -> bool:
 def oops_env(cfg: Config) -> Dict[str, str]:
     """Environment for the worker subprocess.
 
-    Generation reuses the service's existing LLM credentials, exported under the
-    names OOPS reads (``LLM_API_KEY`` / ``LLM_API_URL``), so there is a single
-    key to rotate and OOPS-core/.env is never consulted.
+    Generation uses its own dedicated LLM credentials (``OOPS_API_KEY`` /
+    ``OOPS_LLM_API_URL``), exported under the names OOPS reads (``LLM_API_KEY``
+    / ``LLM_API_URL``). These are deliberately separate from the main engine's
+    ``API_KEY`` / ``LLM_API_BASE`` so spec generation can run against a
+    different provider (e.g. Gemini) than whatever the test-generation engine
+    uses. The vendored project's own ``.env`` is never consulted.
     """
     env = os.environ.copy()
-    if cfg.api_key:
-        env["LLM_API_KEY"] = cfg.api_key
-    env["LLM_API_URL"] = cfg.llm_api_base
+    if cfg.oops_api_key:
+        env["LLM_API_KEY"] = cfg.oops_api_key
+    env["LLM_API_URL"] = cfg.oops_llm_api_url
     env["OOPS_MODEL"] = cfg.oops_model
     env["OOPS_DIR"] = str(cfg.oops_dir)
     # Read by oops_worker.py to override OOPS's built-in pacing before the
@@ -82,7 +85,7 @@ def run_oops(cfg: Config, job_dir: Path) -> int:
     if not cfg.oops_python.exists():
         raise RuntimeError(
             f"OOPS interpreter not found at {cfg.oops_python}. "
-            "Run `uv sync` in OOPS-core, or set OOPS_PYTHON."
+            f"Run `uv sync` in {cfg.oops_dir}, or set OOPS_PYTHON."
         )
     if not worker.exists():
         raise RuntimeError(f"oops_worker.py not found at {worker}")
