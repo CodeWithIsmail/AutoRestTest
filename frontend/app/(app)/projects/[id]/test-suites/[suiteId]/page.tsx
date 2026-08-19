@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DependencyGraphView } from "@/components/graph/DependencyGraphView";
 import { EndpointFilterBar } from "@/components/projects/EndpointFilterBar";
 import type { OutcomeFilter } from "@/components/projects/EndpointFilterBar";
 import { useProject } from "@/components/projects/project-context";
+import { RunHistoryPanel } from "@/components/projects/RunHistoryPanel";
 import { RunTimeline } from "@/components/projects/RunTimeline";
 import { StatusDistribution } from "@/components/projects/StatusDistribution";
 import { StatusDonut } from "@/components/projects/StatusDonut";
@@ -18,7 +19,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ApiError } from "@/lib/api";
 import { getSuiteGraph } from "@/lib/graph";
 import { downloadReport, explainFailures, getReport } from "@/lib/reports";
-import { getSuite, runSuite } from "@/lib/test-suites";
+import { getSuite, replaySuite, runSuite } from "@/lib/test-suites";
 import { useApi } from "@/lib/useApi";
 import type {
   DependencyGraph,
@@ -103,12 +104,14 @@ const OUTCOME_BADGE: Record<
 export default function SuiteDetailPage() {
   const { project, canRun } = useProject();
   const { suiteId } = useParams<{ suiteId: string }>();
+  const router = useRouter();
   const toast = useToast();
 
   const [suite, setSuite] = useState<TestSuiteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [replaying, setReplaying] = useState(false);
 
   // Initial load.
   useEffect(() => {
@@ -235,6 +238,23 @@ export default function SuiteDetailPage() {
     }
   }
 
+  async function onReplay() {
+    setReplaying(true);
+    try {
+      const replay = await replaySuite(project.id, suiteId);
+      toast.success("Replay started.");
+      // A replay is a new, separate suite (unlike the old "Re-run", which
+      // reused this suite's id) — navigate there to watch it run.
+      router.push(`${backLink}/${replay.id}`);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to start replay",
+      );
+    } finally {
+      setReplaying(false);
+    }
+  }
+
   async function onExplain() {
     setExplaining(true);
     try {
@@ -287,7 +307,9 @@ export default function SuiteDetailPage() {
     );
   }
 
-  const runLabel = suite.name || `Run ${suite.id.slice(0, 8)}`;
+  const isReplay = suite.runType === "replay";
+  const runLabel =
+    suite.name || (isReplay ? "Replay" : `Run ${suite.id.slice(0, 8)}`);
   const canReRun = canRun && suite.status !== "running";
 
   // Outcome breakdown from the honest source (the status-code distribution).
@@ -312,6 +334,7 @@ export default function SuiteDetailPage() {
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{runLabel}</h2>
               <StatusBadge status={suite.status} />
+              {isReplay && <Badge tone="purple">Replay</Badge>}
             </div>
             <p className="mt-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
               {suite.targetUrl}
@@ -353,12 +376,28 @@ export default function SuiteDetailPage() {
                 </Button>
               </>
             )}
-            {(suite.status === "completed" || suite.status === "failed") &&
-              canReRun && (
-                <Button variant="secondary" size="sm" onClick={onRun} loading={starting}>
-                  Re-run
-                </Button>
-              )}
+            {suite.status === "failed" && canReRun && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onRun}
+                loading={starting}
+                title="This run never produced results — start it again with the AI engine."
+              >
+                Retry
+              </Button>
+            )}
+            {suite.status === "completed" && canReRun && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onReplay}
+                loading={replaying}
+                title="Resend this run's exact captured requests, in order, as a new comparable run — no AI regeneration."
+              >
+                Replay
+              </Button>
+            )}
           </div>
         </div>
 
@@ -391,6 +430,23 @@ export default function SuiteDetailPage() {
                 {suite.targetUrl}
               </dd>
             </div>
+            {isReplay && suite.originSuiteId && (
+              <div className="col-span-2">
+                <dt className="text-xs uppercase tracking-wider text-zinc-500">
+                  Replayed from
+                </dt>
+                <dd className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+                  <Link
+                    href={`${backLink}/${suite.originSuiteId}`}
+                    className="font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
+                  >
+                    View the original run →
+                  </Link>{" "}
+                  This resent that run&apos;s exact captured requests, in
+                  order — no AI generation occurred.
+                </dd>
+              </div>
+            )}
           </dl>
         </div>
         <div className="sm:border-l sm:border-zinc-200 dark:sm:border-zinc-800 sm:pl-6">
@@ -403,6 +459,13 @@ export default function SuiteDetailPage() {
           />
         </div>
       </Card>
+
+      <RunHistoryPanel
+        projectId={project.id}
+        suiteId={suite.id}
+        currentSuiteId={suite.id}
+        basePath={backLink}
+      />
 
       {/* Status-specific body */}
       {suite.status === "pending" && (
@@ -430,7 +493,7 @@ export default function SuiteDetailPage() {
       {suite.status === "failed" && (
         <Card className="p-8 text-center">
           <p className="text-sm text-red-600 dark:text-red-400">
-            This run failed to complete. You can re-run it, or check that the
+            This run failed to complete. You can retry it, or check that the
             target URL is reachable and the engine service is running.
           </p>
         </Card>

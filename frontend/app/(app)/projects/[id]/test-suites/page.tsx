@@ -28,11 +28,15 @@ export default function TestSuitesPage() {
   const router = useRouter();
   const toast = useToast();
   const {
-    data: suites,
+    data: allSuites,
     loading,
     error,
     reload,
   } = useApi(() => listSuites(project.id), [project.id]);
+
+  // Replays are reached via a suite's own "Run history" panel, not this list —
+  // keeps the top-level list to one row per AI-generated run.
+  const suites = allSuites?.filter((s) => s.runType !== "replay");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TestSuiteSummary | null>(

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
-import type { OperationDetail } from "@/lib/spec-parse";
+import type { OperationDetail, SchemaProp } from "@/lib/spec-parse";
 
 // Renders the parsed detail for one operation: auth, parameters, request body,
 // and responses. Consumers pass `detail = null` for endpoints not found in the
@@ -22,6 +22,44 @@ function Section({
       </p>
       {children}
     </div>
+  );
+}
+
+// Renders one schema property plus its nested children (indented, same list),
+// so an object field like `user` shows its inner fields inline instead of
+// only the top-level shape.
+function SchemaPropRow({
+  prop,
+  path,
+  depth,
+}: {
+  prop: SchemaProp;
+  path: string;
+  depth: number;
+}) {
+  return (
+    <>
+      <li
+        className="flex items-center gap-2 text-sm"
+        style={{ paddingLeft: depth * 14 }}
+      >
+        <span className="font-mono text-zinc-800 dark:text-zinc-200">{prop.name}</span>
+        <span className="text-xs text-zinc-500">{prop.type}</span>
+        {prop.required && (
+          <span className="text-xs font-medium text-red-600 dark:text-red-400">
+            required
+          </span>
+        )}
+      </li>
+      {prop.children?.map((child) => (
+        <SchemaPropRow
+          key={`${path}.${child.name}`}
+          prop={child}
+          path={`${path}.${child.name}`}
+          depth={depth + 1}
+        />
+      ))}
+    </>
   );
 }
 
@@ -102,15 +140,12 @@ export function EndpointDetailPanel({ detail }: { detail: OperationDetail }) {
             {requestBody.props.length > 0 && (
               <ul className="flex flex-col gap-1">
                 {requestBody.props.map((prop) => (
-                  <li key={prop.name} className="flex items-center gap-2 text-sm">
-                    <span className="font-mono text-zinc-800 dark:text-zinc-200">{prop.name}</span>
-                    <span className="text-xs text-zinc-500">{prop.type}</span>
-                    {prop.required && (
-                      <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                        required
-                      </span>
-                    )}
-                  </li>
+                  <SchemaPropRow
+                    key={prop.name}
+                    prop={prop}
+                    path={prop.name}
+                    depth={0}
+                  />
                 ))}
               </ul>
             )}

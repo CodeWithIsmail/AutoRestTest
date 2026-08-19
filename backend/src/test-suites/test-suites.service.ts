@@ -10,6 +10,7 @@ import {
   Prisma,
   Role,
   SuiteStatus,
+  TestRunType,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectAccessService } from '../common/project-access.service';
@@ -39,6 +40,8 @@ export interface TestSuiteSummary {
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
+  runType: TestRunType;
+  originSuiteId: string | null;
 }
 
 /** A single run with the extra async-job fields exposed. */
@@ -150,6 +153,8 @@ const SUMMARY_SELECT = {
   createdAt: true,
   startedAt: true,
   completedAt: true,
+  runType: true,
+  originSuiteId: true,
 } as const;
 
 const DETAIL_SELECT = {
@@ -166,6 +171,21 @@ const RUN_MUTATING_ROLES: Role[] = [Role.admin, Role.tester];
 // Background polling cadence + safety cap on how long we track a single job.
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 1500; // ~75 min at 3s
+
+// Headers captured at record time that must not be replayed verbatim — fetch
+// derives host/content-length itself, and stale values would corrupt or be
+// rejected outright. Mirrors engine-service/proxy.py's _DROP_REQUEST_HEADERS.
+const REPLAY_DROP_HEADERS = new Set([
+  'host',
+  'content-length',
+  'connection',
+  'accept-encoding',
+  'proxy-connection',
+]);
+
+// Mirrors engine-service/proxy.py's MAX_BODY_CHARS — same storage guard
+// applied to a replay's own captured responses.
+const MAX_REPLAY_BODY_CHARS = 100_000;
 
 @Injectable()
 export class TestSuitesService {
@@ -346,6 +366,100 @@ export class TestSuitesService {
 
     this.beginPolling(projectId, suiteId, job.jobId);
     return updated;
+  }
+
+  // --------------------------------------------------------------------------
+  // replay — POST /projects/:projectId/test-suites/:suiteId/replay
+  // Owner/admin/tester. Resends the origin run's captured request sequence
+  // verbatim against the target — a deterministic regression check, not a
+  // fresh AI-generated run. No engine-service involvement at all. Recorded as
+  // a new TestSuite linked back to the origin so both stay comparable and the
+  // original's results are never overwritten.
+  // --------------------------------------------------------------------------
+  async replay(
+    projectId: string,
+    suiteId: string,
+    userId: string,
+  ): Promise<TestSuiteDetail> {
+    await this.access.assertAccess(projectId, userId, RUN_MUTATING_ROLES);
+
+    const source = await this.prisma.testSuite.findFirst({
+      where: { id: suiteId, projectId },
+      select: {
+        id: true,
+        status: true,
+        targetUrl: true,
+        timeBudget: true,
+        mutationRate: true,
+        totalEndpoints: true,
+        originSuiteId: true,
+      },
+    });
+    if (!source) {
+      throw new NotFoundException('Test suite not found');
+    }
+    if (source.status === SuiteStatus.running) {
+      throw new ConflictException('Test suite is already running');
+    }
+
+    // A replay of a replay still resends the true origin's fixed sequence, so
+    // every replay in a chain stays directly comparable to its siblings.
+    const originId = source.originSuiteId ?? source.id;
+    const requestCount = await this.prisma.requestLog.count({
+      where: { testSuiteId: originId },
+    });
+    if (requestCount === 0) {
+      throw new BadRequestException(
+        'This run has no captured requests to replay.',
+      );
+    }
+
+    const replaySuite = await this.prisma.testSuite.create({
+      data: {
+        projectId,
+        triggeredById: userId,
+        name: null,
+        status: SuiteStatus.running,
+        targetUrl: source.targetUrl,
+        timeBudget: source.timeBudget,
+        mutationRate: source.mutationRate,
+        totalEndpoints: source.totalEndpoints,
+        runType: TestRunType.replay,
+        originSuiteId: originId,
+        startedAt: new Date(),
+      },
+      select: DETAIL_SELECT,
+    });
+
+    void this.executeReplay(replaySuite.id, originId);
+    return replaySuite;
+  }
+
+  // --------------------------------------------------------------------------
+  // getHistory — GET /projects/:projectId/test-suites/:suiteId/history
+  // The origin run plus every replay of it, oldest first. Any project member.
+  // --------------------------------------------------------------------------
+  async getHistory(
+    projectId: string,
+    suiteId: string,
+    userId: string,
+  ): Promise<TestSuiteSummary[]> {
+    await this.access.assertAccess(projectId, userId);
+
+    const suite = await this.prisma.testSuite.findFirst({
+      where: { id: suiteId, projectId },
+      select: { id: true, originSuiteId: true },
+    });
+    if (!suite) {
+      throw new NotFoundException('Test suite not found');
+    }
+    const originId = suite.originSuiteId ?? suite.id;
+
+    return this.prisma.testSuite.findMany({
+      where: { projectId, OR: [{ id: originId }, { originSuiteId: originId }] },
+      orderBy: { createdAt: 'asc' },
+      select: SUMMARY_SELECT,
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -836,6 +950,187 @@ export class TestSuitesService {
     );
   }
 
+  /**
+   * Sequentially resends one origin run's captured RequestLog rows verbatim
+   * against the target. No engine-service involvement — this is a
+   * deterministic HTTP replay, not a fresh AI-generated run. Best-effort per
+   * request: a network failure or a size-truncated original capture is
+   * recorded and the replay continues rather than aborting the sequence.
+   *
+   * Two independent pass/fail views are produced, matching how a generated
+   * run's results are read elsewhere in this service: the suite-level
+   * counts are request-level (2xx = pass, matching `persistResults`, so the
+   * history list's "passed/total" reads consistently across run types), while
+   * per-endpoint `TestCase` rows use "no 5xx = pass" (matching the report/UI
+   * heuristic in `endpointOutcome()`), since there's no AI judgment on this
+   * pass to fall back on.
+   */
+  private async executeReplay(
+    replaySuiteId: string,
+    originId: string,
+  ): Promise<void> {
+    try {
+      const logs = await this.prisma.requestLog.findMany({
+        where: { testSuiteId: originId },
+        orderBy: { seq: 'asc' },
+        select: {
+          endpointId: true,
+          method: true,
+          path: true,
+          url: true,
+          requestHeaders: true,
+          requestBody: true,
+          requestTruncated: true,
+        },
+      });
+
+      const rows: Prisma.RequestLogCreateManyInput[] = [];
+      const perEndpoint = new Map<string, Record<string, number>>();
+      let totalSent = 0;
+      let passedRequests = 0;
+
+      for (let i = 0; i < logs.length; i++) {
+        const log = logs[i];
+        const seq = i + 1;
+
+        if (log.requestTruncated) {
+          // The stored body is incomplete; sending it would corrupt the
+          // request rather than faithfully replay it.
+          rows.push({
+            testSuiteId: replaySuiteId,
+            endpointId: log.endpointId,
+            seq,
+            method: log.method,
+            path: log.path,
+            url: log.url,
+            statusCode: null,
+            durationMs: null,
+            requestHeaders: log.requestHeaders ?? Prisma.JsonNull,
+            requestBody: null,
+            requestTruncated: true,
+            responseHeaders: Prisma.JsonNull,
+            responseBody:
+              'Skipped: the original captured request body was truncated and cannot be replayed faithfully.',
+            responseTruncated: false,
+          });
+          continue;
+        }
+
+        const headers = filterReplayHeaders(log.requestHeaders);
+        const canHaveBody = !['GET', 'HEAD'].includes(log.method.toUpperCase());
+        const started = Date.now();
+        let statusCode: number | null = null;
+        let responseHeaders: Record<string, string> | null = null;
+        let responseText: string | null = null;
+        let responseTruncated = false;
+
+        try {
+          const res = await fetch(log.url, {
+            method: log.method,
+            headers,
+            body:
+              canHaveBody && log.requestBody != null
+                ? log.requestBody
+                : undefined,
+          });
+          statusCode = res.status;
+          responseHeaders = Object.fromEntries(res.headers.entries());
+          const capped = truncateForStorage(await res.text());
+          responseText = capped.text;
+          responseTruncated = capped.truncated;
+        } catch (err) {
+          this.logger.warn(
+            `Replay ${replaySuiteId}: request ${seq} (${log.method} ${log.path}) failed: ${String(err)}`,
+          );
+        }
+
+        totalSent += 1;
+        if (statusCode != null && Math.floor(statusCode / 100) === 2) {
+          passedRequests += 1;
+        }
+
+        rows.push({
+          testSuiteId: replaySuiteId,
+          endpointId: log.endpointId,
+          seq,
+          method: log.method,
+          path: log.path,
+          url: log.url,
+          statusCode,
+          durationMs: Date.now() - started,
+          requestHeaders: log.requestHeaders ?? Prisma.JsonNull,
+          requestBody: log.requestBody,
+          requestTruncated: false,
+          responseHeaders: responseHeaders ?? Prisma.JsonNull,
+          responseBody: responseText,
+          responseTruncated,
+        });
+
+        if (log.endpointId) {
+          const dist = perEndpoint.get(log.endpointId) ?? {};
+          const key = statusCode != null ? String(statusCode) : 'none';
+          dist[key] = (dist[key] ?? 0) + 1;
+          perEndpoint.set(log.endpointId, dist);
+        }
+      }
+
+      const CHUNK = 500;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        await this.prisma.requestLog.createMany({
+          data: rows.slice(i, i + CHUNK),
+        });
+      }
+
+      const caseRows: Prisma.TestCaseCreateManyInput[] = [];
+      let endpointsPassed = 0;
+      for (const [endpointId, dist] of perEndpoint) {
+        const dominant = dominantStatusCode(dist);
+        const casePassed = dominant != null && dominant < 500;
+        if (casePassed) endpointsPassed += 1;
+        caseRows.push({
+          testSuiteId: replaySuiteId,
+          endpointId,
+          statusCode: dominant,
+          responseBody: {
+            statusCodes: dist,
+            serverErrors: [],
+          },
+          passed: casePassed,
+          failureExplanation: casePassed
+            ? null
+            : 'Replayed request(s) for this endpoint returned a 5xx response.',
+        });
+      }
+      if (caseRows.length > 0) {
+        await this.prisma.testCase.createMany({ data: caseRows });
+      }
+
+      await this.prisma.testSuite.update({
+        where: { id: replaySuiteId },
+        data: {
+          status: SuiteStatus.completed,
+          completedAt: new Date(),
+          coveredEndpoints: perEndpoint.size,
+          totalTestCases: totalSent,
+          passedTestCases: passedRequests,
+          failedTestCases: Math.max(totalSent - passedRequests, 0),
+        },
+      });
+
+      this.logger.log(
+        `Replay ${replaySuiteId} (origin ${originId}) completed: ` +
+          `${endpointsPassed}/${caseRows.length} endpoints passed, ${totalSent}/${rows.length} requests sent.`,
+      );
+
+      await this.notifyRunFinished(replaySuiteId, 'completed');
+    } catch (err) {
+      this.logger.error(
+        `Replay ${replaySuiteId} (origin ${originId}) failed: ${String(err)}`,
+      );
+      await this.markFailed(replaySuiteId, 'Replay failed unexpectedly');
+    }
+  }
+
   private async markFailed(suiteId: string, message: string): Promise<void> {
     this.logger.error(`Suite ${suiteId} failed: ${message}`);
     try {
@@ -939,4 +1234,28 @@ function summarizeServerErrors(errors: unknown[]): string {
     return 'Operation had no successful (2xx) responses.';
   }
   return `${count} server error(s) recorded during the run.`;
+}
+
+/** Rebuild a fetch-safe header object from a captured RequestLog snapshot. */
+function filterReplayHeaders(raw: unknown): Record<string, string> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (REPLAY_DROP_HEADERS.has(key.toLowerCase())) continue;
+    if (typeof value === 'string') out[key] = value;
+  }
+  return out;
+}
+
+/** Cap a replayed response body the same way engine-service's proxy does. */
+function truncateForStorage(text: string): {
+  text: string;
+  truncated: boolean;
+} {
+  if (text.length > MAX_REPLAY_BODY_CHARS) {
+    return { text: text.slice(0, MAX_REPLAY_BODY_CHARS), truncated: true };
+  }
+  return { text, truncated: false };
 }

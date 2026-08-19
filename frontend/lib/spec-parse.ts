@@ -19,6 +19,8 @@ export interface SchemaProp {
   name: string;
   type: string;
   required: boolean;
+  /** Nested object/array<object> fields, one level per recursion. */
+  children?: SchemaProp[];
 }
 
 export interface RequestBodyDetail {
@@ -129,6 +131,41 @@ function extractParams(root: Dict, raw: unknown): ParamDetail[] {
   return out;
 }
 
+// Depth cap guards against self-referential schemas (e.g. a Comment whose
+// `replies` field is itself an array of Comment) recursing forever.
+const MAX_SCHEMA_DEPTH = 6;
+
+/** Recursively expand an object (or array<object>) schema's properties. */
+function extractObjectProps(
+  root: Dict,
+  schema: unknown,
+  depth: number,
+): SchemaProp[] {
+  if (depth >= MAX_SCHEMA_DEPTH) return [];
+  const s = deref(root, schema);
+  if (!isObj(s)) return [];
+  const objSchema = s.type === "array" ? deref(root, s.items) : s;
+  if (!isObj(objSchema) || !isObj(objSchema.properties)) return [];
+
+  const requiredList = Array.isArray(objSchema.required)
+    ? (objSchema.required as unknown[]).filter(
+        (x): x is string => typeof x === "string",
+      )
+    : [];
+
+  const out: SchemaProp[] = [];
+  for (const [name, propSchema] of Object.entries(objSchema.properties)) {
+    const children = extractObjectProps(root, propSchema, depth + 1);
+    out.push({
+      name,
+      type: typeLabel(root, propSchema),
+      required: requiredList.includes(name),
+      children: children.length > 0 ? children : undefined,
+    });
+  }
+  return out;
+}
+
 function extractRequestBody(
   root: Dict,
   raw: unknown,
@@ -156,23 +193,7 @@ function extractRequestBody(
     if (example === null && schema.example !== undefined) {
       example = safeJson(schema.example);
     }
-    // Show one level of properties (object, or array<object> items).
-    const objSchema =
-      schema.type === "array" ? deref(root, schema.items) : schema;
-    if (isObj(objSchema) && isObj(objSchema.properties)) {
-      const requiredList = Array.isArray(objSchema.required)
-        ? (objSchema.required as unknown[]).filter(
-            (x): x is string => typeof x === "string",
-          )
-        : [];
-      for (const [name, propSchema] of Object.entries(objSchema.properties)) {
-        props.push({
-          name,
-          type: typeLabel(root, propSchema),
-          required: requiredList.includes(name),
-        });
-      }
-    }
+    props.push(...extractObjectProps(root, schema, 0));
   }
 
   return {

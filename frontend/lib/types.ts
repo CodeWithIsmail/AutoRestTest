@@ -169,6 +169,13 @@ export interface CreateEndpointInput {
 
 export type SuiteStatus = "pending" | "running" | "completed" | "failed";
 
+/**
+ * "generated" suites are AI/MARL-driven runs against the current spec.
+ * "replay" suites resend a fixed, previously-captured request sequence from
+ * their origin suite — no AI engine involved, useful for regression checks.
+ */
+export type TestRunType = "generated" | "replay";
+
 export interface TestSuiteSummary {
   id: string;
   name: string | null;
@@ -184,6 +191,9 @@ export interface TestSuiteSummary {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  runType: TestRunType;
+  /** Set only on a "replay" suite: the id of the original AI-generated run. */
+  originSuiteId: string | null;
 }
 
 export interface TestSuiteDetail extends TestSuiteSummary {

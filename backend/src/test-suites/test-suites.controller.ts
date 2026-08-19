@@ -80,6 +80,35 @@ export class TestSuitesController {
   }
 
   /**
+   * POST /projects/:projectId/test-suites/:suiteId/replay
+   * Resends the origin run's captured request sequence verbatim against the
+   * target, as a new linked suite. No engine-service involvement.
+   * Owner/admin/tester.
+   */
+  @Post(':suiteId/replay')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async replay(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('suiteId', new ParseUUIDPipe()) suiteId: string,
+  ) {
+    return this.testSuitesService.replay(projectId, suiteId, req.user.id);
+  }
+
+  /**
+   * GET /projects/:projectId/test-suites/:suiteId/history
+   * The origin run plus every replay of it, oldest first. Any project member.
+   */
+  @Get(':suiteId/history')
+  async history(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('suiteId', new ParseUUIDPipe()) suiteId: string,
+  ) {
+    return this.testSuitesService.getHistory(projectId, suiteId, req.user.id);
+  }
+
+  /**
    * GET /projects/:projectId/test-suites/:suiteId/test-cases
    * Per-endpoint results for a run. Any project member.
    */

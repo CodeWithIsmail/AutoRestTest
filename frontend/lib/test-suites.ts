@@ -41,6 +41,27 @@ export function runSuite(
   );
 }
 
+/** Resends the origin run's captured request sequence as a new linked suite. */
+export function replaySuite(
+  projectId: string,
+  suiteId: string,
+): Promise<TestSuiteDetail> {
+  return apiFetch<TestSuiteDetail>(
+    `/projects/${projectId}/test-suites/${suiteId}/replay`,
+    { method: "POST" },
+  );
+}
+
+/** The origin run plus every replay of it, oldest first. */
+export function getRunHistory(
+  projectId: string,
+  suiteId: string,
+): Promise<TestSuiteSummary[]> {
+  return apiFetch<TestSuiteSummary[]>(
+    `/projects/${projectId}/test-suites/${suiteId}/history`,
+  );
+}
+
 export function getTestCases(
   projectId: string,
   suiteId: string,

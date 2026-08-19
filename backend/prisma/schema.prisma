@@ -42,6 +42,14 @@ enum SuiteStatus {
   failed
 }
 
+// "generated" suites are driven by the AI/MARL engine against the current
+// spec. "replay" suites resend a fixed, previously-captured request sequence
+// (see TestSuite.originSuiteId) — no engine-service involvement at all.
+enum TestRunType {
+  generated
+  replay
+}
+
 // Lifecycle of a codebase-to-OpenAPI generation job. Mirrors SuiteStatus:
 // both track an async job running in the Python engine-service.
 enum SpecGenStatus {
@@ -395,6 +403,15 @@ model TestSuite {
   name      String?
   status    SuiteStatus @default(pending)
   jobId     String? // Flask async job id
+  runType   TestRunType @default(generated)
+
+  // Set only on a "replay" suite: points at the original AI-generated suite
+  // whose RequestLog rows were resent verbatim. Always the true origin, never
+  // an intermediate replay, so every replay in a chain resends the same fixed
+  // baseline and stays directly comparable to its siblings.
+  originSuiteId String?
+  originSuite   TestSuite?  @relation("SuiteReplays", fields: [originSuiteId], references: [id], onDelete: Cascade)
+  replays       TestSuite[] @relation("SuiteReplays")
 
   // Run configuration — passed to the engine
   targetUrl    String
