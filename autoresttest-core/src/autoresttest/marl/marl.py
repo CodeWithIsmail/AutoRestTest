@@ -1526,7 +1526,10 @@ class QLearning:
                 ):
                     try:
                         response_content = json.loads(response.content)
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        # UnicodeDecodeError happens when the body isn't valid UTF-8
+                        # at all (e.g. a binary file download) — json.loads raises it
+                        # while decoding, before JSONDecodeError ever applies.
                         print("Error decoding JSON response content")
                         print("Response content: ", response.content)
                         response_content = None

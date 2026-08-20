@@ -925,17 +925,17 @@ export class TestSuitesService {
         : null,
       seq: r.seq,
       method: r.method,
-      path: r.path,
-      url: r.url,
+      path: stripNulBytes(r.path) ?? r.path,
+      url: stripNulBytes(r.url) ?? r.url,
       statusCode: r.statusCode ?? null,
       durationMs: r.durationMs ?? null,
-      requestHeaders: (r.requestHeaders ??
+      requestHeaders: (stripNulFromHeaders(r.requestHeaders) ??
         Prisma.JsonNull) as Prisma.InputJsonValue,
-      requestBody: r.requestBody ?? null,
+      requestBody: stripNulBytes(r.requestBody ?? null),
       requestTruncated: r.requestTruncated ?? false,
-      responseHeaders: (r.responseHeaders ??
+      responseHeaders: (stripNulFromHeaders(r.responseHeaders) ??
         Prisma.JsonNull) as Prisma.InputJsonValue,
-      responseBody: r.responseBody ?? null,
+      responseBody: stripNulBytes(r.responseBody ?? null),
       responseTruncated: r.responseTruncated ?? false,
     }));
 
@@ -1054,15 +1054,16 @@ export class TestSuitesService {
           endpointId: log.endpointId,
           seq,
           method: log.method,
-          path: log.path,
-          url: log.url,
+          path: stripNulBytes(log.path) ?? log.path,
+          url: stripNulBytes(log.url) ?? log.url,
           statusCode,
           durationMs: Date.now() - started,
           requestHeaders: log.requestHeaders ?? Prisma.JsonNull,
-          requestBody: log.requestBody,
+          requestBody: stripNulBytes(log.requestBody),
           requestTruncated: false,
-          responseHeaders: responseHeaders ?? Prisma.JsonNull,
-          responseBody: responseText,
+          responseHeaders: (stripNulFromHeaders(responseHeaders) ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
+          responseBody: stripNulBytes(responseText),
           responseTruncated,
         });
 
@@ -1258,4 +1259,32 @@ function truncateForStorage(text: string): {
     return { text: text.slice(0, MAX_REPLAY_BODY_CHARS), truncated: true };
   }
   return { text, truncated: false };
+}
+
+/**
+ * Postgres text/jsonb columns reject the NUL byte (0x00) outright, in any
+ * encoding. It shows up in more than just binary response bodies: this is a
+ * security fuzzer, and null-byte injection is a standard boundary-value
+ * payload it deliberately sends in path/query parameters (probing for
+ * null-byte-poisoning bugs in the target API) — so it can land in `path`,
+ * `url`, or header values just as easily as a body. Retrying the insert
+ * never helps since it's the same poison byte every attempt, so every
+ * captured string has to be sanitized before it reaches Prisma.
+ */
+const NUL_BYTE = String.fromCharCode(0);
+
+function stripNulBytes(text: string | null): string | null {
+  return text === null ? null : text.split(NUL_BYTE).join('');
+}
+
+/** Same NUL-stripping as `stripNulBytes`, applied to every header value. */
+function stripNulFromHeaders(
+  headers: Record<string, string> | null,
+): Record<string, string> | null {
+  if (!headers) return headers;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[key] = stripNulBytes(value) ?? value;
+  }
+  return out;
 }
