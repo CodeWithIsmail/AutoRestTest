@@ -1,4 +1,4 @@
-type Tone = "emerald" | "zinc" | "blue" | "amber" | "purple" | "red";
+export type Tone = "emerald" | "zinc" | "blue" | "amber" | "purple" | "red";
 
 const TONES: Record<Tone, string> = {
   emerald: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400",

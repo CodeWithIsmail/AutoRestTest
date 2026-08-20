@@ -1,10 +1,10 @@
 [spec]
-location = "D:\\SPL3\\AutoRestTest\\engine-service\\jobs\\0075f793e3d94807ade7ef63965f39e8\\spec_a122c12e0ab19f8d.yaml"
+location = "D:\\SPL3\\AutoRestTest\\engine-service\\jobs\\7442885be89b4f9d984a81d522d512c1\\spec_88b8260c5045f17d.yaml"
 recursion_limit = 50
 strict_validation = false
 
 [llm]
-engine = "meta/llama-3.1-8b-instruct"
+engine = "openai/gpt-oss-20b"
 creative_temperature = 1
 strict_temperature = 1
 api_base = "https://integrate.api.nvidia.com/v1"
@@ -25,8 +25,8 @@ parallelize = true
 max_workers = 3
 
 [cache]
-use_cached_graph = true
-use_cached_table = true
+use_cached_graph = false
+use_cached_table = false
 
 [export]
 dependency_graph = true
@@ -37,7 +37,7 @@ discount_factor = 0.9
 max_exploration = 1
 
 [request_generation]
-time_duration = 3600
+time_duration = 1200
 mutation_rate = 0.2
 
 [api]
@@ -46,4 +46,4 @@ host = "localhost"
 port = 8080
 
 [custom_headers]
-Authorization = "Bearer ${JWT_TOKEN}"
+Authorization = "Token token_ef72005d133770785b34fab1a0a811de"

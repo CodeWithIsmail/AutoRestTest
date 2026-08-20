@@ -76,6 +76,18 @@ export interface ProjectListItem {
   memberCount: number;
   /** The current user's role in this project. */
   role: Role;
+  /** Whether the project has no spec, an uploaded one, or an AI-generated one. */
+  specStatus: "none" | "uploaded" | "generated";
+  /** Set only while a spec-generation job is in-flight or awaiting review. */
+  generationStatus: SpecGenStatus | null;
+  /** The most recent test run, or null if none has ever been triggered. */
+  lastRun: {
+    status: SuiteStatus;
+    createdAt: string;
+    completedAt: string | null;
+  } | null;
+  /** Latest known activity: max of last edit, spec upload, and last run. */
+  lastActivityAt: string;
 }
 
 /** A member row inside a project detail. */

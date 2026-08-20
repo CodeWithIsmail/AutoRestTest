@@ -4,13 +4,25 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Role } from '../../generated/prisma/client';
+import {
+  Prisma,
+  Role,
+  SpecGenStatus,
+  SuiteStatus,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
 /** Default role assigned to a user when they create or own a project. */
 const OWNER_PROJECT_ROLE: Role = Role.admin;
+
+/** The project's most recent test run, as summarized for the list view. */
+export interface ProjectListItemLastRun {
+  status: SuiteStatus;
+  createdAt: Date;
+  completedAt: Date | null;
+}
 
 /** Shape of a single project as returned by GET /projects (list view). */
 export interface ProjectListItem {
@@ -22,6 +34,19 @@ export interface ProjectListItem {
   updatedAt: Date;
   memberCount: number;
   role: Role;
+  /** Whether the project has no spec, an uploaded one, or an AI-generated one. */
+  specStatus: 'none' | 'uploaded' | 'generated';
+  /** Set only while a spec-generation job is in-flight or awaiting review. */
+  generationStatus: SpecGenStatus | null;
+  /** The most recent test run, or null if none has ever been triggered. */
+  lastRun: ProjectListItemLastRun | null;
+  /**
+   * Latest known activity on the project: the max of `updatedAt`, the spec's
+   * upload time, and the latest run's completion/start time. `updatedAt`
+   * alone only reflects name/description edits, so it understates activity
+   * on projects that have been tested or had a spec uploaded since.
+   */
+  lastActivityAt: Date;
 }
 
 /** Shape of a single project as returned by GET /projects/:id (detail view). */
@@ -112,6 +137,17 @@ export class ProjectsService {
         members: {
           select: { role: true, userId: true },
         },
+        // 1:1 relations — cheap to include, no ordering/take needed.
+        spec: { select: { generatedByAI: true, uploadedAt: true } },
+        specGeneration: { select: { status: true } },
+        // TestSuite is unbounded per project, so only the latest row is
+        // pulled (rather than the members-style JS reduction) to avoid
+        // ever loading a project's full run history for a list page.
+        testSuites: {
+          select: { status: true, createdAt: true, completedAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
     });
 
@@ -126,6 +162,31 @@ export class ProjectsService {
         explicitMembership?.role ??
         (project.ownerId === userId ? OWNER_PROJECT_ROLE : Role.viewer);
 
+      const specStatus: ProjectListItem['specStatus'] = !project.spec
+        ? 'none'
+        : project.spec.generatedByAI
+          ? 'generated'
+          : 'uploaded';
+
+      const generationStatus = project.specGeneration?.status ?? null;
+
+      const latestSuite = project.testSuites[0] ?? null;
+      const lastRun: ProjectListItemLastRun | null = latestSuite
+        ? {
+            status: latestSuite.status,
+            createdAt: latestSuite.createdAt,
+            completedAt: latestSuite.completedAt,
+          }
+        : null;
+
+      const lastActivityAt = [
+        project.updatedAt,
+        project.spec?.uploadedAt,
+        lastRun?.completedAt ?? lastRun?.createdAt,
+      ]
+        .filter((d): d is Date => Boolean(d))
+        .reduce((max, d) => (d > max ? d : max), project.createdAt);
+
       return {
         id: project.id,
         name: project.name,
@@ -135,6 +196,10 @@ export class ProjectsService {
         updatedAt: project.updatedAt,
         memberCount: project.members.length,
         role,
+        specStatus,
+        generationStatus,
+        lastRun,
+        lastActivityAt,
       };
     });
   }
