@@ -12,8 +12,11 @@ import type {
 
 // --- members ----------------------------------------------------------------
 
-export function listMembers(projectId: string): Promise<MemberList> {
-  return apiFetch<MemberList>(`/projects/${projectId}/members`);
+export function listMembers(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<MemberList> {
+  return apiFetch<MemberList>(`/projects/${projectId}/members`, { signal });
 }
 
 export function updateMemberRole(
@@ -46,8 +49,11 @@ export function leaveProject(
 
 export function listInvitations(
   projectId: string,
+  signal?: AbortSignal,
 ): Promise<InvitationItem[]> {
-  return apiFetch<InvitationItem[]>(`/projects/${projectId}/invitations`);
+  return apiFetch<InvitationItem[]>(`/projects/${projectId}/invitations`, {
+    signal,
+  });
 }
 
 export function createInvitation(
@@ -82,8 +88,10 @@ export function revokeInvitation(
 
 // --- my invitations (the invitee's view) ------------------------------------
 
-export function listMyInvitations(): Promise<MyInvitationItem[]> {
-  return apiFetch<MyInvitationItem[]>(`/invitations`);
+export function listMyInvitations(
+  signal?: AbortSignal,
+): Promise<MyInvitationItem[]> {
+  return apiFetch<MyInvitationItem[]>(`/invitations`, { signal });
 }
 
 export function acceptInvitation(

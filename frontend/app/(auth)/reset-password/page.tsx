@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import { resetPassword } from "@/lib/auth";
+import { useMutation } from "@tanstack/react-query";
 
 /**
  * `useSearchParams` forces the client tree up to the nearest Suspense boundary
@@ -38,8 +39,22 @@ function ResetPasswordForm() {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Declared above the missing-token early return, because hooks cannot sit
+  // behind a conditional.
+  const resetMutation = useMutation({
+    mutationFn: () => resetPassword(token!, password),
+    onSuccess: () => {
+      toast.success("Password updated. Sign in with your new password.");
+      router.replace("/login");
+    },
+    // 401 unknown, 409 already used, 410 expired — the backend's message
+    // already says which, and each one ends with "request a new one".
+    onError: (err) => setError(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = resetMutation.isPending;
 
   if (!token) {
     return (
@@ -61,24 +76,14 @@ function ResetPasswordForm() {
     );
   }
 
-  async function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password !== confirm) {
       setError("Both passwords must match.");
       return;
     }
     setError(null);
-    setSubmitting(true);
-    try {
-      await resetPassword(token!, password);
-      toast.success("Password updated. Sign in with your new password.");
-      router.replace("/login");
-    } catch (err) {
-      // 401 unknown, 409 already used, 410 expired — the backend's message
-      // already says which, and each one ends with "request a new one".
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-      setSubmitting(false);
-    }
+    resetMutation.mutate();
   }
 
   return (

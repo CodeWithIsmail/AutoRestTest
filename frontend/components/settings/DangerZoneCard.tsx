@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { ApiError } from "@/lib/api";
-import { listProjects } from "@/lib/projects";
+import { errMsg } from "@/lib/api";
+import { projectsOptions } from "@/lib/queries";
 import { deleteAccount } from "@/lib/users";
-import { useApi } from "@/lib/useApi";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 export function DangerZoneCard({ userId }: { userId: string }) {
   const router = useRouter();
@@ -21,7 +21,7 @@ export function DangerZoneCard({ userId }: { userId: string }) {
   const [open, setOpen] = useState(false);
 
   // Owned projects go with the account, so say how many before asking.
-  const { data: projects } = useApi(listProjects, []);
+  const { data: projects } = useQuery(projectsOptions());
   const ownedCount = (projects ?? []).filter((p) => p.ownerId === userId).length;
 
   return (
@@ -66,18 +66,19 @@ function DeleteAccountModal({
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onConfirm() {
-    setSubmitting(true);
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteAccount(password),
+    // The caller signs out, which clears the cache in memory and on disk.
+    onSuccess: () => onDeleted(),
+    onError: (err) => setError(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = deleteMutation.isPending;
+
+  function onConfirm() {
     setError(null);
-    try {
-      await deleteAccount(password);
-      onDeleted();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-      setSubmitting(false);
-    }
+    deleteMutation.mutate();
   }
 
   return (
@@ -94,7 +95,7 @@ function DeleteAccountModal({
             variant="danger"
             loading={submitting}
             disabled={!password}
-            onClick={() => void onConfirm()}
+            onClick={onConfirm}
           >
             Delete permanently
           </Button>

@@ -1,12 +1,14 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { FormField, TextareaField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import { createProject, updateProject } from "@/lib/projects";
+import { qk } from "@/lib/query-keys";
 import type { ProjectDetail } from "@/lib/types";
 
 interface ProjectFormModalProps {
@@ -24,34 +26,41 @@ export function ProjectFormModal({
   project,
 }: ProjectFormModalProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const isEdit = Boolean(project);
 
   // The parent mounts this modal only when open, so initializing from props
   // gives a fresh, correctly-prefilled form on every open (no effect needed).
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const body = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-      };
-      const saved =
-        isEdit && project
-          ? await updateProject(project.id, body)
-          : await createProject(body);
+  // The modal owns the invalidation rather than the caller, because both
+  // callers (the list page and the project header) need the same refresh and
+  // one of them used to forget the list.
+  const saveMutation = useMutation({
+    mutationFn: (body: { name: string; description?: string }) =>
+      isEdit && project ? updateProject(project.id, body) : createProject(body),
+    onSuccess: (saved) => {
       toast.success(isEdit ? "Project updated." : "Project created.");
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+      if (project) {
+        queryClient.setQueryData(qk.projects.detail(project.id), saved);
+      }
       onSaved(saved);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => {
+      toast.error(errMsg(err, "Something went wrong"));
+    },
+  });
+
+  const submitting = saveMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    saveMutation.mutate({
+      name: name.trim(),
+      description: description.trim() || undefined,
+    });
   }
 
   return (

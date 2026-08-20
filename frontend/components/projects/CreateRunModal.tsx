@@ -5,8 +5,10 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
+import { qk } from "@/lib/query-keys";
 import { createSuite } from "@/lib/test-suites";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TestSuiteDetail } from "@/lib/types";
 
 interface CreateRunModalProps {
@@ -21,31 +23,38 @@ export function CreateRunModal({
   onCreated,
 }: CreateRunModalProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
   const [timeBudget, setTimeBudget] = useState("30");
   const [mutationRate, setMutationRate] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const suite = await createSuite(projectId, {
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createSuite(projectId, {
         name: name.trim() || undefined,
         targetUrl: targetUrl.trim(),
         timeBudget: Number(timeBudget),
         mutationRate:
           mutationRate.trim() === "" ? undefined : Number(mutationRate),
-      });
+      }),
+    onSuccess: (suite) => {
       toast.success("Run created.");
+      // Seed the detail the caller is about to navigate to, so the run page
+      // opens with data instead of a spinner.
+      queryClient.setQueryData(qk.suites.detail(projectId, suite.id), suite);
+      void queryClient.invalidateQueries({ queryKey: qk.suites.list(projectId) });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
       onCreated(suite);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => toast.error(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = createMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    createMutation.mutate();
   }
 
   return (

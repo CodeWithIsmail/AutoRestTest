@@ -1,8 +1,9 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { DependencyGraphView } from "@/components/graph/DependencyGraphView";
 import { EndpointFilterBar } from "@/components/projects/EndpointFilterBar";
 import type { OutcomeFilter } from "@/components/projects/EndpointFilterBar";
@@ -16,19 +17,16 @@ import { Badge, MethodBadge, StatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import { getSuiteGraph } from "@/lib/graph";
-import { downloadReport, explainFailures, getReport } from "@/lib/reports";
-import { getSuite, replaySuite, runSuite } from "@/lib/test-suites";
-import { useApi } from "@/lib/useApi";
-import type {
-  DependencyGraph,
-  ReportEndpoint,
-  SuiteReport,
-  TestSuiteDetail,
-} from "@/lib/types";
-
-const POLL_MS = 3000;
+import { errMsg } from "@/lib/api";
+import {
+  suiteGraphOptions,
+  suiteOptions,
+  suiteReportOptions,
+} from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { downloadReport, explainFailures } from "@/lib/reports";
+import { replaySuite, runSuite } from "@/lib/test-suites";
+import type { ReportEndpoint } from "@/lib/types";
 
 function StatCard({
   label,
@@ -107,82 +105,32 @@ export default function SuiteDetailPage() {
   const router = useRouter();
   const toast = useToast();
 
-  const [suite, setSuite] = useState<TestSuiteDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [replaying, setReplaying] = useState(false);
+  const queryClient = useQueryClient();
 
-  // Initial load.
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setLoading(true);
-      try {
-        const s = await getSuite(project.id, suiteId);
-        if (active) {
-          setSuite(s);
-          setError(null);
-        }
-      } catch (err) {
-        if (active) {
-          setError(err instanceof ApiError ? err.message : "Failed to load run");
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [project.id, suiteId]);
+  // Load + poll in one: the query re-runs itself every 3s while the run is in
+  // progress and stops the moment it isn't (see `suiteOptions`).
+  const {
+    data: suite,
+    isPending: loading,
+    error,
+  } = useQuery(suiteOptions(project.id, suiteId));
 
-  // Poll silently (no loading flicker) while a run is in progress.
   const status = suite?.status;
-  useEffect(() => {
-    if (status !== "running") return;
-    let active = true;
-    const iv = setInterval(async () => {
-      try {
-        const s = await getSuite(project.id, suiteId);
-        if (active) setSuite(s);
-      } catch {
-        // Transient poll errors are ignored; the next tick retries.
-      }
-    }, POLL_MS);
-    return () => {
-      active = false;
-      clearInterval(iv);
-    };
-  }, [status, project.id, suiteId]);
 
   // Computed report: only meaningful once completed (backend 409s otherwise).
-  // Keyed on status so it fetches when the run finishes.
-  const {
-    data: report,
-    loading: reportLoading,
-    reload: reloadReport,
-  } = useApi<SuiteReport | null>(
-    () =>
-      status === "completed"
-        ? getReport(project.id, suiteId)
-        : Promise.resolve(null),
-    [suiteId, status],
-  );
+  // `enabled` is what the old `Promise.resolve(null)` branch was standing in
+  // for; it fetches on its own the moment the poll reports completion.
+  const { data: report, isPending: reportLoading } = useQuery({
+    ...suiteReportOptions(project.id, suiteId),
+    enabled: status === "completed",
+  });
 
   // The graph snapshotted for this run. Fetched separately from the report
   // because it is large and only this one section reads it.
-  const { data: suiteGraph } = useApi<DependencyGraph | null>(
-    () =>
-      status === "completed"
-        ? getSuiteGraph(project.id, suiteId).then((r) => r.graph)
-        : Promise.resolve(null),
-    [suiteId, status],
-  );
-
-  const [explaining, setExplaining] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const { data: suiteGraph } = useQuery({
+    ...suiteGraphOptions(project.id, suiteId),
+    enabled: status === "completed",
+  });
 
   // Per-endpoint table filters. Page-local (not in the URL) and deliberately
   // preserved across the report reload that "Explain failures" triggers.
@@ -223,67 +171,75 @@ export default function SuiteDetailPage() {
     setCode("");
   }
 
-  async function onRun() {
-    setStarting(true);
-    try {
-      const s = await runSuite(project.id, suiteId);
-      setSuite(s);
-      toast.success("Run started.");
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Failed to start run",
-      );
-    } finally {
-      setStarting(false);
-    }
-  }
+  const backLink = `/projects/${project.id}/test-suites`;
 
-  async function onReplay() {
-    setReplaying(true);
-    try {
-      const replay = await replaySuite(project.id, suiteId);
+  const runMutation = useMutation({
+    mutationFn: () => runSuite(project.id, suiteId),
+    onSuccess: (started) => {
+      // Writing the response in flips status to "running", which starts the
+      // poll — no refetch needed to get there.
+      queryClient.setQueryData(qk.suites.detail(project.id, suiteId), started);
+      void queryClient.invalidateQueries({
+        queryKey: qk.suites.list(project.id),
+      });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+      toast.success("Run started.");
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to start run")),
+  });
+
+  const replayMutation = useMutation({
+    mutationFn: () => replaySuite(project.id, suiteId),
+    onSuccess: (replay) => {
       toast.success("Replay started.");
+      queryClient.setQueryData(
+        qk.suites.detail(project.id, replay.id),
+        replay,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: qk.suites.list(project.id),
+      });
+      // The origin run's history panel gains a row.
+      void queryClient.invalidateQueries({
+        queryKey: qk.suites.history(project.id, suiteId),
+      });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
       // A replay is a new, separate suite (unlike the old "Re-run", which
       // reused this suite's id) — navigate there to watch it run.
       router.push(`${backLink}/${replay.id}`);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Failed to start replay",
-      );
-    } finally {
-      setReplaying(false);
-    }
-  }
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to start replay")),
+  });
 
-  async function onExplain() {
-    setExplaining(true);
-    try {
-      const results = await explainFailures(project.id, suiteId);
+  const explainMutation = useMutation({
+    mutationFn: () => explainFailures(project.id, suiteId),
+    onSuccess: (results) => {
       toast.success(
         `Generated ${results.length} failure explanation${results.length === 1 ? "" : "s"}.`,
       );
-      reloadReport();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Failed to explain failures",
-      );
-    } finally {
-      setExplaining(false);
-    }
-  }
+      void queryClient.invalidateQueries({
+        queryKey: qk.suites.report(project.id, suiteId),
+      });
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to explain failures")),
+  });
 
-  async function onExport(format: "csv" | "pdf") {
-    setExporting(true);
-    try {
-      await downloadReport(project.id, suiteId, format);
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Export failed");
-    } finally {
-      setExporting(false);
-    }
-  }
+  // Not cached: this streams a file to the browser rather than returning data.
+  const exportMutation = useMutation({
+    mutationFn: (format: "csv" | "pdf") =>
+      downloadReport(project.id, suiteId, format),
+    onError: (err) => toast.error(errMsg(err, "Export failed")),
+  });
 
-  const backLink = `/projects/${project.id}/test-suites`;
+  const onRun = () => runMutation.mutate();
+  const onReplay = () => replayMutation.mutate();
+  const onExplain = () => explainMutation.mutate();
+  const onExport = (format: "csv" | "pdf") => exportMutation.mutate(format);
+
+  const starting = runMutation.isPending;
+  const replaying = replayMutation.isPending;
+  const explaining = explainMutation.isPending;
+  const exporting = exportMutation.isPending;
 
   if (loading) {
     return (
@@ -296,7 +252,9 @@ export default function SuiteDetailPage() {
   if (error || !suite) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Run not found."}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {errMsg(error, "Run not found.")}
+        </p>
         <Link
           href={backLink}
           className="mt-3 inline-block text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"

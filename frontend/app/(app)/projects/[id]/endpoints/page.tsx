@@ -11,15 +11,16 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DropdownMenu } from "@/components/ui/DropdownMenu";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import { deleteEndpoint, listEndpoints } from "@/lib/endpoints";
+import { errMsg } from "@/lib/api";
+import { deleteEndpoint } from "@/lib/endpoints";
+import { endpointsOptions, specOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
 import {
   getOperationDetail,
   parseSpec,
   type OperationDetail,
 } from "@/lib/spec-parse";
-import { getSpec } from "@/lib/specs";
-import { useApi } from "@/lib/useApi";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { EndpointItem } from "@/lib/types";
 
 function Chevron({ className = "" }: { className?: string }) {
@@ -42,16 +43,18 @@ function Chevron({ className = "" }: { className?: string }) {
 export default function EndpointsPage() {
   const { project, canManage } = useProject();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const {
     data: endpoints,
-    loading,
+    isPending,
     error,
-    reload,
-  } = useApi(() => listEndpoints(project.id), [project.id]);
+  } = useQuery(endpointsOptions(project.id));
 
   // The spec supplies per-operation detail (params, body, auth, responses).
   // Parsed once; each endpoint is matched to its operation by method + path.
-  const { data: spec } = useApi(() => getSpec(project.id), [project.id]);
+  // Shares its cache entry with the Spec tab, so switching between the two no
+  // longer re-downloads the document.
+  const { data: spec } = useQuery(specOptions(project.id));
   const specDoc = useMemo(
     () => (spec?.fileContent ? parseSpec(spec.fileContent) : null),
     [spec],
@@ -73,7 +76,6 @@ export default function EndpointsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<EndpointItem | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     if (!endpoints) return [];
@@ -87,22 +89,34 @@ export default function EndpointsPage() {
     );
   }, [endpoints, search]);
 
-  async function onConfirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteEndpoint(project.id, deleteTarget.id);
-      toast.success("Endpoint deleted.");
-      setDeleteTarget(null);
-      reload();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Delete failed",
+  // Optimistic: the row disappears on click and comes back if the server says
+  // no. Deleting one endpoint out of a list is safe to show before it is
+  // confirmed — nothing else on the page is derived from it.
+  const deleteMutation = useMutation({
+    mutationFn: (endpoint: EndpointItem) =>
+      deleteEndpoint(project.id, endpoint.id),
+    onMutate: async (endpoint) => {
+      const key = qk.projects.endpoints(project.id);
+      // Stop any in-flight refetch from landing on top of the edit below.
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<EndpointItem[]>(key);
+      queryClient.setQueryData<EndpointItem[]>(key, (current) =>
+        (current ?? []).filter((e) => e.id !== endpoint.id),
       );
-    } finally {
-      setDeleting(false);
-    }
-  }
+      setDeleteTarget(null);
+      return { previous, key };
+    },
+    onSuccess: () => toast.success("Endpoint deleted."),
+    onError: (err, _endpoint, context) => {
+      if (context) queryClient.setQueryData(context.key, context.previous);
+      toast.error(errMsg(err, "Delete failed"));
+    },
+    onSettled: (_data, _err, _endpoint, context) => {
+      if (context) {
+        void queryClient.invalidateQueries({ queryKey: context.key });
+      }
+    },
+  });
 
   return (
     <div>
@@ -120,18 +134,24 @@ export default function EndpointsPage() {
       </div>
 
       <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        {loading ? (
+        {isPending ? (
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           </div>
         ) : error ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {errMsg(error, "Failed to load endpoints")}
+            </p>
             <Button
               variant="secondary"
               size="sm"
               className="mt-3"
-              onClick={reload}
+              onClick={() =>
+                queryClient.invalidateQueries({
+                  queryKey: qk.projects.endpoints(project.id),
+                })
+              }
             >
               Retry
             </Button>
@@ -268,10 +288,7 @@ export default function EndpointsPage() {
         <AddEndpointModal
           projectId={project.id}
           onClose={() => setAddOpen(false)}
-          onSaved={() => {
-            setAddOpen(false);
-            reload();
-          }}
+          onSaved={() => setAddOpen(false)}
         />
       )}
 
@@ -289,8 +306,8 @@ export default function EndpointsPage() {
         }
         confirmLabel="Delete"
         danger
-        loading={deleting}
-        onConfirm={onConfirmDelete}
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
       />
     </div>

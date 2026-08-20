@@ -11,9 +11,11 @@ import type {
 export function getRequestLogSummary(
   projectId: string,
   suiteId: string,
+  signal?: AbortSignal,
 ): Promise<RequestLogEndpointSummary[]> {
   return apiFetch<RequestLogEndpointSummary[]>(
     `/projects/${projectId}/test-suites/${suiteId}/request-logs/summary`,
+    { signal },
   );
 }
 
@@ -26,6 +28,7 @@ export function listRequestLogs(
     page?: number;
     pageSize?: number;
   } = {},
+  signal?: AbortSignal,
 ): Promise<RequestLogPage> {
   const qs = new URLSearchParams();
   if (opts.endpointId) qs.set("endpointId", opts.endpointId);
@@ -37,6 +40,7 @@ export function listRequestLogs(
     `/projects/${projectId}/test-suites/${suiteId}/request-logs${
       query ? `?${query}` : ""
     }`,
+    { signal },
   );
 }
 
@@ -44,8 +48,10 @@ export function getRequestLog(
   projectId: string,
   suiteId: string,
   logId: string,
+  signal?: AbortSignal,
 ): Promise<RequestLogDetail> {
   return apiFetch<RequestLogDetail>(
     `/projects/${projectId}/test-suites/${suiteId}/request-logs/${logId}`,
+    { signal },
   );
 }

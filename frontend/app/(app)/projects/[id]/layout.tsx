@@ -10,9 +10,11 @@ import { ProjectFormModal } from "@/components/projects/ProjectFormModal";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import { deleteProject, getProject } from "@/lib/projects";
-import { useApi } from "@/lib/useApi";
+import { errMsg } from "@/lib/api";
+import { deleteProject } from "@/lib/projects";
+import { projectOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const TABS = [
   { label: "Overview", segment: "" },
@@ -34,18 +36,32 @@ export default function ProjectLayout({
   const toast = useToast();
   const { user } = useAuth();
 
+  const queryClient = useQueryClient();
   const {
     data: project,
-    loading,
+    isPending,
     error,
-    reload,
-  } = useApi(() => getProject(id), [id]);
+    refetch,
+  } = useQuery(projectOptions(id));
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  if (loading) {
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProject(id),
+    onSuccess: () => {
+      toast.success("Project deleted.");
+      // Drop this project's whole subtree, then refresh the list it was on.
+      queryClient.removeQueries({ queryKey: qk.projects.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+      router.push("/projects");
+    },
+    onError: (err) => {
+      toast.error(errMsg(err, "Failed to delete project"));
+    },
+  });
+
+  if (isPending) {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
@@ -56,7 +72,9 @@ export default function ProjectLayout({
   if (error || !project) {
     return (
       <div className="mx-auto max-w-3xl py-16 text-center">
-        <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Project not found."}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {errMsg(error, "Project not found.")}
+        </p>
         <Link
           href="/projects"
           className="mt-3 inline-block text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
@@ -75,23 +93,9 @@ export default function ProjectLayout({
   const canRun = canManage || myRole === "tester";
   const base = `/projects/${project.id}`;
 
-  async function onConfirmDelete() {
-    setDeleting(true);
-    try {
-      await deleteProject(id);
-      toast.success("Project deleted.");
-      router.push("/projects");
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Failed to delete project",
-      );
-      setDeleting(false);
-    }
-  }
-
   return (
     <ProjectContext.Provider
-      value={{ project, isOwner, canManage, canRun, reload }}
+      value={{ project, isOwner, canManage, canRun, reload: refetch }}
     >
       {/* Wider than the 5xl the rest of the app uses: with the sidebar gone,
           this is where the reclaimed width actually pays off — the dependency
@@ -166,7 +170,7 @@ export default function ProjectLayout({
           onClose={() => setEditOpen(false)}
           onSaved={() => {
             setEditOpen(false);
-            reload();
+            void refetch();
           }}
         />
       )}
@@ -184,8 +188,8 @@ export default function ProjectLayout({
         }
         confirmLabel="Delete"
         danger
-        loading={deleting}
-        onConfirm={onConfirmDelete}
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
         onClose={() => setDeleteOpen(false)}
       />
     </ProjectContext.Provider>

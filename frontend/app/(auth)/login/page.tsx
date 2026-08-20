@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toast";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/Input";
@@ -19,21 +20,23 @@ export default function LoginPage() {
   // them apart by the '@', which usernames may not contain.
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      await login(identifier, password);
+  // A 401 here means "wrong password" and must stay on this form. That is why
+  // the global unauthorized handler is wired to queries only, never mutations.
+  const loginMutation = useMutation({
+    mutationFn: () => login(identifier, password),
+    onSuccess: () => {
       toast.success("Signed in successfully.");
       router.replace("/projects");
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => toast.error(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = loginMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    loginMutation.mutate();
   }
 
   return (

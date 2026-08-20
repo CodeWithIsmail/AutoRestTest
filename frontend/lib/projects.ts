@@ -8,12 +8,15 @@ import type {
   UpdateProjectInput,
 } from "./types";
 
-export function listProjects(): Promise<ProjectListItem[]> {
-  return apiFetch<ProjectListItem[]>("/projects");
+export function listProjects(signal?: AbortSignal): Promise<ProjectListItem[]> {
+  return apiFetch<ProjectListItem[]>("/projects", { signal });
 }
 
-export function getProject(id: string): Promise<ProjectDetail> {
-  return apiFetch<ProjectDetail>(`/projects/${id}`);
+export function getProject(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ProjectDetail> {
+  return apiFetch<ProjectDetail>(`/projects/${id}`, { signal });
 }
 
 export function createProject(

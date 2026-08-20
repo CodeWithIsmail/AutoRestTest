@@ -1,32 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toast";
 import { Card } from "@/components/ui/Card";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
+import { qk } from "@/lib/query-keys";
 import type { UpdateNotificationsInput, User } from "@/lib/types";
 import { updateNotifications } from "@/lib/users";
 
 export function NotificationsCard({ user }: { user: User }) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { applyUser } = useAuth();
-  const [saving, setSaving] = useState<string | null>(null);
 
-  async function toggle(field: keyof UpdateNotificationsInput, value: boolean) {
-    setSaving(field);
-    try {
-      // Saved on change rather than behind a button: two checkboxes do not
-      // need a form, and the toast is enough confirmation.
-      const updated = await updateNotifications({ [field]: value });
-      applyUser(updated);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Could not save that",
+  // Optimistic: a checkbox that waits for a round trip before moving reads as
+  // broken. The box flips at once and flips back if the save fails.
+  const saveMutation = useMutation({
+    mutationFn: (input: UpdateNotificationsInput) =>
+      updateNotifications(input),
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: qk.me });
+      const previous = queryClient.getQueryData<User>(qk.me);
+      queryClient.setQueryData<User>(qk.me, (current) =>
+        current ? { ...current, ...input } : current,
       );
-    } finally {
-      setSaving(null);
-    }
+      return { previous };
+    },
+    // Saved on change rather than behind a button: two checkboxes do not need
+    // a form, and the box moving is enough confirmation.
+    onSuccess: (updated) => applyUser(updated),
+    onError: (err, _input, context) => {
+      if (context) queryClient.setQueryData(qk.me, context.previous);
+      toast.error(errMsg(err, "Could not save that"));
+    },
+  });
+
+  const saving = saveMutation.isPending
+    ? Object.keys(saveMutation.variables ?? {})[0]
+    : null;
+
+  function toggle(field: keyof UpdateNotificationsInput, value: boolean) {
+    saveMutation.mutate({ [field]: value });
   }
 
   return (
@@ -43,14 +58,14 @@ export function NotificationsCard({ user }: { user: User }) {
           hint="Email me when a run I started completes or fails."
           checked={user.notifyRunFinished}
           busy={saving === "notifyRunFinished"}
-          onChange={(v) => void toggle("notifyRunFinished", v)}
+          onChange={(v) => toggle("notifyRunFinished", v)}
         />
         <Toggle
           label="Project invitations"
           hint="Email me when someone invites me to a project. Invitations still appear in the app either way."
           checked={user.notifyInvitations}
           busy={saving === "notifyInvitations"}
-          onChange={(v) => void toggle("notifyInvitations", v)}
+          onChange={(v) => toggle("notifyInvitations", v)}
         />
       </div>
     </Card>

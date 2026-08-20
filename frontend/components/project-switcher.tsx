@@ -2,8 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { DropdownMenu, type MenuItem } from "@/components/ui/DropdownMenu";
-import { listProjects } from "@/lib/projects";
-import { useApi } from "@/lib/useApi";
+import { projectsOptions } from "@/lib/queries";
+import { useQuery } from "@tanstack/react-query";
 
 /** Pull the project id out of /projects/<id>/... , or null elsewhere. */
 export function currentProjectId(pathname: string): string | null {
@@ -29,10 +29,10 @@ export function ProjectSwitcher() {
   const pathname = usePathname();
   const projectId = currentProjectId(pathname);
 
-  // Keyed on the project rather than the pathname: refetching on every
-  // navigation would be a request per tab click, and the only time the list can
-  // be meaningfully stale is when you have just moved to a project it predates.
-  const { data: projects } = useApi(listProjects, [projectId]);
+  // Shares one cache entry with the projects page and the settings danger
+  // zone, so mounting this in the shell costs no request of its own — it used
+  // to re-fetch the whole list every time the current project changed.
+  const { data: projects } = useQuery(projectsOptions());
 
   if (!projectId) return null;
 

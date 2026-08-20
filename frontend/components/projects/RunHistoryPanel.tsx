@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import { getRunHistory } from "@/lib/test-suites";
-import { useApi } from "@/lib/useApi";
+import { suiteHistoryOptions } from "@/lib/queries";
+import { useQuery } from "@tanstack/react-query";
 import type { TestSuiteSummary } from "@/lib/types";
 
 function formatDate(iso: string): string {
@@ -34,12 +34,11 @@ export function RunHistoryPanel({
   currentSuiteId: string;
   basePath: string;
 }) {
-  const { data: history, loading } = useApi(
-    () => getRunHistory(projectId, suiteId),
-    [projectId, suiteId],
+  const { data: history, isPending } = useQuery(
+    suiteHistoryOptions(projectId, suiteId),
   );
 
-  if (loading) {
+  if (isPending) {
     return (
       <Card className="flex justify-center p-6">
         <Spinner className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />

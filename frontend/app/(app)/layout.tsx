@@ -10,8 +10,8 @@ import { useToast } from "@/components/toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { DropdownMenu } from "@/components/ui/DropdownMenu";
 import { Spinner } from "@/components/ui/Spinner";
-import { listMyInvitations } from "@/lib/collaboration";
-import { useApi } from "@/lib/useApi";
+import { myInvitationsOptions } from "@/lib/queries";
+import { useQuery } from "@tanstack/react-query";
 
 // Inline SVGs keep the app dependency-free (no icon library). 20px, 1.6 stroke.
 function InvitationsIcon({ className = "" }: { className?: string }) {
@@ -54,7 +54,7 @@ export default function AppLayout({
   // Pending invites are the app's only in-app notification, so the count is
   // surfaced in the bar itself rather than only inside the account menu —
   // something you have to open to discover is not a notification.
-  const { data: myInvites } = useApi(listMyInvitations, []);
+  const { data: myInvites } = useQuery(myInvitationsOptions());
   const pendingInvites = myInvites?.length ?? 0;
 
   // Guard: once the initial auth check is done, redirect out if not signed in.

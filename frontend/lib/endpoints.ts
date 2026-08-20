@@ -3,8 +3,13 @@
 import { apiFetch } from "./api";
 import type { CreateEndpointInput, EndpointItem } from "./types";
 
-export function listEndpoints(projectId: string): Promise<EndpointItem[]> {
-  return apiFetch<EndpointItem[]>(`/projects/${projectId}/endpoints`);
+export function listEndpoints(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<EndpointItem[]> {
+  return apiFetch<EndpointItem[]>(`/projects/${projectId}/endpoints`, {
+    signal,
+  });
 }
 
 export function createEndpoint(

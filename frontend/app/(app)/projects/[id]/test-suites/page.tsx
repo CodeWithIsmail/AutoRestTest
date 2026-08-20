@@ -1,7 +1,8 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useProject } from "@/components/projects/project-context";
 import { CreateRunModal } from "@/components/projects/CreateRunModal";
 import { useToast } from "@/components/toast";
@@ -10,9 +11,10 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DropdownMenu } from "@/components/ui/DropdownMenu";
 import { Spinner } from "@/components/ui/Spinner";
 import { StatusBadge } from "@/components/ui/Badge";
-import { ApiError } from "@/lib/api";
-import { deleteSuite, listSuites } from "@/lib/test-suites";
-import { useApi } from "@/lib/useApi";
+import { errMsg } from "@/lib/api";
+import { suiteOptions, suitesOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { deleteSuite } from "@/lib/test-suites";
 import type { TestSuiteSummary } from "@/lib/types";
 
 function formatDate(iso: string): string {
@@ -27,12 +29,17 @@ export default function TestSuitesPage() {
   const { project, canRun, canManage } = useProject();
   const router = useRouter();
   const toast = useToast();
-  const {
-    data: allSuites,
-    loading,
-    error,
-    reload,
-  } = useApi(() => listSuites(project.id), [project.id]);
+  const queryClient = useQueryClient();
+  const { data: allSuites, isPending, error } = useQuery(
+    suitesOptions(project.id),
+  );
+
+  const prefetchSuite = useCallback(
+    (suiteId: string) => {
+      void queryClient.prefetchQuery(suiteOptions(project.id, suiteId));
+    },
+    [queryClient, project.id],
+  );
 
   // Replays are reached via a suite's own "Run history" panel, not this list —
   // keeps the top-level list to one row per AI-generated run.
@@ -42,22 +49,23 @@ export default function TestSuitesPage() {
   const [deleteTarget, setDeleteTarget] = useState<TestSuiteSummary | null>(
     null,
   );
-  const [deleting, setDeleting] = useState(false);
 
-  async function onConfirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteSuite(project.id, deleteTarget.id);
+  const deleteMutation = useMutation({
+    mutationFn: (suite: TestSuiteSummary) => deleteSuite(project.id, suite.id),
+    onSuccess: (_result, suite) => {
       toast.success("Run deleted.");
       setDeleteTarget(null);
-      reload();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Delete failed");
-    } finally {
-      setDeleting(false);
-    }
-  }
+      queryClient.removeQueries({
+        queryKey: qk.suites.detail(project.id, suite.id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: qk.suites.list(project.id),
+      });
+      // The projects list carries this project's last-run summary.
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+    },
+    onError: (err) => toast.error(errMsg(err, "Delete failed")),
+  });
 
   const base = `/projects/${project.id}/test-suites`;
 
@@ -73,18 +81,24 @@ export default function TestSuitesPage() {
       </div>
 
       <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        {loading ? (
+        {isPending ? (
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           </div>
         ) : error ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {errMsg(error, "Failed to load runs")}
+            </p>
             <Button
               variant="secondary"
               size="sm"
               className="mt-3"
-              onClick={reload}
+              onClick={() =>
+                queryClient.invalidateQueries({
+                  queryKey: qk.suites.list(project.id),
+                })
+              }
             >
               Retry
             </Button>
@@ -117,6 +131,7 @@ export default function TestSuitesPage() {
                 <tr
                   key={s.id}
                   onClick={() => router.push(`${base}/${s.id}`)}
+                  onMouseEnter={() => prefetchSuite(s.id)}
                   className="cursor-pointer border-b border-zinc-200 dark:border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/40"
                 >
                   <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">
@@ -193,8 +208,8 @@ export default function TestSuitesPage() {
         }
         confirmLabel="Delete"
         danger
-        loading={deleting}
-        onConfirm={onConfirmDelete}
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
       />
     </div>

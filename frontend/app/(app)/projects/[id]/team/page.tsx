@@ -11,18 +11,23 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import {
   leaveProject,
-  listInvitations,
-  listMembers,
   removeMember,
   resendInvitation,
   revokeInvitation,
   updateMemberRole,
 } from "@/lib/collaboration";
-import { useApi } from "@/lib/useApi";
-import type { InvitationItem, MemberItem, Role } from "@/lib/types";
+import { membersOptions, projectInvitationsOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  InvitationItem,
+  MemberItem,
+  MemberList,
+  Role,
+} from "@/lib/types";
 
 const ROLES: Role[] = ["admin", "tester", "viewer"];
 
@@ -53,100 +58,139 @@ export default function TeamPage() {
   const router = useRouter();
   const toast = useToast();
 
-  const {
-    data: memberData,
-    loading,
-    error,
-    reload: reloadMembers,
-  } = useApi(() => listMembers(project.id), [project.id]);
+  const queryClient = useQueryClient();
+  const membersKey = qk.projects.members(project.id);
+
+  const { data: memberData, isPending, error } = useQuery(
+    membersOptions(project.id),
+  );
 
   // Invitations are owner/admin-only on the backend; only fetch when allowed.
-  const { data: invitations, reload: reloadInvites } = useApi<InvitationItem[]>(
-    () => (canManage ? listInvitations(project.id) : Promise.resolve([])),
-    [project.id],
-  );
+  // With `enabled: false` the data is `undefined` rather than the `[]` the old
+  // conditional promise returned, so consumers below default it.
+  const { data: invitations } = useQuery({
+    ...projectInvitationsOptions(project.id),
+    enabled: canManage,
+  });
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<MemberItem | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<InvitationItem | null>(null);
-  const [busy, setBusy] = useState(false);
-  // Its own flag rather than `busy`, which the confirm dialogs share — resending
-  // must only disable the one row's button.
+  // Its own flag rather than the shared confirm-dialog state — resending must
+  // only disable the one row's button.
   const [resendingId, setResendingId] = useState<string | null>(null);
 
-  async function onChangeRole(m: MemberItem, role: Role) {
-    try {
-      await updateMemberRole(project.id, m.userId, role);
-      toast.success(`${m.username} is now ${role}.`);
-      reloadMembers();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to change role");
-    }
+  function reloadMembers() {
+    void queryClient.invalidateQueries({ queryKey: membersKey });
   }
 
-  async function onRemove() {
-    if (!removeTarget) return;
-    setBusy(true);
-    try {
-      await removeMember(project.id, removeTarget.userId);
+  function reloadInvites() {
+    void queryClient.invalidateQueries({
+      queryKey: qk.projects.invitations(project.id),
+    });
+  }
+
+  // Optimistic: the select shows the new role the instant it is picked. This
+  // is the one control on the page that previously had no in-flight state at
+  // all, so a slow request left it silently showing the old value.
+  const roleMutation = useMutation({
+    mutationFn: ({ member, role }: { member: MemberItem; role: Role }) =>
+      updateMemberRole(project.id, member.userId, role),
+    onMutate: async ({ member, role }) => {
+      await queryClient.cancelQueries({ queryKey: membersKey });
+      const previous = queryClient.getQueryData<MemberList>(membersKey);
+      queryClient.setQueryData<MemberList>(membersKey, (current) =>
+        current
+          ? {
+              ...current,
+              members: current.members.map((m) =>
+                m.userId === member.userId ? { ...m, role } : m,
+              ),
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onSuccess: (_result, { member, role }) =>
+      toast.success(`${member.username} is now ${role}.`),
+    onError: (err, _vars, context) => {
+      if (context) queryClient.setQueryData(membersKey, context.previous);
+      toast.error(errMsg(err, "Failed to change role"));
+    },
+    onSettled: reloadMembers,
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (member: MemberItem) =>
+      removeMember(project.id, member.userId),
+    onSuccess: () => {
       toast.success("Member removed.");
       setRemoveTarget(null);
       reloadMembers();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to remove");
-    } finally {
-      setBusy(false);
-    }
-  }
+      // Member counts live on the project detail and the projects list.
+      void queryClient.invalidateQueries({
+        queryKey: qk.projects.detail(project.id),
+      });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to remove")),
+  });
 
-  async function onLeave() {
-    setBusy(true);
-    try {
-      await leaveProject(project.id);
+  const leaveMutation = useMutation({
+    mutationFn: () => leaveProject(project.id),
+    onSuccess: () => {
       toast.success("You have left the project.");
+      queryClient.removeQueries({ queryKey: qk.projects.detail(project.id) });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
       router.push("/projects");
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to leave");
-      setBusy(false);
-    }
-  }
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to leave")),
+  });
 
-  async function onRevoke() {
-    if (!revokeTarget) return;
-    setBusy(true);
-    try {
-      await revokeInvitation(project.id, revokeTarget.id);
+  const revokeMutation = useMutation({
+    mutationFn: (invitation: InvitationItem) =>
+      revokeInvitation(project.id, invitation.id),
+    onSuccess: () => {
       toast.success("Invitation revoked.");
       setRevokeTarget(null);
       reloadInvites();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to revoke");
-    } finally {
-      setBusy(false);
-    }
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to revoke")),
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: (invitation: InvitationItem) =>
+      resendInvitation(project.id, invitation.id),
+    onSuccess: (_result, invitation) =>
+      toast.success(`Invitation email sent to ${invitation.email}.`),
+    onError: (err) => toast.error(errMsg(err, "Failed to send the email")),
+    onSettled: () => setResendingId(null),
+  });
+
+  const onChangeRole = (m: MemberItem, role: Role) =>
+    roleMutation.mutate({ member: m, role });
+  const onRemove = () => removeTarget && removeMutation.mutate(removeTarget);
+  const onLeave = () => leaveMutation.mutate();
+  const onRevoke = () => revokeTarget && revokeMutation.mutate(revokeTarget);
+
+  function onResend(inv: InvitationItem) {
+    setResendingId(inv.id);
+    resendMutation.mutate(inv);
   }
 
-  async function onResend(inv: InvitationItem) {
-    setResendingId(inv.id);
-    try {
-      await resendInvitation(project.id, inv.id);
-      toast.success(`Invitation email sent to ${inv.email}.`);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Failed to send the email",
-      );
-    } finally {
-      setResendingId(null);
-    }
-  }
+  // Shared by the confirm dialogs, as before.
+  const busy =
+    removeMutation.isPending ||
+    leaveMutation.isPending ||
+    revokeMutation.isPending;
 
   function copyToken(inv: InvitationItem) {
     void navigator.clipboard?.writeText(inv.token);
     toast.success("Invite token copied.");
   }
 
-  if (loading) {
+  if (isPending) {
     return (
       <div className="flex justify-center py-16">
         <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
@@ -157,7 +201,9 @@ export default function TeamPage() {
   if (error || !memberData) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-red-600 dark:text-red-400">{error ?? "Failed to load team."}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {errMsg(error, "Failed to load team.")}
+        </p>
       </div>
     );
   }

@@ -55,18 +55,38 @@ function extractMessage(body: unknown, fallback: string): string {
 
 // --- core fetch -------------------------------------------------------------
 
+/**
+ * Pulls a displayable message out of whatever a failed request threw.
+ *
+ * `useApi` used to hand components a pre-extracted `error: string | null`;
+ * TanStack Query hands back an `Error`, so the extraction moves here and the
+ * screens call this instead.
+ */
+export function errMsg(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
 interface ApiFetchOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   /** Set false for public endpoints (login/register). Defaults to true. */
   auth?: boolean;
+  /**
+   * Abort signal, supplied by TanStack Query. Navigating away from a screen
+   * now actually cancels its in-flight reads instead of letting them run to
+   * completion and discarding the result — which matters here because every
+   * authenticated request costs a DB user lookup on the backend.
+   */
+  signal?: AbortSignal;
 }
 
 export async function apiFetch<T>(
   path: string,
   opts: ApiFetchOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, auth = true } = opts;
+  const { method = "GET", body, auth = true, signal } = opts;
 
   // FormData (file uploads) must be sent as-is: let the browser set the
   // multipart Content-Type + boundary, and don't JSON-stringify.
@@ -87,6 +107,7 @@ export async function apiFetch<T>(
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
+      signal,
       body:
         body === undefined
           ? undefined
@@ -94,7 +115,12 @@ export async function apiFetch<T>(
             ? (body as FormData)
             : JSON.stringify(body),
     });
-  } catch {
+  } catch (err) {
+    // A cancelled request is not a failure. It has to propagate untouched so
+    // the caller can recognise it as an abort — flattening it into an ApiError
+    // would make TanStack Query treat a routine navigation as a network
+    // outage, retry it, and flash "Cannot reach the server" on the way out.
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
     throw new ApiError(0, "Cannot reach the server. Is the backend running?");
   }
 

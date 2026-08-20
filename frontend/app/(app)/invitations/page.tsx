@@ -7,13 +7,11 @@ import { Badge, roleTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import {
-  acceptInvitation,
-  declineInvitation,
-  listMyInvitations,
-} from "@/lib/collaboration";
-import { useApi } from "@/lib/useApi";
+import { errMsg } from "@/lib/api";
+import { acceptInvitation, declineInvitation } from "@/lib/collaboration";
+import { myInvitationsOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -50,40 +48,54 @@ function MyInvitations() {
   // an undifferentiated list.
   const highlightToken = useSearchParams().get("token");
 
-  const {
-    data: invitations,
-    loading,
-    error,
-    reload,
-  } = useApi(listMyInvitations, []);
+  const queryClient = useQueryClient();
+  const { data: invitations, isPending, error } = useQuery(
+    myInvitationsOptions(),
+  );
 
   // Token currently being acted on, to disable its buttons.
   const [busyToken, setBusyToken] = useState<string | null>(null);
 
-  async function onAccept(token: string) {
-    setBusyToken(token);
-    try {
-      const res = await acceptInvitation(token);
-      toast.success("Invitation accepted.");
-      router.push(`/projects/${res.projectId}`);
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to accept");
-      setBusyToken(null);
-      reload();
-    }
+  // Both outcomes refresh the pending list — which is also what feeds the
+  // count in the app header, so the badge now decrements on its own.
+  function refreshInvitations() {
+    void queryClient.invalidateQueries({ queryKey: qk.myInvitations });
   }
 
-  async function onDecline(token: string) {
-    setBusyToken(token);
-    try {
-      await declineInvitation(token);
-      toast.success("Invitation declined.");
-      reload();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Failed to decline");
-    } finally {
+  const acceptMutation = useMutation({
+    mutationFn: (token: string) => acceptInvitation(token),
+    onSuccess: (res) => {
+      toast.success("Invitation accepted.");
+      refreshInvitations();
+      // Joining a project changes what the projects list contains.
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+      router.push(`/projects/${res.projectId}`);
+    },
+    onError: (err) => {
+      toast.error(errMsg(err, "Failed to accept"));
       setBusyToken(null);
-    }
+      refreshInvitations();
+    },
+  });
+
+  const declineMutation = useMutation({
+    mutationFn: (token: string) => declineInvitation(token),
+    onSuccess: () => {
+      toast.success("Invitation declined.");
+      refreshInvitations();
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to decline")),
+    onSettled: () => setBusyToken(null),
+  });
+
+  function onAccept(token: string) {
+    setBusyToken(token);
+    acceptMutation.mutate(token);
+  }
+
+  function onDecline(token: string) {
+    setBusyToken(token);
+    declineMutation.mutate(token);
   }
 
   return (
@@ -94,18 +106,20 @@ function MyInvitations() {
       </p>
 
       <div className="mt-6">
-        {loading ? (
+        {isPending ? (
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
           </div>
         ) : error ? (
           <div className="py-12 text-center">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {errMsg(error, "Failed to load invitations")}
+            </p>
             <Button
               variant="secondary"
               size="sm"
               className="mt-3"
-              onClick={reload}
+              onClick={refreshInvitations}
             >
               Retry
             </Button>

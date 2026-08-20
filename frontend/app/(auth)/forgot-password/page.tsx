@@ -5,31 +5,29 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/Input";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import { forgotPassword } from "@/lib/auth";
+import { useMutation } from "@tanstack/react-query";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  const requestMutation = useMutation({
+    mutationFn: () => forgotPassword(email),
+    onSuccess: () => setSent(true),
+    // The endpoint refuses to say whether the address exists, so the only
+    // errors that reach here are rate limiting and the server being down.
+    onError: (err) => setError(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = requestMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
-    try {
-      await forgotPassword(email);
-      setSent(true);
-    } catch (err) {
-      // The endpoint refuses to say whether the address exists, so the only
-      // errors that reach here are rate limiting and the server being down.
-      setError(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-    } finally {
-      setSubmitting(false);
-    }
+    requestMutation.mutate();
   }
 
   if (sent) {

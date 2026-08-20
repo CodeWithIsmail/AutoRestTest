@@ -8,7 +8,8 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
 import { resendSignupCode, verifySignup } from "@/lib/auth";
 
 const LENGTH = 6;
@@ -43,10 +44,38 @@ function VerifySignupForm() {
   const email = useSearchParams().get("email") ?? "";
 
   const [digits, setDigits] = useState<string[]>(Array(LENGTH).fill(""));
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Declared above the missing-email early return, because hooks cannot sit
+  // behind a conditional.
+  const verifyMutation = useMutation({
+    mutationFn: (value: string) => verifySignup(email, value),
+    onSuccess: (res) => {
+      // The account is created by this call — not by /auth/register — so this
+      // is also where the session begins.
+      applySession(res.accessToken, res.user);
+      toast.success("Welcome aboard — your account is ready.");
+      router.replace("/projects");
+    },
+    onError: (err) => {
+      setError(errMsg(err, "Something went wrong"));
+      setDigits(Array(LENGTH).fill(""));
+      inputs.current[0]?.focus();
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: () => resendSignupCode(email),
+    onSuccess: (res) => toast.success(res.message),
+    onError: (err) => {
+      toast.error(errMsg(err, "Could not resend"));
+      setCooldown(0);
+    },
+  });
+
+  const submitting = verifyMutation.isPending;
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -76,22 +105,9 @@ function VerifySignupForm() {
     );
   }
 
-  async function submit(value: string) {
-    setSubmitting(true);
+  function submit(value: string) {
     setError(null);
-    try {
-      // The account is created by this call — not by /auth/register — so this
-      // is also where the session begins.
-      const res = await verifySignup(email, value);
-      applySession(res.accessToken, res.user);
-      toast.success("Welcome aboard — your account is ready.");
-      router.replace("/projects");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-      setDigits(Array(LENGTH).fill(""));
-      inputs.current[0]?.focus();
-      setSubmitting(false);
-    }
+    verifyMutation.mutate(value);
   }
 
   function setDigit(index: number, value: string) {
@@ -124,16 +140,10 @@ function VerifySignupForm() {
     }
   }
 
-  async function onResend() {
+  function onResend() {
     setCooldown(RESEND_COOLDOWN);
     setError(null);
-    try {
-      const res = await resendSignupCode(email);
-      toast.success(res.message);
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not resend");
-      setCooldown(0);
-    }
+    resendMutation.mutate();
   }
 
   return (

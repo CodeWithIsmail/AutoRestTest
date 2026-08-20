@@ -5,8 +5,10 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { FormField, TextareaField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import { createEndpoint } from "@/lib/endpoints";
+import { qk } from "@/lib/query-keys";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { EndpointItem, HttpMethod } from "@/lib/types";
 
 const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
@@ -23,28 +25,33 @@ export function AddEndpointModal({
   onSaved,
 }: AddEndpointModalProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [method, setMethod] = useState<HttpMethod>("GET");
   const [path, setPath] = useState("");
   const [description, setDescription] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const saved = await createEndpoint(projectId, {
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createEndpoint(projectId, {
         method,
         path: path.trim(),
         description: description.trim() || undefined,
-      });
+      }),
+    onSuccess: (saved) => {
       toast.success("Endpoint added.");
+      void queryClient.invalidateQueries({
+        queryKey: qk.projects.endpoints(projectId),
+      });
       onSaved(saved);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => toast.error(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = createMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    createMutation.mutate();
   }
 
   return (

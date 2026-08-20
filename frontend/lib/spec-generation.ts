@@ -34,10 +34,12 @@ export function startGeneration(
  */
 export async function getGeneration(
   projectId: string,
+  signal?: AbortSignal,
 ): Promise<SpecGeneration | null> {
   try {
     return await apiFetch<SpecGeneration>(
       `/projects/${projectId}/spec/generate`,
+      { signal },
     );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return null;

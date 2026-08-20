@@ -95,6 +95,8 @@ interface ProjectCardProps {
   project: ProjectListItem;
   currentUserId: string | undefined;
   onOpen: () => void;
+  /** Warms this project's cache on hover, so opening it is instant. */
+  onPrefetch?: () => void;
   menuItems: MenuItem[];
 }
 
@@ -102,12 +104,16 @@ export function ProjectCard({
   project,
   currentUserId,
   onOpen,
+  onPrefetch,
   menuItems,
 }: ProjectCardProps) {
   const role = effectiveRole(project, currentUserId);
 
   return (
-    <Card className="relative flex cursor-pointer flex-col gap-3 p-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+    <Card
+      onMouseEnter={onPrefetch}
+      className="relative flex cursor-pointer flex-col gap-3 p-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
+    >
       <div onClick={onOpen} className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2 pr-8">
           <div className="min-w-0">

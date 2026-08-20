@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/Input";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import { AVATAR_COLORS, type User } from "@/lib/types";
 import { updateProfile } from "@/lib/users";
+import { useMutation } from "@tanstack/react-query";
 
 export function ProfileCard({ user }: { user: User }) {
   const toast = useToast();
@@ -18,25 +19,24 @@ export function ProfileCard({ user }: { user: User }) {
 
   const [name, setName] = useState(user.name ?? "");
   const [color, setColor] = useState(user.avatarColor ?? "emerald");
-  const [submitting, setSubmitting] = useState(false);
 
   const dirty =
     name.trim() !== (user.name ?? "") || color !== (user.avatarColor ?? "emerald");
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const updated = await updateProfile({ name, avatarColor: color });
+  const saveMutation = useMutation({
+    mutationFn: () => updateProfile({ name, avatarColor: color }),
+    onSuccess: (updated) => {
       applyUser(updated);
       toast.success("Profile updated.");
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => toast.error(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = saveMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    saveMutation.mutate();
   }
 
   return (

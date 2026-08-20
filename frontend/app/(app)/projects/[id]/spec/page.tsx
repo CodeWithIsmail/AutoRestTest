@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { GenerateSpecPanel } from "@/components/projects/GenerateSpecPanel";
 import { useProject } from "@/components/projects/project-context";
 import { useToast } from "@/components/toast";
@@ -10,10 +10,11 @@ import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import { getGeneration } from "@/lib/spec-generation";
-import { deleteSpec, getSpec, uploadSpec } from "@/lib/specs";
-import { useApi } from "@/lib/useApi";
+import { errMsg } from "@/lib/api";
+import { generationOptions, specOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { deleteSpec, uploadSpec } from "@/lib/specs";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const ACCEPT = ".json,.yaml,.yml";
 const VALID_EXT = /\.(json|ya?ml)$/i;
@@ -32,84 +33,84 @@ function formatDate(iso: string): string {
 export default function SpecPage() {
   const { project, canManage } = useProject();
   const toast = useToast();
-  const {
-    data: spec,
-    loading,
-    error,
-    reload,
-  } = useApi(() => getSpec(project.id), [project.id]);
-
-  const [mode, setMode] = useState<SpecMode>("file");
+  const queryClient = useQueryClient();
+  const { data: spec, isPending, error } = useQuery(specOptions(project.id));
 
   // A generation in flight (or awaiting review) must not be hidden behind an
-  // unselected tab, so it decides the initial mode. The panel owns the job
-  // state from then on; this is a one-shot check.
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const current = await getGeneration(project.id);
-        if (active && current) setMode("codebase");
-      } catch {
-        // No generation, or unreadable — the default file mode is correct.
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [project.id]);
+  // unselected tab, so it decides which tab opens. Shares its cache entry with
+  // GenerateSpecPanel, which used to fetch the same job separately.
+  const { data: generation } = useQuery(generationOptions(project.id));
+
+  // Derived rather than synced from an effect: `null` means the user has not
+  // picked a tab yet, so the generation decides. Once they do pick, their
+  // choice wins permanently — which is what stops the tab snapping back to
+  // "codebase" every time the generation poll returns.
+  const [modeChoice, setModeChoice] = useState<SpecMode | null>(null);
+  const mode: SpecMode = modeChoice ?? (generation ? "codebase" : "file");
+  const setMode = setModeChoice;
 
   const fileInput = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [pendingReplace, setPendingReplace] = useState<File | null>(null);
 
-  async function doUpload(file: File) {
+  /**
+   * Changing the spec rewrites the endpoint list and invalidates the
+   * dependency graph, and it moves the `specStatus` badge on the projects
+   * list — which is exactly the badge that used to sit there stale until a
+   * manual refresh.
+   */
+  function invalidateSpecDependents() {
+    void queryClient.invalidateQueries({
+      queryKey: qk.projects.spec(project.id),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: qk.projects.endpoints(project.id),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: qk.projects.graph(project.id),
+    });
+    void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+  }
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => uploadSpec(project.id, file),
+    onSuccess: () => {
+      toast.success("Spec uploaded — endpoints extracted.");
+      invalidateSpecDependents();
+    },
+    onError: (err) => toast.error(errMsg(err, "Upload failed")),
+  });
+
+  function doUpload(file: File) {
     if (!VALID_EXT.test(file.name)) {
       toast.error("Please choose a .json, .yaml, or .yml file.");
       return;
     }
-    setUploading(true);
-    try {
-      await uploadSpec(project.id, file);
-      toast.success("Spec uploaded — endpoints extracted.");
-      reload();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Upload failed",
-      );
-    } finally {
-      setUploading(false);
-    }
+    uploadMutation.mutate(file);
   }
 
   // When a spec already exists, uploading replaces all endpoints — confirm first.
   function onFilePicked(file: File | undefined) {
     if (!file) return;
     if (spec) setPendingReplace(file);
-    else void doUpload(file);
+    else doUpload(file);
   }
 
-  async function onDelete() {
-    setDeleting(true);
-    try {
-      await deleteSpec(project.id);
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteSpec(project.id),
+    onSuccess: () => {
       toast.success("Spec deleted.");
       setDeleteOpen(false);
-      reload();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Delete failed",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
+      invalidateSpecDependents();
+    },
+    onError: (err) => toast.error(errMsg(err, "Delete failed")),
+  });
 
-  if (loading) {
+  const uploading = uploadMutation.isPending;
+
+  if (isPending) {
     return (
       <div className="flex justify-center py-16">
         <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
@@ -120,8 +121,19 @@ export default function SpecPage() {
   if (error) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {errMsg(error, "Failed to load the specification")}
+        </p>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="mt-3"
+          onClick={() =>
+            queryClient.invalidateQueries({
+              queryKey: qk.projects.spec(project.id),
+            })
+          }
+        >
           Retry
         </Button>
       </div>
@@ -148,10 +160,7 @@ export default function SpecPage() {
           projectName={project.name}
           canManage={canManage}
           hasSpec={Boolean(spec)}
-          onApplied={() => {
-            setMode("file");
-            reload();
-          }}
+          onApplied={() => setMode("file")}
         />
       </>
     );
@@ -300,8 +309,8 @@ export default function SpecPage() {
         message="This removes the stored OpenAPI spec. Endpoints already extracted from it stay in the project (delete them from the Endpoints tab if you want them gone)."
         confirmLabel="Delete"
         danger
-        loading={deleting}
-        onConfirm={onDelete}
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
         onClose={() => setDeleteOpen(false)}
       />
 
@@ -314,7 +323,7 @@ export default function SpecPage() {
         onConfirm={() => {
           const f = pendingReplace;
           setPendingReplace(null);
-          if (f) void doUpload(f);
+          if (f) doUpload(f);
         }}
         onClose={() => setPendingReplace(null)}
       />

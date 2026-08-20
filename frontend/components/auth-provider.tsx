@@ -1,18 +1,13 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-import {
-  apiFetch,
-  clearToken,
-  getToken,
-  setToken,
-} from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { apiFetch, clearToken, getToken, setToken } from "@/lib/api";
+import { clearPersistedCache } from "@/lib/query-client";
+import { qk } from "@/lib/query-keys";
+import { meOptions } from "@/lib/queries";
+import { setUnauthorizedHandler } from "@/lib/session";
 import type { AuthResponse, RegisterResponse, User } from "@/lib/types";
 
 interface AuthContextValue {
@@ -45,43 +40,61 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const router = useRouter();
 
-  // On mount: if a token exists, verify it by fetching the profile. A stale or
-  // revoked token yields 401 -> clear it and treat the user as logged out.
+  // Read once, lazily, rather than in an effect: the client's very first
+  // render then already knows whether a session might exist. That matters
+  // because the app shell redirects to /login the moment it sees "not loading
+  // and no user", and an effect would let it see exactly that for one render.
+  // Guarded because client components are still server-rendered, where there
+  // is no localStorage — and `false` there renders the same spinner the client
+  // shows while the profile loads, so the markup still matches.
+  const [tokenPresent, setTokenPresent] = useState(
+    () => typeof window !== "undefined" && getToken() !== null,
+  );
+
+  // The profile fetch that used to live in a useEffect. A stale or revoked
+  // token yields 401, which the QueryCache turns into the sign-out below.
+  const { data, isPending } = useQuery({
+    ...meOptions(),
+    enabled: tokenPresent,
+  });
+
+  const endSession = useCallback(() => {
+    clearToken();
+    setTokenPresent(false);
+    // Both halves matter: `clear()` drops the in-memory cache, and the second
+    // call drops the copy on disk. Leaving either behind would show one user's
+    // projects to whoever signs in next on this browser.
+    queryClient.clear();
+    clearPersistedCache();
+  }, [queryClient]);
+
+  // The app's only session-revocation path: the backend rejects any token
+  // minted before `passwordChangedAt`, and until now that left the user
+  // stranded on a page of failed requests instead of back at the login form.
   useEffect(() => {
-    let active = true;
-    async function bootstrap() {
-      if (!getToken()) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const me = await apiFetch<User>("/auth/me");
-        if (active) setUser(me);
-      } catch {
-        clearToken();
-        if (active) setUser(null);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void bootstrap();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const login = useCallback(async (identifier: string, password: string) => {
-    const res = await apiFetch<AuthResponse>("/auth/login", {
-      method: "POST",
-      auth: false,
-      body: { identifier, password },
+    setUnauthorizedHandler(() => {
+      endSession();
+      router.replace("/login");
     });
-    setToken(res.accessToken);
-    setUser(res.user);
-  }, []);
+    return () => setUnauthorizedHandler(null);
+  }, [endSession, router]);
+
+  const login = useCallback(
+    async (identifier: string, password: string) => {
+      const res = await apiFetch<AuthResponse>("/auth/login", {
+        method: "POST",
+        auth: false,
+        body: { identifier, password },
+      });
+      setToken(res.accessToken);
+      setTokenPresent(true);
+      queryClient.setQueryData(qk.me, res.user);
+    },
+    [queryClient],
+  );
 
   const register = useCallback(
     async (username: string, email: string, password: string) => {
@@ -98,23 +111,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const logout = useCallback(() => {
-    clearToken();
-    setUser(null);
-  }, []);
+  const logout = useCallback(() => endSession(), [endSession]);
 
-  const applyUser = useCallback((next: User) => setUser(next), []);
+  const applyUser = useCallback(
+    (next: User) => {
+      queryClient.setQueryData(qk.me, next);
+    },
+    [queryClient],
+  );
 
-  const applySession = useCallback((accessToken: string, next: User) => {
-    setToken(accessToken);
-    setUser(next);
-  }, []);
+  const applySession = useCallback(
+    (accessToken: string, next: User) => {
+      setToken(accessToken);
+      setTokenPresent(true);
+      queryClient.setQueryData(qk.me, next);
+    },
+    [queryClient],
+  );
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        loading,
+        user: data ?? null,
+        // Only "loading" when there is a token to check. Without one there is
+        // nothing to wait for and the shell should redirect immediately.
+        loading: tokenPresent && isPending,
         login,
         register,
         logout,

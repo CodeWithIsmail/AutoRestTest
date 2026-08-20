@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toast";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/Input";
@@ -18,14 +19,10 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const { verificationRequired } = await register(username, email, password);
-
+  const registerMutation = useMutation({
+    mutationFn: () => register(username, email, password),
+    onSuccess: ({ verificationRequired }) => {
       if (!verificationRequired) {
         // Server has verification switched off, so the account already exists.
         toast.success("Account created — sign in to continue.");
@@ -36,12 +33,15 @@ export default function RegisterPage() {
       // No session yet: the account is created when the code comes back. The
       // address rides along so the next screen knows who is verifying.
       router.replace(`/verify-signup?email=${encodeURIComponent(email)}`);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => toast.error(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = registerMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    registerMutation.mutate();
   }
 
   return (

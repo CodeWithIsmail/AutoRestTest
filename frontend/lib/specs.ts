@@ -7,9 +7,14 @@ import type { SpecDetail } from "./types";
  * Returns the project's spec, or `null` if none has been uploaded (the backend
  * responds 404), so callers can render an empty state instead of an error.
  */
-export async function getSpec(projectId: string): Promise<SpecDetail | null> {
+export async function getSpec(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<SpecDetail | null> {
   try {
-    return await apiFetch<SpecDetail>(`/projects/${projectId}/spec`);
+    return await apiFetch<SpecDetail>(`/projects/${projectId}/spec`, {
+      signal,
+    });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return null;
     throw err;

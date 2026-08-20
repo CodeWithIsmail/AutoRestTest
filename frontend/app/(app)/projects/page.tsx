@@ -1,7 +1,8 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toast";
 import { ProjectFormModal } from "@/components/projects/ProjectFormModal";
@@ -18,9 +19,10 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DropdownMenu, type MenuItem } from "@/components/ui/DropdownMenu";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import { deleteProject, listProjects } from "@/lib/projects";
-import { useApi } from "@/lib/useApi";
+import { errMsg } from "@/lib/api";
+import { deleteProject } from "@/lib/projects";
+import { projectOptions, projectsOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
 import type { ProjectListItem, Role } from "@/lib/types";
 
 const VIEW_KEY = "autoresttest-projects-view";
@@ -133,7 +135,17 @@ export default function ProjectsPage() {
   const router = useRouter();
   const toast = useToast();
   const { user } = useAuth();
-  const { data: projects, loading, error, reload } = useApi(listProjects, []);
+  const queryClient = useQueryClient();
+  const { data: projects, isPending, error } = useQuery(projectsOptions());
+
+  // Warm a project's detail cache on hover, so the click that follows lands on
+  // data that has already arrived instead of starting the round trip.
+  const prefetchProject = useCallback(
+    (projectId: string) => {
+      void queryClient.prefetchQuery(projectOptions(projectId));
+    },
+    [queryClient],
+  );
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
@@ -145,7 +157,19 @@ export default function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<ProjectListItem | null>(
     null,
   );
-  const [deleting, setDeleting] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: (project: ProjectListItem) => deleteProject(project.id),
+    onSuccess: (_result, project) => {
+      toast.success("Project deleted.");
+      setDeleteTarget(null);
+      queryClient.removeQueries({ queryKey: qk.projects.detail(project.id) });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+    },
+    onError: (err) => {
+      toast.error(errMsg(err, "Failed to delete project"));
+    },
+  });
 
   const visible = useMemo(() => {
     if (!projects) return [];
@@ -216,23 +240,6 @@ export default function ProjectsPage() {
     ];
   }
 
-  async function onConfirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteProject(deleteTarget.id);
-      toast.success("Project deleted.");
-      setDeleteTarget(null);
-      reload();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Failed to delete project",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   const isEmpty = projects && projects.length === 0;
   const noMatches = Boolean(projects) && !isEmpty && visible.length === 0;
 
@@ -276,18 +283,22 @@ export default function ProjectsPage() {
       </div>
 
       {/* Body */}
-      {loading ? (
+      {isPending ? (
         <div className="mt-4 flex items-center justify-center overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-16">
           <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
         </div>
       ) : error ? (
         <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-6 py-12 text-center">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {errMsg(error, "Failed to load projects")}
+          </p>
           <Button
             variant="secondary"
             size="sm"
             className="mt-3"
-            onClick={reload}
+            onClick={() =>
+              queryClient.invalidateQueries({ queryKey: qk.projects.list() })
+            }
           >
             Retry
           </Button>
@@ -319,6 +330,7 @@ export default function ProjectsPage() {
               project={p}
               currentUserId={user?.id}
               onOpen={() => router.push(`/projects/${p.id}`)}
+              onPrefetch={() => prefetchProject(p.id)}
               menuItems={menuItemsFor(p)}
             />
           ))}
@@ -355,6 +367,7 @@ export default function ProjectsPage() {
                   <tr
                     key={p.id}
                     onClick={() => router.push(`/projects/${p.id}`)}
+                    onMouseEnter={() => prefetchProject(p.id)}
                     className="cursor-pointer border-b border-zinc-200 dark:border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-100 dark:hover:bg-zinc-800/40"
                   >
                     <td className="px-5 py-3">
@@ -407,10 +420,7 @@ export default function ProjectsPage() {
           open
           project={editTarget}
           onClose={() => setEditTarget(null)}
-          onSaved={() => {
-            setEditTarget(null);
-            reload();
-          }}
+          onSaved={() => setEditTarget(null)}
         />
       )}
 
@@ -428,8 +438,8 @@ export default function ProjectsPage() {
         }
         confirmLabel="Delete"
         danger
-        loading={deleting}
-        onConfirm={onConfirmDelete}
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
       />
     </div>

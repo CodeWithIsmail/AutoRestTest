@@ -1,87 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { DependencyGraphView } from "@/components/graph/DependencyGraphView";
 import { useProject } from "@/components/projects/project-context";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import { buildProjectGraph, getProjectGraph } from "@/lib/graph";
-import type { GraphState } from "@/lib/types";
-
-const POLL_MS = 3000;
+import { errMsg } from "@/lib/api";
+import { buildProjectGraph } from "@/lib/graph";
+import { projectGraphOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export default function ProjectGraphPage() {
   const { project, canRun } = useProject();
   const toast = useToast();
+  const queryClient = useQueryClient();
 
-  const [state, setState] = useState<GraphState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [building, setBuilding] = useState(false);
+  // Polling while a build is running is the query's own `refetchInterval` now;
+  // it also stops on its own once the tab is hidden.
+  const { data: state, isPending, error } = useQuery(
+    projectGraphOptions(project.id),
+  );
 
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setLoading(true);
-      try {
-        const next = await getProjectGraph(project.id);
-        if (active) {
-          setState(next);
-          setError(null);
-        }
-      } catch (err) {
-        if (active) {
-          setError(
-            err instanceof ApiError ? err.message : "Failed to load the graph",
-          );
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [project.id]);
-
-  // Narrowed so the interval isn't torn down and rebuilt on every tick.
-  const status = state?.status;
-  useEffect(() => {
-    if (status !== "running") return;
-    let active = true;
-    const iv = setInterval(async () => {
-      try {
-        const next = await getProjectGraph(project.id);
-        if (active) setState(next);
-      } catch {
-        // Transient poll errors are ignored; the next tick retries.
-      }
-    }, POLL_MS);
-    return () => {
-      active = false;
-      clearInterval(iv);
-    };
-  }, [status, project.id]);
-
-  async function onBuild() {
-    setBuilding(true);
-    try {
-      setState(await buildProjectGraph(project.id));
+  const buildMutation = useMutation({
+    mutationFn: () => buildProjectGraph(project.id),
+    onSuccess: (next) => {
+      // Seeding the cache flips status to "running", which is what starts the
+      // poll — no separate trigger needed.
+      queryClient.setQueryData(qk.projects.graph(project.id), next);
       toast.success("Building the dependency graph…");
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Could not start the build",
-      );
-    } finally {
-      setBuilding(false);
-    }
-  }
+    },
+    onError: (err) => toast.error(errMsg(err, "Could not start the build")),
+  });
 
-  if (loading) {
+  const onBuild = () => buildMutation.mutate();
+  const building = buildMutation.isPending;
+
+  if (isPending) {
     return (
       <div className="flex justify-center py-16">
         <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
@@ -92,7 +48,9 @@ export default function ProjectGraphPage() {
   if (error) {
     return (
       <div className="py-12 text-center">
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {errMsg(error, "Failed to load the graph")}
+        </p>
       </div>
     );
   }

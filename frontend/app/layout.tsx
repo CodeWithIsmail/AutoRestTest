@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { QueryProvider } from "@/components/query-provider";
 import { ToastProvider } from "@/components/toast";
 import "./globals.css";
 
@@ -39,8 +40,12 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        {/* QueryProvider sits above AuthProvider because the session itself is
+            now a query — AuthProvider reads and writes the cache. */}
         <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <QueryProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryProvider>
         </ToastProvider>
       </body>
     </html>

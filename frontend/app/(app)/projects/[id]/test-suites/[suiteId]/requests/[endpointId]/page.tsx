@@ -9,9 +9,13 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
-import { getRequestLog, getRequestLogSummary, listRequestLogs } from "@/lib/request-logs";
-import { useApi } from "@/lib/useApi";
+import { errMsg } from "@/lib/api";
+import {
+  requestLogOptions,
+  requestLogSummaryOptions,
+  requestLogsOptions,
+} from "@/lib/queries";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RequestLogDetail } from "@/lib/types";
 
 const PAGE_SIZE = 50;
@@ -160,21 +164,23 @@ export default function CapturedRequestsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const { data, loading, error } = useApi(
-    () =>
-      listRequestLogs(project.id, suiteId, {
-        endpointId: apiEndpointId,
-        status: status || undefined,
-        page,
-        pageSize: PAGE_SIZE,
-      }),
-    [project.id, suiteId, apiEndpointId, status, page],
-  );
+  const queryClient = useQueryClient();
+
+  const { data, isPending, isFetching, error } = useQuery({
+    ...requestLogsOptions(project.id, suiteId, {
+      endpointId: apiEndpointId,
+      status: status || undefined,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    // Keeps the current rows on screen while the next page loads instead of
+    // collapsing the table to a spinner. Same pager, same layout.
+    placeholderData: keepPreviousData,
+  });
 
   // Summary drives the heading (method/path for a specific endpoint).
-  const { data: summary } = useApi(
-    () => getRequestLogSummary(project.id, suiteId),
-    [project.id, suiteId],
+  const { data: summary } = useQuery(
+    requestLogSummaryOptions(project.id, suiteId),
   );
 
   const suiteLink = `/projects/${project.id}/test-suites/${suiteId}`;
@@ -225,12 +231,15 @@ export default function CapturedRequestsPage() {
     if (!details[id]) {
       setDetailLoading(true);
       try {
-        const d = await getRequestLog(project.id, suiteId, id);
+        // `fetchQuery` rather than a bare call so a row that has already been
+        // expanded once (in this session or a previous visit) resolves from
+        // the cache instead of going back to the server.
+        const d = await queryClient.fetchQuery(
+          requestLogOptions(project.id, suiteId, id),
+        );
         setDetails((m) => ({ ...m, [id]: d }));
       } catch (err) {
-        setDetailError(
-          err instanceof ApiError ? err.message : "Failed to load request",
-        );
+        setDetailError(errMsg(err, "Failed to load request"));
       } finally {
         setDetailLoading(false);
       }
@@ -316,13 +325,15 @@ export default function CapturedRequestsPage() {
         )}
       </div>
 
-      {loading && !data ? (
+      {isPending ? (
         <div className="flex justify-center py-16">
           <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
         </div>
       ) : error ? (
         <Card className="p-8 text-center">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {errMsg(error, "Failed to load captured requests")}
+          </p>
         </Card>
       ) : !data || data.items.length === 0 ? (
         <Card className="p-10 text-center">
@@ -415,7 +426,7 @@ export default function CapturedRequestsPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={page <= 1 || loading}
+                disabled={page <= 1 || isFetching}
                 onClick={() => {
                   setPage((p) => Math.max(1, p - 1));
                   setExpandedId(null);
@@ -429,7 +440,7 @@ export default function CapturedRequestsPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={page >= totalPages || loading}
+                disabled={page >= totalPages || isFetching}
                 onClick={() => {
                   setPage((p) => p + 1);
                   setExpandedId(null);

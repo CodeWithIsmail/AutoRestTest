@@ -5,8 +5,10 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import { createInvitation } from "@/lib/collaboration";
+import { qk } from "@/lib/query-keys";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { InvitationItem, Role } from "@/lib/types";
 
 const ROLES: Role[] = ["admin", "tester", "viewer"];
@@ -29,26 +31,28 @@ export function InviteModal({
   onInvited,
 }: InviteModalProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("tester");
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const invitation = await createInvitation(projectId, {
-        email: email.trim(),
-        role,
-      });
+  const inviteMutation = useMutation({
+    mutationFn: () =>
+      createInvitation(projectId, { email: email.trim(), role }),
+    onSuccess: (invitation) => {
       toast.success("Invitation created.");
+      void queryClient.invalidateQueries({
+        queryKey: qk.projects.invitations(projectId),
+      });
       onInvited(invitation);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Something went wrong",
-      );
-      setSubmitting(false);
-    }
+    },
+    onError: (err) => toast.error(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = inviteMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    inviteMutation.mutate();
   }
 
   return (

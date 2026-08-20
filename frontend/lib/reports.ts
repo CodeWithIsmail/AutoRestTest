@@ -6,9 +6,11 @@ import type { ReportEndpoint, SuiteReport } from "./types";
 export function getReport(
   projectId: string,
   suiteId: string,
+  signal?: AbortSignal,
 ): Promise<SuiteReport> {
   return apiFetch<SuiteReport>(
     `/projects/${projectId}/test-suites/${suiteId}/report`,
+    { signal },
   );
 }
 

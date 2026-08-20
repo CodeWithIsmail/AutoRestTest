@@ -8,16 +8,23 @@ import type {
   TestSuiteSummary,
 } from "./types";
 
-export function listSuites(projectId: string): Promise<TestSuiteSummary[]> {
-  return apiFetch<TestSuiteSummary[]>(`/projects/${projectId}/test-suites`);
+export function listSuites(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<TestSuiteSummary[]> {
+  return apiFetch<TestSuiteSummary[]>(`/projects/${projectId}/test-suites`, {
+    signal,
+  });
 }
 
 export function getSuite(
   projectId: string,
   suiteId: string,
+  signal?: AbortSignal,
 ): Promise<TestSuiteDetail> {
   return apiFetch<TestSuiteDetail>(
     `/projects/${projectId}/test-suites/${suiteId}`,
+    { signal },
   );
 }
 
@@ -56,18 +63,22 @@ export function replaySuite(
 export function getRunHistory(
   projectId: string,
   suiteId: string,
+  signal?: AbortSignal,
 ): Promise<TestSuiteSummary[]> {
   return apiFetch<TestSuiteSummary[]>(
     `/projects/${projectId}/test-suites/${suiteId}/history`,
+    { signal },
   );
 }
 
 export function getTestCases(
   projectId: string,
   suiteId: string,
+  signal?: AbortSignal,
 ): Promise<TestCaseItem[]> {
   return apiFetch<TestCaseItem[]>(
     `/projects/${projectId}/test-suites/${suiteId}/test-cases`,
+    { signal },
   );
 }
 

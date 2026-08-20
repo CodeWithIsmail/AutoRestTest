@@ -7,8 +7,9 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/Input";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
 import { changePassword } from "@/lib/users";
+import { useMutation } from "@tanstack/react-query";
 
 export function PasswordCard() {
   const router = useRouter();
@@ -19,28 +20,31 @@ export function PasswordCard() {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
+  const changeMutation = useMutation({
+    mutationFn: () => changePassword(current, next),
+    onSuccess: () => {
+      // The backend stamps passwordChangedAt, which kills the token this page
+      // is holding. Signing out is not a precaution — staying put would 401 on
+      // the very next request with no explanation. `logout` also clears the
+      // query cache, in memory and on disk.
+      logout();
+      toast.success("Password changed. Please sign in again.");
+      router.replace("/login");
+    },
+    onError: (err) => setError(errMsg(err, "Something went wrong")),
+  });
+
+  const submitting = changeMutation.isPending;
+
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (next !== confirm) {
       setError("Both new passwords must match.");
       return;
     }
     setError(null);
-    setSubmitting(true);
-    try {
-      await changePassword(current, next);
-      // The backend stamps passwordChangedAt, which kills the token this page
-      // is holding. Signing out is not a precaution — staying put would 401 on
-      // the very next request with no explanation.
-      logout();
-      toast.success("Password changed. Please sign in again.");
-      router.replace("/login");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
-      setSubmitting(false);
-    }
+    changeMutation.mutate();
   }
 
   return (

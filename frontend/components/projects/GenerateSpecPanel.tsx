@@ -8,16 +8,19 @@ import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormField } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
-import { ApiError } from "@/lib/api";
+import { errMsg } from "@/lib/api";
+import { generationOptions } from "@/lib/queries";
+import { qk } from "@/lib/query-keys";
 import {
   applyGeneration,
   discardGeneration,
-  getGeneration,
   startGeneration,
 } from "@/lib/spec-generation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SpecGeneration } from "@/lib/types";
 
-const POLL_MS = 5000;
+/** Refresh rate of the elapsed-time readout, which counts in seconds. */
+const CLOCK_MS = 1000;
 
 /** Vendored trees dominate both analysis cost and wall time. */
 const DEFAULT_IGNORE = "node_modules, dist, build, coverage, venv, __pycache__";
@@ -51,13 +54,13 @@ export function GenerateSpecPanel({
   onApplied,
 }: GenerateSpecPanelProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const [generation, setGeneration] = useState<SpecGeneration | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [starting, setStarting] = useState(false);
-  const [applying, setApplying] = useState(false);
-  const [discarding, setDiscarding] = useState(false);
+  const { data: generation, isPending } = useQuery(
+    generationOptions(projectId),
+  );
+
   const [dragging, setDragging] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [confirmApply, setConfirmApply] = useState(false);
@@ -67,102 +70,82 @@ export function GenerateSpecPanel({
   const [version, setVersion] = useState("1.0.0");
   const [ignorePath, setIgnorePath] = useState(DEFAULT_IGNORE);
 
-  // Initial load, kept separate from polling so a refresh never flickers.
-  useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const current = await getGeneration(projectId);
-        if (active) setGeneration(current);
-      } catch {
-        // A missing generation is not an error state; the idle form renders.
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [projectId]);
-
-  // Poll silently while a generation is in flight. The `tick` bump also drives
-  // the elapsed-time readout between polls.
+  // The fetch itself is now the query's `refetchInterval`. This interval is
+  // only a clock: `elapsedSince` reads `Date.now()`, so without something
+  // forcing a re-render the readout would freeze between polls — and the poll
+  // is five seconds apart while the text counts in seconds.
   const status = generation?.status;
   useEffect(() => {
-    if (status !== "running") return;
-    let active = true;
-    const iv = setInterval(() => {
-      setTick((t) => t + 1);
-      void (async () => {
-        try {
-          const next = await getGeneration(projectId);
-          if (active && next) setGeneration(next);
-        } catch {
-          // Transient poll errors are ignored; the next tick retries.
-        }
-      })();
-    }, POLL_MS);
-    return () => {
-      active = false;
-      clearInterval(iv);
-    };
-  }, [status, projectId]);
+    if (status !== "running" && status !== "pending") return;
+    const iv = setInterval(() => setTick((t) => t + 1), CLOCK_MS);
+    return () => clearInterval(iv);
+  }, [status]);
 
-  async function onStart(file: File) {
+  /** Writes the job straight into the cache, so the panel reacts immediately
+   *  rather than waiting for the next poll. */
+  function setGeneration(next: SpecGeneration | null) {
+    queryClient.setQueryData(qk.projects.generation(projectId), next);
+  }
+
+  const startMutation = useMutation({
+    mutationFn: (file: File) =>
+      startGeneration(projectId, file, { title, version, ignorePath }),
+    onSuccess: (started) => {
+      setGeneration(started);
+      toast.success("Analysing your codebase — this can take a while.");
+      // The projects list shows a "Generating…" badge off this job.
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+    },
+    onError: (err) => toast.error(errMsg(err, "Could not start generation")),
+  });
+
+  const applyMutation = useMutation({
+    mutationFn: () => applyGeneration(projectId),
+    onSuccess: () => {
+      setGeneration(null);
+      setConfirmApply(false);
+      toast.success("Specification applied — endpoints extracted.");
+      // Same fan-out as a file upload: this *is* the project's spec now.
+      void queryClient.invalidateQueries({
+        queryKey: qk.projects.spec(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: qk.projects.endpoints(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: qk.projects.graph(projectId),
+      });
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+      onApplied();
+    },
+    onError: (err) => toast.error(errMsg(err, "Could not apply the spec")),
+  });
+
+  const discardMutation = useMutation({
+    mutationFn: () => discardGeneration(projectId),
+    onSuccess: () => {
+      setGeneration(null);
+      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+    },
+    onError: (err) => toast.error(errMsg(err, "Could not discard")),
+  });
+
+  function onStart(file: File) {
     if (!file.name.toLowerCase().endsWith(".zip")) {
       toast.error("Please upload your source code as a .zip archive.");
       return;
     }
-    setStarting(true);
-    try {
-      const started = await startGeneration(projectId, file, {
-        title,
-        version,
-        ignorePath,
-      });
-      setGeneration(started);
-      toast.success("Analysing your codebase — this can take a while.");
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Could not start generation",
-      );
-    } finally {
-      setStarting(false);
-    }
+    startMutation.mutate(file);
   }
 
-  async function onApply() {
-    setApplying(true);
-    try {
-      await applyGeneration(projectId);
-      setGeneration(null);
-      setConfirmApply(false);
-      toast.success("Specification applied — endpoints extracted.");
-      onApplied();
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Could not apply the spec",
-      );
-    } finally {
-      setApplying(false);
-    }
-  }
+  const onApply = () => applyMutation.mutate();
+  const onDiscard = () => discardMutation.mutate();
 
-  async function onDiscard() {
-    setDiscarding(true);
-    try {
-      await discardGeneration(projectId);
-      setGeneration(null);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Could not discard",
-      );
-    } finally {
-      setDiscarding(false);
-    }
-  }
+  const starting = startMutation.isPending;
+  const applying = applyMutation.isPending;
+  const discarding = discardMutation.isPending;
 
-  if (loading) {
+  if (isPending) {
     return (
       <div className="flex justify-center py-16">
         <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
