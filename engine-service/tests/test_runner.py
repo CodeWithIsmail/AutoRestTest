@@ -105,7 +105,7 @@ def test_render_config_toml_roundtrips():
         mutation_rate=0.35,
         llm_engine="test/model",
         llm_api_base="https://example/v1",
-        auth_header="Bearer abc",
+        custom_headers={"Authorization": "Bearer abc", "X-API-Key": "xyz"},
     )
     doc = tomllib.loads(text)
     assert doc["spec"]["location"] == "/abs/spec.yaml"
@@ -114,6 +114,7 @@ def test_render_config_toml_roundtrips():
     assert doc["llm"]["engine"] == "test/model"
     assert doc["api"]["override_url"] is False
     assert doc["custom_headers"]["Authorization"] == "Bearer abc"
+    assert doc["custom_headers"]["X-API-Key"] == "xyz"
 
 
 def test_render_config_toml_omits_headers_when_none():
@@ -123,7 +124,7 @@ def test_render_config_toml_omits_headers_when_none():
         mutation_rate=0.2,
         llm_engine="m",
         llm_api_base="b",
-        auth_header=None,
+        custom_headers=None,
     )
     doc = tomllib.loads(text)
     assert "custom_headers" not in doc
@@ -136,7 +137,7 @@ def test_render_config_toml_carries_workers_and_cache():
         mutation_rate=0.2,
         llm_engine="m",
         llm_api_base="b",
-        auth_header=None,
+        custom_headers=None,
         value_workers=8,
         use_cache=True,
     )

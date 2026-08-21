@@ -215,6 +215,26 @@ class JobManager:
                 spec_path = job_dir / f"{spec_name}.yaml"
                 spec_path.write_text(spec_text, encoding="utf-8")
 
+                # Authorization falls back through: per-run authHeader, then a
+                # service-wide TEST_AUTH_HEADER env var, then a JWT_TOKEN from the
+                # core's own .env (mirrors the core CLI's [custom_headers] bearer
+                # auth). A per-run customHeaders object layers arbitrarily-named
+                # headers (e.g. X-API-Key) on top, and can also override
+                # Authorization itself if the caller sets that key explicitly.
+                custom_headers: Dict[str, str] = {}
+                auth_header = (
+                    params.get("authHeader")
+                    or os.getenv("TEST_AUTH_HEADER")
+                    or runner.default_auth_header(self.cfg.core_dir)
+                )
+                if auth_header:
+                    custom_headers["Authorization"] = auth_header
+                extra_headers = params.get("customHeaders")
+                if isinstance(extra_headers, dict):
+                    custom_headers.update(
+                        {str(k): str(v) for k, v in extra_headers.items()}
+                    )
+
                 toml_text = runner.render_config_toml(
                     spec_location=str(spec_path),
                     time_duration=time_budget,
@@ -224,15 +244,7 @@ class JobManager:
                     llm_rpm_limit=self.cfg.llm_rpm_limit,
                     value_workers=self.cfg.engine_value_workers,
                     use_cache=self.cfg.engine_use_cache,
-                    # Per-run authHeader wins; then a service-wide TEST_AUTH_HEADER
-                    # env var; then a JWT_TOKEN from the core's own .env (mirrors
-                    # the core CLI's [custom_headers] bearer auth). All are
-                    # temporary shortcuts until the per-suite auth field is built.
-                    auth_header=(
-                        params.get("authHeader")
-                        or os.getenv("TEST_AUTH_HEADER")
-                        or runner.default_auth_header(self.cfg.core_dir)
-                    ),
+                    custom_headers=custom_headers or None,
                 )
                 runner.run_real(
                     self.cfg,

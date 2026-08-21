@@ -93,7 +93,7 @@ def render_config_toml(
     mutation_rate: float,
     llm_engine: str,
     llm_api_base: str,
-    auth_header: Optional[str],
+    custom_headers: Optional[Dict[str, str]],
     recursion_limit: int = 50,
     llm_rpm_limit: int = 0,
     value_workers: int = 8,
@@ -180,9 +180,10 @@ def render_config_toml(
     api["port"] = 8080
     doc["api"] = api
 
-    if auth_header:
+    if custom_headers:
         headers = tomlkit.table()
-        headers["Authorization"] = auth_header
+        for key, value in custom_headers.items():
+            headers[key] = value
         doc["custom_headers"] = headers
 
     return tomlkit.dumps(doc)

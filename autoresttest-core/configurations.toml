@@ -1,49 +1,110 @@
+# ===========================
+# AutoRestTest Configuration
+# ===========================
+
 [spec]
-location = "D:\\SPL3\\AutoRestTest\\engine-service\\jobs\\b4839965b13f4ea2b6dff19f2fe3a9b2\\spec_3a18855792a189e1.yaml"
-recursion_limit = 50
+# Relative path from the project root to the OpenAPI specification file.
+# Only .yaml and .json are supported; file MUST be OpenAPI 3.0.
+# location = "specs/original/oas/ohsome.yaml"
+location = "careerstory-openapi/openapi.yaml"
+
+# Maximum times a circular/self-reference may appear in the resolution stack.
+# A value of 1 means an element may be referred to exactly once before triggering the handler.
+recursion_limit = 1
+
+# Validate the OpenAPI spec strictly (errors will abort) when true; allow lenient parsing when false.
 strict_validation = false
 
 [llm]
-engine = "openai/gpt-oss-20b"
-creative_temperature = 1
-strict_temperature = 1
-api_base = "https://integrate.api.nvidia.com/v1"
-max_tokens = 4096
-rpm_limit = 40
+# LLM engine used for Value Agent (and optional Header Agent) generation.
+# Supports any model from an OpenAI-API compatible provider (OpenAI, OpenRouter, Azure, local models, etc.).
+# Must support JSON mode.
+engine = "google/gemini-2.5-flash-lite"
 
-[agents.header]
-enabled = false
+# Sampling temperature for creative generations (0.0 = deterministic, higher = more random).
+creative_temperature = 1
+
+# Sampling temperature for strict/repair flows (e.g., retries, JSON fixes).
+strict_temperature = 1
+
+# Base URL for the LLM API. Supports any OpenAI-API compatible endpoint.
+# Examples: "https://api.openai.com/v1", "https://openrouter.ai/api/v1", "http://localhost:1234/v1"
+api_base = "https://openrouter.ai/api/v1"
+
+# Maximum tokens for LLM response. Set to -1 to omit and use provider default.
+max_tokens = 30000
+
+# Client-side pacing: cap outgoing LLM calls to this many per minute across all
+# threads (0 = disabled). Match your provider's limit, e.g. 40 for NVIDIA NIM's
+# free tier. Note that value-table generation is not covered by
+# [request_generation].time_duration, so a slow provider stretches a run well
+# past its budget regardless of this setting.
+rpm_limit = 0
 
 [agent]
+# Max number of optional parameters per combination (required params always included).
 max_combinations = 12
+
+# Hard cap on total combinations per operation to bound memory usage.
 max_total_combinations = 3000
+
+# Base sample count at size=1; decays for larger sizes (size=5 gets ~60 samples).
 base_samples_per_size = 200
+
+# Seed for reproducible combination sampling. Change to get different random samples.
 combination_seed = 42
 
 [agent.value]
+# Enable parallel value table generation using thread pool.
+# Set to false to use sequential DFS generation.
 parallelize = true
-max_workers = 3
+
+# Number of worker threads for parallel generation (ignored if parallelize = false).
+max_workers = 4
+
+[agents.header]
+# Whether to enable the Header Agent (uses Basic tokens). Only helpful for APIs requiring such auth.
+enabled = false
 
 [cache]
+# Use the cached Semantic Operation Dependency Graph produced by a prior run.
 use_cached_graph = false
+
+# Use the cached Q-table(s) for the Value Agent (and optional Header Agent) to avoid re-running the LLM.
 use_cached_table = false
 
+# Tip: Set either cache flag to false if you changed graph construction or table generation logic to regenerate the cache.
+
 [export]
+# Write the Semantic Operation Dependency Graph to data/<spec_name>/graph.json, and
+# the learned dependency Q-values to dependency_q_table.json, so tools outside the
+# engine can read the graph (it is otherwise only a pickle in cache/graphs/).
 dependency_graph = true
 
 [q_learning]
-learning_rate = 0.1
-discount_factor = 0.9
-max_exploration = 1
+# Q-learning agent hyperparameters.
+learning_rate = 0.1        # alpha
+discount_factor = 0.9       # gamma
+max_exploration = 1         # epsilon; decays over time to 0.1
 
 [request_generation]
+# Controls the request generation process.
+# Duration for generation in seconds.
 time_duration = 1200
+
+# Probability of mutating request parameters during generation.
 mutation_rate = 0.2
 
 [api]
+# By default, the API URL is extracted from the OpenAPI specification's "servers" field.
+# Set override_url to true to use the custom host and port instead.
 override_url = false
 host = "localhost"
 port = 8080
 
 [custom_headers]
-Authorization = "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNWRkMDA5MGI2NzQ3Yzg5OWViNTJlMzJlMzA0N2NiYzc2MWEwNDAwZjE0MjZhMTFmOWI5MTk2MGE5MTFjMGJlMzdiYWM0YzAyYTBhODY2NTYiLCJpYXQiOjE3ODcyMzQwNjYuMjc0NTYsIm5iZiI6MTc4NzIzNDA2Ni4yNzQ1NjIsImV4cCI6MzA0OTUzODA2Ni4yNTg2MDksInN1YiI6IjEiLCJzY29wZXMiOltdfQ.ZSxeoTLeyt2dY1zZQ0JMrJc_KjPmNfa_zXCbslKSa0q1jbvZ1JO96WDHTkUbEZuJACsZk1-4kH3IELoTE7WNpMGYmrCa-jxO4Co7qT0beVT0ceXGXZ0dZpvm70sP1hnQ1xSSz_CNK4LDaStwd6AzchxI17ndlGPFByg1pyicfdq2m98cdKCT4rEdr6Zu7vEkEwonKdJ2OIVx1dqtHai0mfOJdH95_Ukqt53JNohSlmsMgY8ofj3GzlIqR3oDFklAcXaHWorm4k4obw72Y6Cfl0CcuJCgLcUYztyYP4EtnkyloU6mmpvllKSwuQQQYC8Qlme4_Q5ZjnsNOQZb6wNJG89YpW_LG4y2q2QPz6uzf0PiLPltlKbYP9_2pMMFs3DDIsJ9q4YEsyBjYO05prGUOwS7VDwqz4526PCNllUSqiXktuOBjCCqwWK5I5G6CFUGqGf3y0F-QwbPr4t2he4f5GaiVnYajbnoK6iRmU6dT9DCywEpIehTkOC-wdWH12uaQFQTawurndYS4tC3ES2JGrRdtITq9I3YHv37mn67cMx3C6u6l7XwVbF424-_QeTL-n3zYztm5k5sEwiNt49I2vqXy88KYqv4GqW9YnYrhWcVzc5B6hoVyWXvFY2SjtBfepcCA7i8kn0BJTkNJzDZmAru0erhBKLJhuVjr0Fzwag"
+# Static headers to include with every request.
+# Supports environment variable interpolation using ${VAR_NAME} syntax.
+# Example:
+Authorization = "Bearer ${API_AUTH_TOKEN}"
+# X-API-Key = "static-value"

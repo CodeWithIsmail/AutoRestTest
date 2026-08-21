@@ -81,6 +81,12 @@ def _validate_body(body: Any) -> Tuple[Dict[str, Any] | None, str | None]:
         return None, "mutationRate must be a number"
     if mr < 0 or mr > 1:
         return None, "mutationRate must be between 0 and 1"
+    ch = body.get("customHeaders")
+    if ch is not None:
+        if not isinstance(ch, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in ch.items()
+        ):
+            return None, "customHeaders must be an object of string to string"
     body["timeBudget"] = tb
     body["mutationRate"] = mr
     return body, None
