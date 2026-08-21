@@ -30,6 +30,76 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
+function mimeForFileName(fileName: string): string {
+  return /\.(ya?ml)$/i.test(fileName) ? "application/yaml" : "application/json";
+}
+
+function downloadSpecFile(fileName: string, content: string) {
+  const blob = new Blob([content], { type: mimeForFileName(fileName) });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "openapi-spec.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function CopyIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function DownloadIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+  );
+}
+
 export default function SpecPage() {
   const { project, canManage } = useProject();
   const toast = useToast();
@@ -51,7 +121,7 @@ export default function SpecPage() {
 
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [showRaw, setShowRaw] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pendingReplace, setPendingReplace] = useState<File | null>(null);
 
@@ -109,6 +179,16 @@ export default function SpecPage() {
   });
 
   const uploading = uploadMutation.isPending;
+
+  async function copySpec(content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Copy failed — your browser blocked clipboard access.");
+    }
+  }
 
   if (isPending) {
     return (
@@ -290,17 +370,38 @@ export default function SpecPage() {
       </Card>
 
       <Card className="p-5">
-        <button
-          onClick={() => setShowRaw((s) => !s)}
-          className="text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400"
-        >
-          {showRaw ? "Hide raw spec" : "View raw spec"}
-        </button>
-        {showRaw && (
-          <pre className="mt-3 max-h-96 overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-xs text-zinc-700 dark:text-zinc-300">
-            {spec.fileContent}
-          </pre>
-        )}
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Raw spec
+          </h3>
+          <div className="flex shrink-0 gap-1">
+            <button
+              type="button"
+              onClick={() => copySpec(spec.fileContent)}
+              title={copied ? "Copied" : "Copy to clipboard"}
+              aria-label="Copy spec to clipboard"
+              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            >
+              {copied ? (
+                <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
+              ) : (
+                <CopyIcon className="h-4 w-4" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadSpecFile(spec.fileName, spec.fileContent)}
+              title="Download spec"
+              aria-label="Download spec file"
+              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            >
+              <DownloadIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <pre className="mt-3 max-h-96 overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 text-xs text-zinc-700 dark:text-zinc-300">
+          {spec.fileContent}
+        </pre>
       </Card>
 
       <ConfirmDialog
