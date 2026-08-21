@@ -10,6 +10,7 @@ import { Badge, roleTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { errMsg } from "@/lib/api";
 import {
@@ -254,17 +255,16 @@ export default function TeamPage() {
                 <div className="flex shrink-0 items-center gap-2">
                   {canManage && !isSelf ? (
                     <>
-                      <select
+                      <Select
+                        size="sm"
                         value={m.role}
-                        onChange={(e) => onChangeRole(m, e.target.value as Role)}
-                        className="h-8 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none"
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => onChangeRole(m, v as Role)}
+                        aria-label={`Role for ${m.username}`}
+                        options={ROLES.map((r) => ({
+                          value: r,
+                          label: r[0].toUpperCase() + r.slice(1),
+                        }))}
+                      />
                       <Button
                         variant="ghost"
                         size="sm"

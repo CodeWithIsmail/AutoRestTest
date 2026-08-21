@@ -202,6 +202,27 @@ export class TestSuitesController {
   }
 
   /**
+   * POST /projects/:projectId/test-suites/:suiteId/request-logs/:logId/run
+   * Live-sends one captured request against the target and returns the fresh
+   * response synchronously. Ephemeral — nothing is persisted. Owner/admin/tester.
+   */
+  @Post(':suiteId/request-logs/:logId/run')
+  @HttpCode(HttpStatus.OK)
+  async runRequestLog(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('suiteId', new ParseUUIDPipe()) suiteId: string,
+    @Param('logId', new ParseUUIDPipe()) logId: string,
+  ) {
+    return this.testSuitesService.runRequestLog(
+      projectId,
+      suiteId,
+      logId,
+      req.user.id,
+    );
+  }
+
+  /**
    * DELETE /projects/:projectId/test-suites/:suiteId
    * Deletes a test run (cascades its test cases). Owner/admin only.
    */

@@ -712,4 +712,126 @@ describe('TestSuitesService', () => {
       expect(summary.total).toBe(4);
     });
   });
+
+  describe('runRequestLog', () => {
+    const LOG_ID = 'log-1';
+    let fetchSpy: jest.SpiedFunction<typeof fetch>;
+
+    beforeEach(() => {
+      fetchSpy = jest.spyOn(global, 'fetch');
+    });
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    function stubLog(
+      overrides: Partial<{
+        method: string;
+        url: string;
+        requestHeaders: unknown;
+        requestBody: string | null;
+        requestTruncated: boolean;
+      }> = {},
+    ) {
+      prisma.requestLog.findFirst.mockResolvedValue({
+        method: 'GET',
+        url: 'http://localhost:8080/pets',
+        requestHeaders: { 'Content-Type': 'application/json' },
+        requestBody: null,
+        requestTruncated: false,
+        ...overrides,
+      });
+    }
+
+    it('403s when the caller lacks admin/tester access', async () => {
+      access.assertAccess.mockRejectedValue(new ForbiddenException());
+
+      await expect(
+        service.runRequestLog(PROJECT_ID, SUITE_ID, LOG_ID, USER_ID),
+      ).rejects.toThrow(ForbiddenException);
+      expect(access.assertAccess).toHaveBeenCalledWith(PROJECT_ID, USER_ID, [
+        Role.admin,
+        Role.tester,
+      ]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('404s when the request log is not found', async () => {
+      prisma.requestLog.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.runRequestLog(PROJECT_ID, SUITE_ID, LOG_ID, USER_ID),
+      ).rejects.toThrow(NotFoundException);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('400s when the captured request body was truncated, without sending it', async () => {
+      stubLog({ requestTruncated: true });
+
+      await expect(
+        service.runRequestLog(PROJECT_ID, SUITE_ID, LOG_ID, USER_ID),
+      ).rejects.toThrow(BadRequestException);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('sends a GET request without a body and returns the live response', async () => {
+      stubLog();
+      fetchSpy.mockResolvedValue({
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        text: () => Promise.resolve('{"ok":true}'),
+      } as unknown as Response);
+
+      const result = await service.runRequestLog(
+        PROJECT_ID,
+        SUITE_ID,
+        LOG_ID,
+        USER_ID,
+      );
+
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('http://localhost:8080/pets');
+      expect(init.method).toBe('GET');
+      expect(init.body).toBeUndefined();
+      expect(result).toMatchObject({
+        method: 'GET',
+        url: 'http://localhost:8080/pets',
+        statusCode: 200,
+        responseBody: '{"ok":true}',
+        responseTruncated: false,
+        error: null,
+      });
+    });
+
+    it('sends a POST request with its captured body', async () => {
+      stubLog({ method: 'POST', requestBody: '{"name":"Rex"}' });
+      fetchSpy.mockResolvedValue({
+        status: 201,
+        headers: new Map(),
+        text: () => Promise.resolve(''),
+      } as unknown as Response);
+
+      await service.runRequestLog(PROJECT_ID, SUITE_ID, LOG_ID, USER_ID);
+
+      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(init.method).toBe('POST');
+      expect(init.body).toBe('{"name":"Rex"}');
+    });
+
+    it('reports a fetch failure as `error` instead of throwing', async () => {
+      stubLog();
+      fetchSpy.mockRejectedValue(new Error('fetch failed'));
+
+      const result = await service.runRequestLog(
+        PROJECT_ID,
+        SUITE_ID,
+        LOG_ID,
+        USER_ID,
+      );
+
+      expect(result.statusCode).toBeNull();
+      expect(result.error).toContain('fetch failed');
+    });
+  });
 });

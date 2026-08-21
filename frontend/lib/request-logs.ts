@@ -6,6 +6,7 @@ import type {
   RequestLogDetail,
   RequestLogEndpointSummary,
   RequestLogPage,
+  RunRequestLogResult,
 } from "./types";
 
 export function getRequestLogSummary(
@@ -53,5 +54,17 @@ export function getRequestLog(
   return apiFetch<RequestLogDetail>(
     `/projects/${projectId}/test-suites/${suiteId}/request-logs/${logId}`,
     { signal },
+  );
+}
+
+/** Live-sends one captured request against the target. Ephemeral — nothing is persisted. */
+export function runRequestLog(
+  projectId: string,
+  suiteId: string,
+  logId: string,
+): Promise<RunRequestLogResult> {
+  return apiFetch<RunRequestLogResult>(
+    `/projects/${projectId}/test-suites/${suiteId}/request-logs/${logId}/run`,
+    { method: "POST" },
   );
 }

@@ -113,6 +113,23 @@ export interface RequestLogDetail {
 }
 
 /**
+ * Result of live-sending one captured request via `runRequestLog`. Ephemeral —
+ * unlike a replay, nothing here is persisted as a RequestLog row.
+ */
+export interface RunRequestLogResult {
+  method: string;
+  url: string;
+  statusCode: number | null;
+  durationMs: number;
+  responseHeaders: Record<string, string> | null;
+  responseBody: string | null;
+  responseTruncated: boolean;
+  /** Set instead of a response when the fetch itself failed (network error, timeout). */
+  error: string | null;
+  ranAt: Date;
+}
+
+/**
  * Translates the `status` query param into a Prisma filter on `statusCode`.
  *
  * Accepts either a class ('4xx') or an exact code ('404') — the SRS asks for
@@ -186,6 +203,11 @@ const REPLAY_DROP_HEADERS = new Set([
 // Mirrors engine-service/proxy.py's MAX_BODY_CHARS — same storage guard
 // applied to a replay's own captured responses.
 const MAX_REPLAY_BODY_CHARS = 100_000;
+
+// Mirrors engine-service/proxy.py's default fetch timeout. A single hung
+// target request must not hang a whole replay loop, or a synchronous
+// single-request run endpoint, forever.
+const SEND_TIMEOUT_MS = 60_000;
 
 @Injectable()
 export class TestSuitesService {
@@ -703,6 +725,56 @@ export class TestSuitesService {
     return log;
   }
 
+  // --------------------------------------------------------------------------
+  // runRequestLog — POST .../test-suites/:suiteId/request-logs/:logId/run
+  // Live-sends one captured request against the target and returns the fresh
+  // response synchronously. Ephemeral: nothing is persisted. Owner/admin/tester,
+  // same bar as replay() — this makes a real outbound call that can have real
+  // side effects on the target API.
+  // --------------------------------------------------------------------------
+  async runRequestLog(
+    projectId: string,
+    suiteId: string,
+    logId: string,
+    userId: string,
+  ): Promise<RunRequestLogResult> {
+    await this.access.assertAccess(projectId, userId, RUN_MUTATING_ROLES);
+
+    const log = await this.prisma.requestLog.findFirst({
+      where: {
+        id: logId,
+        testSuiteId: suiteId,
+        testSuite: { projectId },
+      },
+      select: {
+        method: true,
+        url: true,
+        requestHeaders: true,
+        requestBody: true,
+        requestTruncated: true,
+      },
+    });
+    if (!log) {
+      throw new NotFoundException('Request log not found');
+    }
+    if (log.requestTruncated) {
+      // Same reasoning executeReplay uses to skip these rather than resend
+      // them: the stored body is incomplete, so sending it would corrupt the
+      // request rather than faithfully reproduce it.
+      throw new BadRequestException(
+        'The captured request body was truncated when it was stored and cannot be run faithfully.',
+      );
+    }
+
+    const sent = await this.sendCapturedRequest(log);
+    return {
+      method: log.method,
+      url: log.url,
+      ranAt: new Date(),
+      ...sent,
+    };
+  }
+
   /**
    * The dependency graph snapshotted for one run, with the RL agent's learned
    * weights on its edges. Its own endpoint rather than a field on the suite
@@ -951,6 +1023,67 @@ export class TestSuitesService {
   }
 
   /**
+   * Sends one captured request live against its recorded URL and reports the
+   * fresh response. Shared by `executeReplay`'s sequential loop and
+   * `runRequestLog`'s single ad-hoc send, so the fetch/header-filter/
+   * truncation behavior stays identical between "replay a whole run" and
+   * "run just this one request" instead of drifting apart.
+   *
+   * Never throws: a network failure or timeout comes back as `error` set
+   * rather than a rejected promise, since both callers want to record/render
+   * that outcome rather than abort (a replay continues its sequence; a
+   * single run still owes the caller a 200 with the failure described).
+   */
+  private async sendCapturedRequest(log: {
+    method: string;
+    url: string;
+    requestHeaders: unknown;
+    requestBody: string | null;
+  }): Promise<{
+    statusCode: number | null;
+    durationMs: number;
+    responseHeaders: Record<string, string> | null;
+    responseBody: string | null;
+    responseTruncated: boolean;
+    error: string | null;
+  }> {
+    const headers = filterReplayHeaders(log.requestHeaders);
+    const canHaveBody = !['GET', 'HEAD'].includes(log.method.toUpperCase());
+    const started = Date.now();
+    let statusCode: number | null = null;
+    let responseHeaders: Record<string, string> | null = null;
+    let responseText: string | null = null;
+    let responseTruncated = false;
+    let error: string | null = null;
+
+    try {
+      const res = await fetch(log.url, {
+        method: log.method,
+        headers,
+        body:
+          canHaveBody && log.requestBody != null ? log.requestBody : undefined,
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      });
+      statusCode = res.status;
+      responseHeaders = Object.fromEntries(res.headers.entries());
+      const capped = truncateForStorage(await res.text());
+      responseText = capped.text;
+      responseTruncated = capped.truncated;
+    } catch (err) {
+      error = String(err);
+    }
+
+    return {
+      statusCode,
+      durationMs: Date.now() - started,
+      responseHeaders,
+      responseBody: responseText,
+      responseTruncated,
+      error,
+    };
+  }
+
+  /**
    * Sequentially resends one origin run's captured RequestLog rows verbatim
    * against the target. No engine-service involvement — this is a
    * deterministic HTTP replay, not a fresh AI-generated run. Best-effort per
@@ -1016,36 +1149,18 @@ export class TestSuitesService {
           continue;
         }
 
-        const headers = filterReplayHeaders(log.requestHeaders);
-        const canHaveBody = !['GET', 'HEAD'].includes(log.method.toUpperCase());
-        const started = Date.now();
-        let statusCode: number | null = null;
-        let responseHeaders: Record<string, string> | null = null;
-        let responseText: string | null = null;
-        let responseTruncated = false;
-
-        try {
-          const res = await fetch(log.url, {
-            method: log.method,
-            headers,
-            body:
-              canHaveBody && log.requestBody != null
-                ? log.requestBody
-                : undefined,
-          });
-          statusCode = res.status;
-          responseHeaders = Object.fromEntries(res.headers.entries());
-          const capped = truncateForStorage(await res.text());
-          responseText = capped.text;
-          responseTruncated = capped.truncated;
-        } catch (err) {
+        const sent = await this.sendCapturedRequest(log);
+        if (sent.error) {
           this.logger.warn(
-            `Replay ${replaySuiteId}: request ${seq} (${log.method} ${log.path}) failed: ${String(err)}`,
+            `Replay ${replaySuiteId}: request ${seq} (${log.method} ${log.path}) failed: ${sent.error}`,
           );
         }
 
         totalSent += 1;
-        if (statusCode != null && Math.floor(statusCode / 100) === 2) {
+        if (
+          sent.statusCode != null &&
+          Math.floor(sent.statusCode / 100) === 2
+        ) {
           passedRequests += 1;
         }
 
@@ -1056,20 +1171,21 @@ export class TestSuitesService {
           method: log.method,
           path: stripNulBytes(log.path) ?? log.path,
           url: stripNulBytes(log.url) ?? log.url,
-          statusCode,
-          durationMs: Date.now() - started,
+          statusCode: sent.statusCode,
+          durationMs: sent.durationMs,
           requestHeaders: log.requestHeaders ?? Prisma.JsonNull,
           requestBody: stripNulBytes(log.requestBody),
           requestTruncated: false,
-          responseHeaders: (stripNulFromHeaders(responseHeaders) ??
-            Prisma.JsonNull) as Prisma.InputJsonValue,
-          responseBody: stripNulBytes(responseText),
-          responseTruncated,
+          responseHeaders:
+            stripNulFromHeaders(sent.responseHeaders) ?? Prisma.JsonNull,
+          responseBody: stripNulBytes(sent.responseBody),
+          responseTruncated: sent.responseTruncated,
         });
 
         if (log.endpointId) {
           const dist = perEndpoint.get(log.endpointId) ?? {};
-          const key = statusCode != null ? String(statusCode) : 'none';
+          const key =
+            sent.statusCode != null ? String(sent.statusCode) : 'none';
           dist[key] = (dist[key] ?? 0) + 1;
           perEndpoint.set(log.endpointId, dist);
         }

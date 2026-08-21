@@ -1,6 +1,6 @@
 "use client";
 
-import { Select } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 /** Outcome classes a per-endpoint result can be narrowed to. */
 export type OutcomeFilter = "all" | "successful" | "client" | "server";
@@ -83,17 +83,15 @@ export function EndpointFilterBar({
 
         {codes.length > 0 && (
           <Select
+            size="sm"
             value={code}
-            onChange={(e) => onCode(e.target.value)}
+            onChange={onCode}
             aria-label="Filter endpoints by HTTP response code"
-          >
-            <option value="">Any code</option>
-            {codes.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "", label: "Any code" },
+              ...codes.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         )}
       </div>
 

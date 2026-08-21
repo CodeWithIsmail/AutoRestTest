@@ -18,6 +18,7 @@ import { Badge, roleTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DropdownMenu, type MenuItem } from "@/components/ui/DropdownMenu";
+import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { errMsg } from "@/lib/api";
 import { deleteProject } from "@/lib/projects";
@@ -265,18 +266,13 @@ export default function ProjectsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-56 shrink-0 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           />
-          <select
+          <Select
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+            onChange={(v) => setRoleFilter(v as RoleFilter)}
             aria-label="Filter by role"
-            className="h-10 shrink-0 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-          >
-            {ROLE_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            className="shrink-0"
+            options={ROLE_FILTER_OPTIONS}
+          />
         </div>
 
         <ViewToggle value={view} onChange={changeView} />

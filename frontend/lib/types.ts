@@ -284,6 +284,24 @@ export interface RequestLogDetail {
   createdAt: string;
 }
 
+/**
+ * Result of live-sending one captured request via `runRequestLog`. Ephemeral —
+ * unlike a replay, nothing here is persisted; it only reflects what came back
+ * just now.
+ */
+export interface RunRequestLogResult {
+  method: string;
+  url: string;
+  statusCode: number | null;
+  durationMs: number;
+  responseHeaders: Record<string, string> | null;
+  responseBody: string | null;
+  responseTruncated: boolean;
+  /** Set instead of a response when the send itself failed (network error, timeout). */
+  error: string | null;
+  ranAt: string;
+}
+
 // --- reports ----------------------------------------------------------------
 
 export interface ReportEndpoint {

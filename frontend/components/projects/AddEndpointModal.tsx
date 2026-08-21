@@ -5,6 +5,7 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { FormField, TextareaField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { errMsg } from "@/lib/api";
 import { createEndpoint } from "@/lib/endpoints";
 import { qk } from "@/lib/query-keys";
@@ -79,18 +80,12 @@ export function AddEndpointModal({
           <label htmlFor="method" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Method
           </label>
-          <select
+          <Select
             id="method"
             value={method}
-            onChange={(e) => setMethod(e.target.value as HttpMethod)}
-            className="h-10 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-          >
-            {METHODS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setMethod(v as HttpMethod)}
+            options={METHODS.map((m) => ({ value: m, label: m }))}
+          />
         </div>
         <FormField
           label="Path"

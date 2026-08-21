@@ -1,8 +1,4 @@
-import type {
-  InputHTMLAttributes,
-  SelectHTMLAttributes,
-  TextareaHTMLAttributes,
-} from "react";
+import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 const FIELD_CLASS =
   "rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
@@ -29,26 +25,6 @@ export function FormField({
       <input id={inputId} className={`h-10 ${FIELD_CLASS} ${className}`} {...props} />
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
-  );
-}
-
-/**
- * Compact unlabelled dropdown for filter bars, where a stacked label would
- * dominate the row. Because there is no visible label, callers must pass
- * `aria-label`. Use `FormField` instead inside forms.
- */
-export function Select({
-  className = "",
-  children,
-  ...props
-}: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      className={`h-8 cursor-pointer py-0 text-xs ${FIELD_CLASS} ${className}`}
-      {...props}
-    >
-      {children}
-    </select>
   );
 }
 

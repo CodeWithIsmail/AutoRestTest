@@ -5,6 +5,7 @@ import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { errMsg } from "@/lib/api";
 import { createInvitation } from "@/lib/collaboration";
 import { qk } from "@/lib/query-keys";
@@ -85,18 +86,15 @@ export function InviteModal({
           <label htmlFor="role" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Role
           </label>
-          <select
+          <Select
             id="role"
             value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="h-10 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-          >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setRole(v as Role)}
+            options={ROLES.map((r) => ({
+              value: r,
+              label: r[0].toUpperCase() + r.slice(1),
+            }))}
+          />
           <p className="text-xs text-zinc-500">{ROLE_HINT[role]}</p>
         </div>
         <p className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-xs text-zinc-500">

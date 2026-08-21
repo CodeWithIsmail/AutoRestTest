@@ -4,19 +4,29 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
 import { useProject } from "@/components/projects/project-context";
+import { useToast } from "@/components/toast";
 import { Badge, MethodBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Select } from "@/components/ui/Input";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { CheckIcon, CopyIcon } from "@/components/ui/icons";
+import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { errMsg } from "@/lib/api";
+import { buildCurlCommand } from "@/lib/curl";
 import {
   requestLogOptions,
   requestLogSummaryOptions,
   requestLogsOptions,
 } from "@/lib/queries";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RequestLogDetail } from "@/lib/types";
+import { runRequestLog } from "@/lib/request-logs";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { RequestLogDetail, RunRequestLogResult } from "@/lib/types";
 
 const PAGE_SIZE = 50;
 
@@ -52,23 +62,48 @@ function pretty(body: string | null): string {
 }
 
 function HeadersBlock({
+  label,
   headers,
 }: {
+  label: string;
   headers: Record<string, string> | null;
 }) {
   const entries = Object.entries(headers ?? {});
-  if (entries.length === 0) {
-    return <p className="text-xs text-zinc-500">No headers.</p>;
-  }
   return (
-    <div className="flex flex-col gap-0.5 font-mono text-xs">
-      {entries.map(([k, v]) => (
-        <div key={k} className="break-all">
-          <span className="text-zinc-600 dark:text-zinc-400">{k}:</span>{" "}
-          <span className="text-zinc-700 dark:text-zinc-300">{v}</span>
+    <details className="group">
+      <summary className="mb-1 flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 select-none [&::-webkit-details-marker]:hidden">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90"
+          aria-hidden
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        {label}
+        {entries.length > 0 && (
+          <span className="font-normal normal-case text-zinc-400">
+            ({entries.length})
+          </span>
+        )}
+      </summary>
+      {entries.length === 0 ? (
+        <p className="text-xs text-zinc-500">No headers.</p>
+      ) : (
+        <div className="flex max-h-96 flex-col gap-0.5 overflow-auto rounded-md bg-white dark:bg-zinc-950 p-3 font-mono text-xs ring-1 ring-zinc-200 dark:ring-zinc-800">
+          {entries.map(([k, v]) => (
+            <div key={k} className="break-all">
+              <span className="text-zinc-600 dark:text-zinc-400">{k}:</span>{" "}
+              <span className="text-zinc-700 dark:text-zinc-300">{v}</span>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      )}
+    </details>
   );
 }
 
@@ -79,12 +114,38 @@ function BodyBlock({
   body: string | null;
   truncated: boolean;
 }) {
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+
   if (!body) return <p className="text-xs text-zinc-500">Empty body.</p>;
+
+  async function copyBody() {
+    try {
+      await navigator.clipboard.writeText(pretty(body));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Copy failed — your browser blocked clipboard access.");
+    }
+  }
+
   return (
-    <div>
-      <pre className="max-h-96 overflow-auto rounded-md bg-white dark:bg-zinc-950 p-3 font-mono text-xs text-zinc-700 dark:text-zinc-300 ring-1 ring-zinc-200 dark:ring-zinc-800">
+    <div className="group/body relative">
+      <pre className="max-h-96 overflow-auto rounded-md bg-white dark:bg-zinc-950 p-3 pr-9 font-mono text-xs text-zinc-700 dark:text-zinc-300 ring-1 ring-zinc-200 dark:ring-zinc-800">
         {pretty(body)}
       </pre>
+      <button
+        type="button"
+        onClick={copyBody}
+        title={copied ? "Copied" : "Copy body"}
+        className="absolute right-2 top-2 rounded-md p-1 text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 focus-visible:opacity-100 group-hover/body:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+      >
+        {copied ? (
+          <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500" />
+        ) : (
+          <CopyIcon className="h-3.5 w-3.5" />
+        )}
+      </button>
       {truncated && (
         <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
           Body was truncated for storage.
@@ -94,60 +155,168 @@ function BodyBlock({
   );
 }
 
-function DetailPanel({ detail }: { detail: RequestLogDetail }) {
+type LiveRunState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "done"; result: RunRequestLogResult };
+
+function DetailPanel({
+  detail,
+  canRun,
+  live,
+  onRun,
+}: {
+  detail: RequestLogDetail;
+  canRun: boolean;
+  live: LiveRunState | undefined;
+  onRun: () => void;
+}) {
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+
+  async function copyCurl() {
+    try {
+      await navigator.clipboard.writeText(buildCurlCommand(detail));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      if (detail.requestTruncated) {
+        toast.error(
+          "Copied, but the captured request body was truncated — the curl command's body is incomplete.",
+        );
+      }
+    } catch {
+      toast.error("Copy failed — your browser blocked clipboard access.");
+    }
+  }
+
   return (
-    <div className="grid gap-5 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 lg:grid-cols-2">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <MethodBadge method={detail.method} />
-          <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400 break-all">
-            {detail.url}
-          </span>
+    <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40">
+      <div className="flex items-center justify-end gap-2 border-b border-zinc-200 dark:border-zinc-800 px-5 py-2.5">
+        <button
+          type="button"
+          onClick={copyCurl}
+          title={copied ? "Copied" : "Copy as curl"}
+          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        >
+          {copied ? (
+            <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500" />
+          ) : (
+            <CopyIcon className="h-3.5 w-3.5" />
+          )}
+          Copy as curl
+        </button>
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={live?.status === "loading"}
+          disabled={!canRun}
+          title={
+            canRun ? undefined : "Requires admin or tester role on this project"
+          }
+          onClick={onRun}
+        >
+          Run
+        </Button>
+      </div>
+
+      <div className="grid gap-5 p-5 lg:grid-cols-2">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <MethodBadge method={detail.method} />
+            <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400 break-all">
+              {detail.url}
+            </span>
+          </div>
+          <HeadersBlock label="Request headers" headers={detail.requestHeaders} />
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Request body
+            </p>
+            <BodyBlock body={detail.requestBody} truncated={detail.requestTruncated} />
+          </div>
         </div>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Request headers
-          </p>
-          <HeadersBlock headers={detail.requestHeaders} />
-        </div>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Request body
-          </p>
-          <BodyBlock body={detail.requestBody} truncated={detail.requestTruncated} />
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Badge tone={httpTone(detail.statusCode)}>
+              {detail.statusCode ?? "—"}
+            </Badge>
+            {detail.durationMs != null && (
+              <span className="text-xs text-zinc-500">{detail.durationMs} ms</span>
+            )}
+          </div>
+          <HeadersBlock label="Response headers" headers={detail.responseHeaders} />
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Response body
+            </p>
+            <BodyBlock
+              body={detail.responseBody}
+              truncated={detail.responseTruncated}
+            />
+          </div>
         </div>
       </div>
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Badge tone={httpTone(detail.statusCode)}>
-            {detail.statusCode ?? "—"}
-          </Badge>
-          {detail.durationMs != null && (
-            <span className="text-xs text-zinc-500">{detail.durationMs} ms</span>
+
+      {live && (
+        <div className="flex flex-col gap-3 border-t border-zinc-200 dark:border-zinc-800 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <Badge tone="purple">Live response</Badge>
+            {live.status === "done" && (
+              <span className="text-xs text-zinc-500">
+                Ran at {new Date(live.result.ranAt).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          {live.status === "loading" && (
+            <div className="flex justify-center py-4">
+              <Spinner className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+            </div>
+          )}
+          {live.status === "error" && (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {live.message}
+            </p>
+          )}
+          {live.status === "done" && (
+            <>
+              <div className="flex items-center gap-2">
+                <Badge tone={httpTone(live.result.statusCode)}>
+                  {live.result.statusCode ?? "—"}
+                </Badge>
+                <span className="text-xs text-zinc-500">
+                  {live.result.durationMs} ms
+                </span>
+              </div>
+              {live.result.error && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Target unreachable: {live.result.error}
+                </p>
+              )}
+              <div className="grid gap-5 lg:grid-cols-2">
+                <HeadersBlock
+                  label="Response headers"
+                  headers={live.result.responseHeaders}
+                />
+                <div>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Response body
+                  </p>
+                  <BodyBlock
+                    body={live.result.responseBody}
+                    truncated={live.result.responseTruncated}
+                  />
+                </div>
+              </div>
+            </>
           )}
         </div>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Response headers
-          </p>
-          <HeadersBlock headers={detail.responseHeaders} />
-        </div>
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Response body
-          </p>
-          <BodyBlock
-            body={detail.responseBody}
-            truncated={detail.responseTruncated}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
 export default function CapturedRequestsPage() {
-  const { project } = useProject();
+  const { project, canRun } = useProject();
   const router = useRouter();
   const { suiteId, endpointId } = useParams<{
     suiteId: string;
@@ -163,8 +332,37 @@ export default function CapturedRequestsPage() {
   const [details, setDetails] = useState<Record<string, RequestLogDetail>>({});
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [liveRuns, setLiveRuns] = useState<Record<string, LiveRunState>>({});
+  const [confirmRunId, setConfirmRunId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+
+  const runMutation = useMutation({
+    mutationFn: (logId: string) => runRequestLog(project.id, suiteId, logId),
+    onMutate: (logId) => {
+      setLiveRuns((m) => ({ ...m, [logId]: { status: "loading" } }));
+    },
+    onSuccess: (result, logId) => {
+      setLiveRuns((m) => ({ ...m, [logId]: { status: "done", result } }));
+    },
+    onError: (err, logId) => {
+      setLiveRuns((m) => ({
+        ...m,
+        [logId]: { status: "error", message: errMsg(err, "Run failed") },
+      }));
+    },
+  });
+
+  // GET/HEAD run immediately; anything that could have real side effects on
+  // the target API is gated behind an extra confirmation click.
+  function startRun(id: string, method: string) {
+    const m = method.toUpperCase();
+    if (m === "GET" || m === "HEAD") {
+      runMutation.mutate(id);
+    } else {
+      setConfirmRunId(id);
+    }
+  }
 
   const { data, isPending, isFetching, error } = useQuery({
     ...requestLogsOptions(project.id, suiteId, {
@@ -273,24 +471,23 @@ export default function CapturedRequestsPage() {
       {/* Filters: endpoint, status class, exact response code */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Select
+          size="sm"
           value={endpointId}
-          onChange={(e) => chooseEndpoint(e.target.value)}
+          onChange={chooseEndpoint}
           aria-label="Filter by endpoint"
           className="max-w-xs"
-        >
-          <option value="all">All requests</option>
-          {(summary ?? []).map((s) =>
-            s.endpointId === null ? (
-              <option key="unmatched" value="unmatched">
-                Unmatched ({s.total})
-              </option>
-            ) : (
-              <option key={s.endpointId} value={s.endpointId}>
-                {s.method} {s.path} ({s.total})
-              </option>
+          options={[
+            { value: "all", label: "All requests" },
+            ...(summary ?? []).map((s) =>
+              s.endpointId === null
+                ? { value: "unmatched", label: `Unmatched (${s.total})` }
+                : {
+                    value: s.endpointId,
+                    label: `${s.method} ${s.path} (${s.total})`,
+                  },
             ),
-          )}
-        </Select>
+          ]}
+        />
 
         <div className="flex flex-wrap gap-1">
           {STATUS_FILTERS.map((f) => (
@@ -311,17 +508,15 @@ export default function CapturedRequestsPage() {
 
         {codeOptions.length > 0 && (
           <Select
+            size="sm"
             value={EXACT_CODE.test(status) ? status : ""}
-            onChange={(e) => chooseStatus(e.target.value)}
+            onChange={chooseStatus}
             aria-label="Filter by HTTP response code"
-          >
-            <option value="">Any code</option>
-            {codeOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "", label: "Any code" },
+              ...codeOptions.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         )}
       </div>
 
@@ -405,7 +600,14 @@ export default function CapturedRequestsPage() {
                                 {detailError}
                               </p>
                             ) : details[r.id] ? (
-                              <DetailPanel detail={details[r.id]} />
+                              <DetailPanel
+                                detail={details[r.id]}
+                                canRun={canRun}
+                                live={liveRuns[r.id]}
+                                onRun={() =>
+                                  startRun(r.id, details[r.id].method)
+                                }
+                              />
                             ) : null}
                           </td>
                         </tr>
@@ -452,6 +654,20 @@ export default function CapturedRequestsPage() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmRunId !== null}
+        title="Run this request?"
+        message="This sends a live request to the target API and may cause real side effects (data changes, side effects on the target system). Continue?"
+        confirmLabel="Run"
+        danger
+        loading={runMutation.isPending}
+        onConfirm={() => {
+          if (confirmRunId) runMutation.mutate(confirmRunId);
+          setConfirmRunId(null);
+        }}
+        onClose={() => setConfirmRunId(null)}
+      />
     </div>
   );
 }

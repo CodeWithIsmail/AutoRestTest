@@ -1,6 +1,6 @@
 "use client";
 
-import { Select } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import type { GraphStats } from "@/lib/types";
 import type { LayoutMode } from "./layout";
 
@@ -80,20 +80,16 @@ export function GraphControls({
       <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
         Show
         <Select
+          size="sm"
           aria-label="Which dependencies to show"
           value={filter}
-          onChange={(e) => onFilterChange(e.target.value as EdgeFilter)}
-        >
-          {(Object.keys(FILTER_LABEL) as EdgeFilter[]).map((value) => (
-            <option
-              key={value}
-              value={value}
-              disabled={value === "confirmed" && !hasLearned}
-            >
-              {FILTER_LABEL[value]}
-            </option>
-          ))}
-        </Select>
+          onChange={(v) => onFilterChange(v as EdgeFilter)}
+          options={(Object.keys(FILTER_LABEL) as EdgeFilter[]).map((value) => ({
+            value,
+            label: FILTER_LABEL[value],
+            disabled: value === "confirmed" && !hasLearned,
+          }))}
+        />
       </label>
 
       {filter !== "all" && (
