@@ -9,10 +9,24 @@ interface ModalProps {
   children: React.ReactNode;
   /** Optional footer (e.g. action buttons). */
   footer?: React.ReactNode;
+  /** Dialog width. Defaults to "md" (unchanged from before this prop existed). */
+  size?: "md" | "lg";
 }
 
+const SIZES = {
+  md: "max-w-md",
+  lg: "max-w-2xl",
+};
+
 /** Centered dialog with a dark backdrop. Closes on backdrop click + Esc. */
-export function Modal({ open, onClose, title, children, footer }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  size = "md",
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -32,10 +46,10 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50"
+        className={`flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
           <button
             onClick={onClose}
@@ -57,9 +71,9 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
             </svg>
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <div className="flex shrink-0 justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
             {footer}
           </div>
         )}

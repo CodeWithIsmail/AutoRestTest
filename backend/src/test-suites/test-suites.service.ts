@@ -49,6 +49,8 @@ export interface TestSuiteDetail extends TestSuiteSummary {
   jobId: string | null;
   /** Null when the account that triggered the run has since been deleted. */
   triggeredById: string | null;
+  /** Extra HTTP headers sent with every request to the target API. */
+  customHeaders: Record<string, string> | null;
 }
 
 /** A persisted per-endpoint result row for a completed run. */
@@ -178,7 +180,22 @@ const DETAIL_SELECT = {
   ...SUMMARY_SELECT,
   jobId: true,
   triggeredById: true,
+  customHeaders: true,
 } as const;
+
+/**
+ * Prisma types `customHeaders` as the general `Json` type; narrow it back to
+ * the `Record<string, string>` shape the DTO validator already guarantees
+ * every stored value has.
+ */
+function toDetail<T extends { customHeaders: Prisma.JsonValue }>(
+  row: T,
+): Omit<T, 'customHeaders'> & { customHeaders: Record<string, string> | null } {
+  return {
+    ...row,
+    customHeaders: row.customHeaders as Record<string, string> | null,
+  };
+}
 
 // Roles (besides owner) allowed to configure/trigger a run. Testers are the
 // role meant to run tests, so they may create suites — unlike specs/endpoints
@@ -242,7 +259,7 @@ export class TestSuitesService {
       );
     }
 
-    return this.prisma.testSuite.create({
+    const created = await this.prisma.testSuite.create({
       data: {
         projectId,
         triggeredById: userId,
@@ -253,9 +270,11 @@ export class TestSuitesService {
         ...(dto.mutationRate !== undefined
           ? { mutationRate: dto.mutationRate }
           : {}),
+        ...(dto.customHeaders ? { customHeaders: dto.customHeaders } : {}),
       },
       select: DETAIL_SELECT,
     });
+    return toDetail(created);
   }
 
   // --------------------------------------------------------------------------
@@ -297,7 +316,7 @@ export class TestSuitesService {
       throw new NotFoundException('Test suite not found');
     }
 
-    return suite;
+    return toDetail(suite);
   }
 
   // --------------------------------------------------------------------------
@@ -341,6 +360,7 @@ export class TestSuitesService {
         targetUrl: true,
         timeBudget: true,
         mutationRate: true,
+        customHeaders: true,
       },
     });
     if (!suite) {
@@ -365,6 +385,8 @@ export class TestSuitesService {
       targetUrl: suite.targetUrl,
       timeBudget: suite.timeBudget,
       mutationRate: suite.mutationRate,
+      customHeaders:
+        (suite.customHeaders as Record<string, string> | null) ?? undefined,
     });
 
     // Reset the run record + drop any results from a previous run.
@@ -387,7 +409,7 @@ export class TestSuitesService {
     });
 
     this.beginPolling(projectId, suiteId, job.jobId);
-    return updated;
+    return toDetail(updated);
   }
 
   // --------------------------------------------------------------------------
@@ -413,6 +435,7 @@ export class TestSuitesService {
         targetUrl: true,
         timeBudget: true,
         mutationRate: true,
+        customHeaders: true,
         totalEndpoints: true,
         originSuiteId: true,
       },
@@ -445,6 +468,9 @@ export class TestSuitesService {
         targetUrl: source.targetUrl,
         timeBudget: source.timeBudget,
         mutationRate: source.mutationRate,
+        ...(source.customHeaders
+          ? { customHeaders: source.customHeaders }
+          : {}),
         totalEndpoints: source.totalEndpoints,
         runType: TestRunType.replay,
         originSuiteId: originId,
@@ -454,7 +480,7 @@ export class TestSuitesService {
     });
 
     void this.executeReplay(replaySuite.id, originId);
-    return replaySuite;
+    return toDetail(replaySuite);
   }
 
   // --------------------------------------------------------------------------

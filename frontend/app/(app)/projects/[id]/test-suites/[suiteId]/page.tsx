@@ -388,6 +388,21 @@ export default function SuiteDetailPage() {
                 {suite.targetUrl}
               </dd>
             </div>
+            {suite.customHeaders && Object.keys(suite.customHeaders).length > 0 && (
+              <div className="col-span-2">
+                <dt className="text-xs uppercase tracking-wider text-zinc-500">
+                  Custom headers
+                </dt>
+                <dd className="mt-0.5 flex flex-col gap-0.5 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                  {Object.entries(suite.customHeaders).map(([key, value]) => (
+                    <div key={key} className="break-all">
+                      <span className="text-zinc-500 dark:text-zinc-500">{key}:</span>{" "}
+                      {value}
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            )}
             {isReplay && suite.originSuiteId && (
               <div className="col-span-2">
                 <dt className="text-xs uppercase tracking-wider text-zinc-500">

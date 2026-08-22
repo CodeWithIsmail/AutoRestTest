@@ -211,6 +211,8 @@ export interface TestSuiteSummary {
 export interface TestSuiteDetail extends TestSuiteSummary {
   jobId: string | null;
   triggeredById: string;
+  /** Extra HTTP headers sent with every request to the target API. */
+  customHeaders: Record<string, string> | null;
 }
 
 export interface TestCaseItem {
@@ -230,6 +232,12 @@ export interface CreateTestSuiteInput {
   targetUrl: string;
   timeBudget: number;
   mutationRate?: number;
+  /**
+   * Extra HTTP headers sent with every request to the target API (e.g.
+   * Authorization for Basic/Bearer/API-key auth). Write-only: never echoed
+   * back in TestSuiteSummary/TestSuiteDetail.
+   */
+  customHeaders?: Record<string, string>;
 }
 
 // --- captured requests (recording proxy) ------------------------------------

@@ -417,6 +417,10 @@ model TestSuite {
   targetUrl    String
   timeBudget   Int // engine time_duration, in seconds
   mutationRate Float  @default(0.2)
+  // Extra HTTP headers layered onto every request made to the target API
+  // (e.g. Authorization for Basic/Bearer/API-key auth). Write-only: never
+  // selected back into read responses, since these are live credentials.
+  customHeaders Json?
 
   // Results summary — filled from the engine report
   totalEndpoints   Int @default(0)

@@ -1,6 +1,7 @@
 import {
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -8,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { IsHeaderMap } from './header-map.validator';
 
 /**
  * Payload accepted by `POST /projects/:projectId/test-suites` to configure a
@@ -18,6 +20,8 @@ import {
  * - `targetUrl`: the live base URL the engine will send requests to
  * - `timeBudget`: how long the engine may run, in seconds (1–3600)
  * - `mutationRate`: fault-injection aggressiveness, 0–1 (defaults to 0.2)
+ * - `customHeaders`: extra HTTP headers sent with every request to the target
+ *   API (e.g. `Authorization` for Basic/Bearer/API-key auth)
  */
 export class CreateTestSuiteDto {
   @IsOptional()
@@ -46,4 +50,9 @@ export class CreateTestSuiteDto {
   @Min(0, { message: 'Mutation rate must be at least 0' })
   @Max(1, { message: 'Mutation rate must be at most 1' })
   mutationRate?: number;
+
+  @IsOptional()
+  @IsObject({ message: 'Custom headers must be a key/value object' })
+  @IsHeaderMap()
+  customHeaders?: Record<string, string>;
 }

@@ -13,6 +13,7 @@ export interface EngineRunPayload {
   timeBudget: number;
   mutationRate: number;
   authHeader?: string;
+  customHeaders?: Record<string, string>;
 }
 
 export type EngineJobState = 'pending' | 'running' | 'completed' | 'failed';

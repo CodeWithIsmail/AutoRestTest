@@ -178,6 +178,35 @@ describe('TestSuitesService', () => {
       >;
       expect('mutationRate' in createCalls[0][0].data).toBe(false);
     });
+
+    it('persists customHeaders when provided', async () => {
+      prisma.endpoint.count.mockResolvedValue(1);
+      prisma.testSuite.create.mockResolvedValue({});
+
+      await service.create(PROJECT_ID, USER_ID, {
+        ...dto,
+        customHeaders: { Authorization: 'Basic dXNlcjpwYXNz' },
+      });
+
+      const createCalls = prisma.testSuite.create.mock.calls as Array<
+        [{ data: Record<string, unknown> }]
+      >;
+      expect(createCalls[0][0].data.customHeaders).toEqual({
+        Authorization: 'Basic dXNlcjpwYXNz',
+      });
+    });
+
+    it('omits customHeaders when not provided', async () => {
+      prisma.endpoint.count.mockResolvedValue(1);
+      prisma.testSuite.create.mockResolvedValue({});
+
+      await service.create(PROJECT_ID, USER_ID, dto);
+
+      const createCalls = prisma.testSuite.create.mock.calls as Array<
+        [{ data: Record<string, unknown> }]
+      >;
+      expect('customHeaders' in createCalls[0][0].data).toBe(false);
+    });
   });
 
   describe('findForProject', () => {
@@ -316,6 +345,40 @@ describe('TestSuitesService', () => {
       expect(updateCalls[0][0].data.status).toBe(SuiteStatus.running);
       expect(updateCalls[0][0].data.jobId).toBe('job-1');
       expect(result.status).toBe(SuiteStatus.running);
+    });
+
+    it("forwards the suite's stored customHeaders into the engine payload", async () => {
+      prisma.testSuite.findFirst.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.pending,
+        targetUrl: 'http://localhost:8080',
+        timeBudget: 300,
+        mutationRate: 0.2,
+        customHeaders: { Authorization: 'Basic dXNlcjpwYXNz' },
+      });
+      prisma.apiSpecification.findUnique.mockResolvedValue({
+        fileContent: 'openapi: 3.0.0',
+      });
+      engine.startRun.mockResolvedValue({
+        jobId: 'job-1',
+        status: 'pending',
+        error: null,
+      });
+      prisma.testSuite.update.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.running,
+        jobId: 'job-1',
+      });
+
+      await service.run(PROJECT_ID, SUITE_ID, USER_ID);
+
+      expect(engine.startRun).toHaveBeenCalledWith({
+        spec: 'openapi: 3.0.0',
+        targetUrl: 'http://localhost:8080',
+        timeBudget: 300,
+        mutationRate: 0.2,
+        customHeaders: { Authorization: 'Basic dXNlcjpwYXNz' },
+      });
     });
 
     it('404s when the suite is not in the project', async () => {
