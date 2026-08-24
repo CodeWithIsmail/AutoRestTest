@@ -1,22 +1,41 @@
 // Static illustration for the landing page's product preview — not the real
-// interactive graph (see components/graph/GraphCanvas.tsx for that). Reuses
-// the same --graph-* tokens and method hex constants as the real canvas so it
-// reads as "the same graph" rather than a generic marketing illustration.
+// interactive graph (see components/graph/GraphCanvas.tsx for that). It mirrors
+// that canvas's conventions so the two read as the same thing: node border by
+// outcome (emerald 2xx / red server error / dashed neutral never called), the
+// method label in its own method colour, and the shared --graph-* tokens.
 const EMERALD = "#10b981";
 const EMERALD_LIGHT = "#34d399";
+const RED = "#ef4444";
 const AMBER = "#f59e0b";
-const BLUE = "#3b82f6";
 
-const NODES = [
-  { x: 16, y: 140, w: 136, h: 40, method: "POST", methodColor: AMBER, path: "/users" },
-  { x: 194, y: 76, w: 154, h: 40, method: "GET", methodColor: EMERALD, path: "/users/{id}" },
-  { x: 388, y: 140, w: 194, h: 40, method: "POST", methodColor: AMBER, path: "/users/{id}/orders" },
-  { x: 622, y: 76, w: 150, h: 40, method: "GET", methodColor: EMERALD, path: "/orders/{id}" },
+type Node = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  method: string;
+  methodColor: string;
+  path: string;
+  border: string;
+};
+
+const NODES: Node[] = [
+  { x: 16, y: 140, w: 150, h: 40, method: "POST", methodColor: AMBER, path: "/users", border: EMERALD },
+  { x: 208, y: 74, w: 168, h: 40, method: "GET", methodColor: EMERALD, path: "/users/{id}", border: EMERALD },
+  { x: 418, y: 140, w: 208, h: 40, method: "POST", methodColor: AMBER, path: "/users/{id}/orders", border: EMERALD },
+  { x: 620, y: 216, w: 160, h: 40, method: "GET", methodColor: EMERALD, path: "/orders/{id}", border: RED },
 ];
 
-// Unconnected on purpose — a node the graph builds but no generated request
-// sequence has reached yet, drawn dashed/muted to read as "not yet covered".
-const DANGLING = { x: 194, y: 220, w: 150, h: 40, method: "GET", methodColor: BLUE, path: "/reports" };
+// Unconnected on purpose: nothing in the spec produces what it needs, so no
+// generated sequence ever reaches it.
+const DANGLING = {
+  x: 208,
+  y: 216,
+  w: 150,
+  h: 40,
+  method: "GET",
+  path: "/reports",
+};
 
 const EDGES: [number, number][] = [
   [0, 1],
@@ -24,32 +43,31 @@ const EDGES: [number, number][] = [
   [2, 3],
 ];
 
-function center(n: (typeof NODES)[number]) {
-  return { x: n.x + n.w, y: n.y + n.h / 2, x0: n.x, x1: n.x + n.w };
-}
-
 export function MiniDependencyGraph() {
   return (
     <svg
-      viewBox="0 0 788 280"
+      viewBox="0 0 796 280"
       className="h-full w-full"
+      preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label="Illustration of a semantic dependency graph linking API endpoints"
+      aria-label="A dependency graph: POST /users feeds GET /users/{id}, which feeds POST /users/{id}/orders, which feeds GET /orders/{id}. A separate GET /reports node is never reached."
     >
-      <rect width="788" height="280" rx="16" fill="var(--graph-canvas)" />
-
       {EDGES.map(([from, to]) => {
-        const a = center(NODES[from]);
-        const b = center(NODES[to]);
-        const midX = (a.x + b.x0) / 2;
+        const a = NODES[from];
+        const b = NODES[to];
+        const ax = a.x + a.w;
+        const ay = a.y + a.h / 2;
+        const bx = b.x;
+        const by = b.y + b.h / 2;
+        const midX = (ax + bx) / 2;
         return (
           <path
             key={`${from}-${to}`}
-            d={`M${a.x},${a.y} Q${midX},${(a.y + b.y) / 2} ${b.x0},${b.y}`}
+            d={`M${ax},${ay} C${midX},${ay} ${midX},${by} ${bx},${by}`}
             fill="none"
             stroke={EMERALD_LIGHT}
             strokeWidth="1.5"
-            strokeOpacity="0.7"
+            strokeOpacity="0.75"
           />
         );
       })}
@@ -63,18 +81,17 @@ export function MiniDependencyGraph() {
             height={n.h}
             rx="9"
             fill="var(--graph-surface)"
-            stroke={n.methodColor}
+            stroke={n.border}
             strokeWidth="1.5"
           />
-          <circle cx={n.x + 16} cy={n.y + n.h / 2} r="4" fill={n.methodColor} />
           <text
-            x={n.x + 28}
+            x={n.x + 14}
             y={n.y + n.h / 2}
             dominantBaseline="middle"
             fontSize="11"
             fontFamily="var(--font-geist-mono, monospace)"
           >
-            <tspan fontWeight="600" fill={n.methodColor}>
+            <tspan fontWeight="700" fill={n.methodColor}>
               {n.method}{" "}
             </tspan>
             <tspan fill="var(--graph-text)">{n.path}</tspan>
@@ -82,8 +99,8 @@ export function MiniDependencyGraph() {
         </g>
       ))}
 
-      {/* Dangling node: dashed stroke, dimmer, no incoming/outgoing edge. */}
-      <g opacity="0.55">
+      {/* Never reached: dashed, dimmed, no edges. */}
+      <g opacity="0.5">
         <rect
           x={DANGLING.x}
           y={DANGLING.y}
@@ -91,25 +108,19 @@ export function MiniDependencyGraph() {
           height={DANGLING.h}
           rx="9"
           fill="var(--graph-surface)"
-          stroke={DANGLING.methodColor}
+          stroke="var(--graph-muted)"
           strokeWidth="1.5"
           strokeDasharray="4 3"
         />
-        <circle
-          cx={DANGLING.x + 16}
-          cy={DANGLING.y + DANGLING.h / 2}
-          r="4"
-          fill={DANGLING.methodColor}
-        />
         <text
-          x={DANGLING.x + 28}
+          x={DANGLING.x + 14}
           y={DANGLING.y + DANGLING.h / 2}
           dominantBaseline="middle"
           fontSize="11"
           fontFamily="var(--font-geist-mono, monospace)"
           fill="var(--graph-muted)"
         >
-          <tspan fontWeight="600">{DANGLING.method} </tspan>
+          <tspan fontWeight="700">{DANGLING.method} </tspan>
           {DANGLING.path}
         </text>
       </g>

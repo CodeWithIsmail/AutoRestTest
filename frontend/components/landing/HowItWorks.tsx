@@ -2,20 +2,20 @@ import { Card } from "@/components/ui/Card";
 
 const STEPS = [
   {
-    title: "Bring your spec",
-    body: "Upload an OpenAPI 3.0 spec, or point AutoRestTest at your source code — the vendored OOPS tool derives one automatically when you don't already have one.",
+    title: "Point it at your API",
+    body: "Upload an OpenAPI 3.0 spec, or a zip of your source and let AutoRestTest derive one. Set a target URL, a time budget, and any auth headers.",
   },
   {
-    title: "Build the dependency graph",
-    body: "AutoRestTest parses every operation and builds a semantic dependency graph (SPDG) linking endpoints that depend on each other's data — the order a POST /users has to happen before a GET /users/{id} can succeed.",
+    title: "It maps the dependencies",
+    body: "Every operation is linked to the ones whose responses can fill its parameters — a semantic dependency graph of your API, built from the spec.",
   },
   {
-    title: "Generate & run requests with MARL",
-    body: "A multi-agent reinforcement learning system (Q-learning), backed by LLM-generated request values, explores that graph — sequencing, parameterizing, and firing real requests against your API.",
+    title: "Agents learn what works",
+    body: "Q-learning agents explore that graph while an LLM generates realistic values, learning which sequences and parameters actually get past your validation.",
   },
   {
-    title: "Read the results",
-    body: "Coverage, status-code distribution, and every server error surface in a report, alongside an interactive view of the dependency graph itself so you can see exactly what got exercised and what didn't.",
+    title: "You get a report, not a log dump",
+    body: "Coverage, pass rate, and status codes per operation — with every server error called out and explained in plain language.",
   },
 ];
 
@@ -35,7 +35,7 @@ export function HowItWorks() {
               <h3 className="mt-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                 {step.title}
               </h3>
-              <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                 {step.body}
               </p>
             </Card>
