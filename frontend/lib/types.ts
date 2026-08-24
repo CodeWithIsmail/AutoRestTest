@@ -32,6 +32,8 @@ export interface User {
   notifyRunFinished: boolean;
   notifyInvitations: boolean;
   createdAt: string;
+  /** Whether this user's email is in the backend's ADMIN_EMAILS allowlist. */
+  isAdmin: boolean;
 }
 
 export interface UpdateProfileInput {
@@ -213,6 +215,8 @@ export interface TestSuiteDetail extends TestSuiteSummary {
   triggeredById: string;
   /** Extra HTTP headers sent with every request to the target API. */
   customHeaders: Record<string, string> | null;
+  /** Endpoint ids stripped from the spec before this run. */
+  excludedEndpointIds: string[];
 }
 
 export interface TestCaseItem {
@@ -238,6 +242,8 @@ export interface CreateTestSuiteInput {
    * back in TestSuiteSummary/TestSuiteDetail.
    */
   customHeaders?: Record<string, string>;
+  /** Endpoint ids to strip from the spec before this run. */
+  excludedEndpointIds?: string[];
 }
 
 // --- captured requests (recording proxy) ------------------------------------

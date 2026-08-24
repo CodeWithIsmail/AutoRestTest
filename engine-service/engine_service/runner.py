@@ -96,6 +96,9 @@ def render_config_toml(
     custom_headers: Optional[Dict[str, str]],
     recursion_limit: int = 50,
     llm_rpm_limit: int = 0,
+    llm_max_tokens: int = 4096,
+    llm_creative_temperature: float = 1,
+    llm_strict_temperature: float = 1,
     value_workers: int = 8,
     use_cache: bool = True,
 ) -> str:
@@ -113,10 +116,10 @@ def render_config_toml(
 
     llm = tomlkit.table()
     llm["engine"] = llm_engine
-    llm["creative_temperature"] = 1
-    llm["strict_temperature"] = 1
+    llm["creative_temperature"] = llm_creative_temperature
+    llm["strict_temperature"] = llm_strict_temperature
     llm["api_base"] = llm_api_base
-    llm["max_tokens"] = 4096
+    llm["max_tokens"] = llm_max_tokens
     # Client-side request pacing (0 = disabled). Caps outgoing LLM calls per
     # minute across all threads to respect a provider's rate limit, e.g. 40 for
     # NVIDIA NIM's free tier.
@@ -613,6 +616,7 @@ def run_real(
     time_duration: int,
     toml_text: str,
     log_path: Optional[Path] = None,
+    llm_api_key: Optional[str] = None,
 ) -> None:
     """Overwrite the core's configurations.toml (restoring it afterwards), then
     shell out to the engine with stdin closed to auto-confirm the prompt.
@@ -640,7 +644,7 @@ def run_real(
         shutil.copy2(core_toml, backup)
     core_toml.write_text(toml_text, encoding="utf-8")
 
-    env = _engine_env(cfg)
+    env = _engine_env(cfg, llm_api_key=llm_api_key)
     cmd = cfg.engine_cmd.split() + [
         "--skip-wizard",
         "-s",
@@ -727,10 +731,15 @@ def _log_tail(log_path: Path, limit: int = 2000) -> str:
     return tail or "(no output captured)"
 
 
-def _engine_env(cfg: Config) -> Dict[str, str]:
+def _engine_env(cfg: Config, *, llm_api_key: Optional[str] = None) -> Dict[str, str]:
     env = os.environ.copy()
-    if cfg.api_key:
-        env["API_KEY"] = cfg.api_key  # python-dotenv won't override an existing var
+    # llm_api_key is a per-run override (from the NestJS backend's
+    # admin-configurable TEST_ENGINE settings); cfg.api_key is this service's
+    # own env var, used when no override is present -- exactly as before this
+    # override existed.
+    resolved_api_key = llm_api_key or cfg.api_key
+    if resolved_api_key:
+        env["API_KEY"] = resolved_api_key  # python-dotenv won't override an existing var
     # The engine's Rich TUI prints Unicode symbols (e.g. the info glyph). When run
     # as a captured subprocess on Windows, Python defaults stdout to legacy cp1252
     # and crashes with UnicodeEncodeError. Force UTF-8 I/O so the TUI can render.

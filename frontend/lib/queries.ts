@@ -18,6 +18,7 @@ import {
 } from "./collaboration";
 import { listEndpoints } from "./endpoints";
 import { getProjectGraph, getSuiteGraph } from "./graph";
+import { listLlmSettings } from "./llm-settings";
 import { getProject, listProjects } from "./projects";
 import { qk } from "./query-keys";
 import { getReport } from "./reports";
@@ -53,6 +54,14 @@ export const meOptions = () =>
     // shell instantly; a revoked token then trips the global 401 handler.
     staleTime: 0,
     retry: false,
+  });
+
+// --- admin --------------------------------------------------------------
+
+export const llmSettingsOptions = () =>
+  queryOptions({
+    queryKey: qk.llmSettings,
+    queryFn: ({ signal }) => listLlmSettings(signal),
   });
 
 // --- projects ---------------------------------------------------------------

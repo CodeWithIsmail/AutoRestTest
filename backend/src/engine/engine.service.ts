@@ -5,8 +5,17 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { LlmScope } from '../../generated/prisma/client';
+import { LlmSettingsService } from '../llm-settings/llm-settings.service';
 
-/** Payload sent to engine-service `POST /runs`. */
+/**
+ * Payload sent to engine-service `POST /runs`. The `llm*` fields are filled
+ * in by `startRun` from the admin-configured TEST_ENGINE settings, not by
+ * callers — they exist here only so `startRun`'s request body is fully typed.
+ * A field left undefined is dropped by `JSON.stringify`, so an unset admin
+ * override falls straight through to engine-service's own env-configured
+ * default, exactly like an un-set `llmEngine` already did before this.
+ */
 export interface EngineRunPayload {
   spec: string;
   targetUrl: string;
@@ -14,6 +23,19 @@ export interface EngineRunPayload {
   mutationRate: number;
   authHeader?: string;
   customHeaders?: Record<string, string>;
+  llmEngine?: string;
+  llmApiBase?: string;
+  llmRpmLimit?: number;
+  llmMaxTokens?: number;
+  llmCreativeTemperature?: number;
+  llmStrictTemperature?: number;
+  /**
+   * Overrides engine-service's own `API_KEY` for this run only. Travels the
+   * same way `customHeaders` already does — over the same
+   * localhost/`X-Service-Token`-protected connection every other run field
+   * uses.
+   */
+  llmApiKey?: string;
 }
 
 export type EngineJobState = 'pending' | 'running' | 'completed' | 'failed';
@@ -167,7 +189,10 @@ export class EngineService {
   private readonly baseUrl: string;
   private readonly token?: string;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly llmSettings: LlmSettingsService,
+  ) {
     // Default to 127.0.0.1 (not "localhost") so Node's fetch doesn't resolve to
     // IPv6 ::1 while the Python service listens on IPv4 only.
     this.baseUrl = (
@@ -177,7 +202,19 @@ export class EngineService {
   }
 
   async startRun(payload: EngineRunPayload): Promise<EngineJob> {
-    return this.request<EngineJob>('POST', '/runs', payload);
+    const llm = await this.llmSettings.getOverride(LlmScope.TEST_ENGINE);
+    return this.request<EngineJob>('POST', '/runs', {
+      ...payload,
+      llmEngine: payload.llmEngine ?? llm.model ?? undefined,
+      llmApiBase: payload.llmApiBase ?? llm.apiBase ?? undefined,
+      llmRpmLimit: payload.llmRpmLimit ?? llm.rpmLimit ?? undefined,
+      llmMaxTokens: payload.llmMaxTokens ?? llm.maxTokens ?? undefined,
+      llmCreativeTemperature:
+        payload.llmCreativeTemperature ?? llm.creativeTemperature ?? undefined,
+      llmStrictTemperature:
+        payload.llmStrictTemperature ?? llm.strictTemperature ?? undefined,
+      llmApiKey: payload.llmApiKey ?? llm.apiKey ?? undefined,
+    });
   }
 
   async getStatus(jobId: string): Promise<EngineJob> {
@@ -233,6 +270,12 @@ export class EngineService {
     if (opts.ignorePath?.length) {
       form.append('ignorePath', opts.ignorePath.join(','));
     }
+    const llm = await this.llmSettings.getOverride(LlmScope.SPEC_GENERATION);
+    if (llm.model) form.append('oopsModel', llm.model);
+    if (llm.apiBase) form.append('oopsApiBase', llm.apiBase);
+    if (llm.rpmLimit !== null)
+      form.append('oopsRpmLimit', String(llm.rpmLimit));
+    if (llm.apiKey) form.append('oopsApiKey', llm.apiKey);
 
     const headers: Record<string, string> = {};
     if (this.token) headers['X-Service-Token'] = this.token;

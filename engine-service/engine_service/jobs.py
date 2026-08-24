@@ -235,13 +235,27 @@ class JobManager:
                         {str(k): str(v) for k, v in extra_headers.items()}
                     )
 
+                # Each llm* param is an optional per-job override -- set from the
+                # NestJS backend's admin-configurable LLM settings when present,
+                # falling back to this service's own env-configured cfg
+                # otherwise. cfg stays the single source of truth for standalone/
+                # manual use of engine-service (no backend in front of it).
                 toml_text = runner.render_config_toml(
                     spec_location=str(spec_path),
                     time_duration=time_budget,
                     mutation_rate=float(params.get("mutationRate", 0.2)),
                     llm_engine=params.get("llmEngine") or self.cfg.llm_engine,
-                    llm_api_base=self.cfg.llm_api_base,
-                    llm_rpm_limit=self.cfg.llm_rpm_limit,
+                    llm_api_base=params.get("llmApiBase") or self.cfg.llm_api_base,
+                    llm_rpm_limit=int(
+                        params.get("llmRpmLimit") or self.cfg.llm_rpm_limit
+                    ),
+                    llm_max_tokens=int(params.get("llmMaxTokens") or 4096),
+                    llm_creative_temperature=float(
+                        params.get("llmCreativeTemperature") or 1
+                    ),
+                    llm_strict_temperature=float(
+                        params.get("llmStrictTemperature") or 1
+                    ),
                     value_workers=self.cfg.engine_value_workers,
                     use_cache=self.cfg.engine_use_cache,
                     custom_headers=custom_headers or None,
@@ -252,6 +266,7 @@ class JobManager:
                     time_budget,
                     toml_text,
                     log_path=job_dir / "stdout.log",
+                    llm_api_key=params.get("llmApiKey"),
                 )
         finally:
             # Stop accepting proxy traffic for this job once the engine exits.

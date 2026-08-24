@@ -1,10 +1,13 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsInt,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -22,6 +25,8 @@ import { IsHeaderMap } from './header-map.validator';
  * - `mutationRate`: fault-injection aggressiveness, 0–1 (defaults to 0.2)
  * - `customHeaders`: extra HTTP headers sent with every request to the target
  *   API (e.g. `Authorization` for Basic/Bearer/API-key auth)
+ * - `excludedEndpointIds`: Endpoint ids to strip from the spec before this
+ *   run, so the engine never generates requests for them
  */
 export class CreateTestSuiteDto {
   @IsOptional()
@@ -55,4 +60,15 @@ export class CreateTestSuiteDto {
   @IsObject({ message: 'Custom headers must be a key/value object' })
   @IsHeaderMap()
   customHeaders?: Record<string, string>;
+
+  @IsOptional()
+  @IsArray({ message: 'excludedEndpointIds must be an array of endpoint ids' })
+  @ArrayMaxSize(500, {
+    message: 'excludedEndpointIds must have at most 500 entries',
+  })
+  @IsUUID('4', {
+    each: true,
+    message: 'Each excluded endpoint id must be a valid UUID',
+  })
+  excludedEndpointIds?: string[];
 }

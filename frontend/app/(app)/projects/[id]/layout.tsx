@@ -5,16 +5,15 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toast";
+import { DeleteProjectModal } from "@/components/projects/DeleteProjectModal";
 import { ProjectContext } from "@/components/projects/project-context";
 import { ProjectFormModal } from "@/components/projects/ProjectFormModal";
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Spinner } from "@/components/ui/Spinner";
 import { errMsg } from "@/lib/api";
-import { deleteProject } from "@/lib/projects";
 import { projectOptions } from "@/lib/queries";
 import { qk } from "@/lib/query-keys";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const TABS = [
   { label: "Overview", segment: "" },
@@ -47,19 +46,13 @@ export default function ProjectLayout({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteProject(id),
-    onSuccess: () => {
-      toast.success("Project deleted.");
-      // Drop this project's whole subtree, then refresh the list it was on.
-      queryClient.removeQueries({ queryKey: qk.projects.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
-      router.push("/projects");
-    },
-    onError: (err) => {
-      toast.error(errMsg(err, "Failed to delete project"));
-    },
-  });
+  function onProjectDeleted() {
+    toast.success("Project deleted.");
+    // Drop this project's whole subtree, then refresh the list it was on.
+    queryClient.removeQueries({ queryKey: qk.projects.detail(id) });
+    void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+    router.push("/projects");
+  }
 
   if (isPending) {
     return (
@@ -175,23 +168,14 @@ export default function ProjectLayout({
         />
       )}
 
-      {/* Delete */}
-      <ConfirmDialog
-        open={deleteOpen}
-        title="Delete project"
-        message={
-          <>
-            Delete{" "}
-            <span className="font-medium text-zinc-900 dark:text-zinc-100">{project.name}</span>?
-            This permanently removes the project and all its data.
-          </>
-        }
-        confirmLabel="Delete"
-        danger
-        loading={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate()}
-        onClose={() => setDeleteOpen(false)}
-      />
+      {/* Delete — mounted only when open, so the fields reset every time. */}
+      {deleteOpen && (
+        <DeleteProjectModal
+          project={project}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={onProjectDeleted}
+        />
+      )}
     </ProjectContext.Provider>
   );
 }

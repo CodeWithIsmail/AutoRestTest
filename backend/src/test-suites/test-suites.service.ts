@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import * as yaml from 'js-yaml';
 import {
   HttpMethod,
   Prisma,
@@ -51,6 +52,8 @@ export interface TestSuiteDetail extends TestSuiteSummary {
   triggeredById: string | null;
   /** Extra HTTP headers sent with every request to the target API. */
   customHeaders: Record<string, string> | null;
+  /** Endpoint ids stripped from the spec before this run. */
+  excludedEndpointIds: string[];
 }
 
 /** A persisted per-endpoint result row for a completed run. */
@@ -181,6 +184,7 @@ const DETAIL_SELECT = {
   jobId: true,
   triggeredById: true,
   customHeaders: true,
+  excludedEndpointIds: true,
 } as const;
 
 /**
@@ -259,6 +263,18 @@ export class TestSuitesService {
       );
     }
 
+    // Drop any id that isn't actually an endpoint of this project, rather
+    // than erroring — keeps this permissive the same way an unknown header
+    // key would be.
+    let excludedEndpointIds: string[] = [];
+    if (dto.excludedEndpointIds && dto.excludedEndpointIds.length > 0) {
+      const owned = await this.prisma.endpoint.findMany({
+        where: { projectId, id: { in: dto.excludedEndpointIds } },
+        select: { id: true },
+      });
+      excludedEndpointIds = owned.map((e) => e.id);
+    }
+
     const created = await this.prisma.testSuite.create({
       data: {
         projectId,
@@ -271,6 +287,7 @@ export class TestSuitesService {
           ? { mutationRate: dto.mutationRate }
           : {}),
         ...(dto.customHeaders ? { customHeaders: dto.customHeaders } : {}),
+        excludedEndpointIds,
       },
       select: DETAIL_SELECT,
     });
@@ -361,6 +378,7 @@ export class TestSuitesService {
         timeBudget: true,
         mutationRate: true,
         customHeaders: true,
+        excludedEndpointIds: true,
       },
     });
     if (!suite) {
@@ -380,8 +398,17 @@ export class TestSuitesService {
       );
     }
 
+    let specText = spec.fileContent;
+    if (suite.excludedEndpointIds.length > 0) {
+      const excluded = await this.prisma.endpoint.findMany({
+        where: { id: { in: suite.excludedEndpointIds }, projectId },
+        select: { method: true, path: true },
+      });
+      specText = this.excludeOperationsFromSpec(specText, excluded);
+    }
+
     const job = await this.engine.startRun({
-      spec: spec.fileContent,
+      spec: specText,
       targetUrl: suite.targetUrl,
       timeBudget: suite.timeBudget,
       mutationRate: suite.mutationRate,
@@ -410,6 +437,42 @@ export class TestSuitesService {
 
     this.beginPolling(projectId, suiteId, job.jobId);
     return toDetail(updated);
+  }
+
+  /**
+   * Strips the given operations out of a raw OpenAPI spec (YAML or JSON) and
+   * re-serializes as YAML — engine-service accepts either, so the original
+   * format doesn't need preserving. No-ops on anything unparseable or a
+   * path/method no longer present (spec drift since the endpoint was
+   * extracted), rather than failing the run over it.
+   */
+  private excludeOperationsFromSpec(
+    specText: string,
+    excluded: { method: HttpMethod; path: string }[],
+  ): string {
+    let doc: unknown;
+    try {
+      doc = yaml.load(specText);
+    } catch {
+      return specText;
+    }
+    if (typeof doc !== 'object' || doc === null || !('paths' in doc)) {
+      return specText;
+    }
+    const paths = (doc as { paths?: Record<string, Record<string, unknown>> })
+      .paths;
+    if (!paths) {
+      return specText;
+    }
+    for (const { method, path } of excluded) {
+      const item = paths[path];
+      if (!item) continue;
+      delete item[method.toLowerCase()];
+      if (Object.keys(item).length === 0) {
+        delete paths[path];
+      }
+    }
+    return yaml.dump(doc);
   }
 
   // --------------------------------------------------------------------------

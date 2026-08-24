@@ -146,7 +146,7 @@ export class ReportsService {
   ): Promise<ReportEndpoint[]> {
     await this.access.assertAccess(projectId, userId, RUN_MUTATING_ROLES);
     await this.loadSuite(projectId, suiteId, { requireCompleted: true });
-    this.llm.assertUsable();
+    await this.llm.assertUsable();
 
     const failed = await this.prisma.testCase.findMany({
       where: { testSuiteId: suiteId, passed: false },

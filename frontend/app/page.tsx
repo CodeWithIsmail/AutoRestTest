@@ -1,7 +1,15 @@
-import { redirect } from "next/navigation";
+import { LandingPage } from "@/components/landing/LandingPage";
+import { AuthRedirect } from "@/components/landing/AuthRedirect";
 
-// The app is auth-gated; send everyone to the dashboard, where the (app)
-// layout guard bounces unauthenticated visitors to /login.
+// Public marketing page for anonymous visitors. Session state lives only in
+// localStorage (see components/auth-provider.tsx), so the server can never
+// know here whether a visitor is signed in — AuthRedirect is a client island
+// that bounces already-authenticated visitors to /projects after mount.
 export default function Home() {
-  redirect("/projects");
+  return (
+    <>
+      <AuthRedirect />
+      <LandingPage />
+    </>
+  );
 }

@@ -1,11 +1,30 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { LlmSettingsService } from '../llm-settings/llm-settings.service';
 import { EngineService } from './engine.service';
 
 function makeConfig(values: Record<string, string>): ConfigService {
   return {
     get: (key: string) => values[key],
   } as unknown as ConfigService;
+}
+
+/** No admin override configured — every scope resolves to an all-null row. */
+function makeLlmSettings(): LlmSettingsService {
+  const emptyRow = (scope: string) => ({
+    scope,
+    model: null,
+    apiBase: null,
+    rpmLimit: null,
+    maxTokens: null,
+    creativeTemperature: null,
+    strictTemperature: null,
+    apiKey: null,
+    updatedAt: null,
+  });
+  return {
+    getOverride: (scope: string) => Promise.resolve(emptyRow(scope)),
+  } as unknown as LlmSettingsService;
 }
 
 describe('EngineService', () => {
@@ -36,6 +55,7 @@ describe('EngineService', () => {
     );
     const svc = new EngineService(
       makeConfig({ ENGINE_SERVICE_URL: 'http://engine:5000/' }),
+      makeLlmSettings(),
     );
 
     const job = await svc.startRun({
@@ -60,6 +80,7 @@ describe('EngineService', () => {
         ENGINE_SERVICE_URL: 'http://engine:5000',
         ENGINE_SERVICE_TOKEN: 's3cret',
       }),
+      makeLlmSettings(),
     );
 
     await svc.getStatus('j');
@@ -71,7 +92,7 @@ describe('EngineService', () => {
 
   it('maps a network failure to 503', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
-    const svc = new EngineService(makeConfig({}));
+    const svc = new EngineService(makeConfig({}), makeLlmSettings());
 
     await expect(svc.getStatus('j')).rejects.toThrow(
       ServiceUnavailableException,
@@ -80,7 +101,7 @@ describe('EngineService', () => {
 
   it('maps a non-2xx engine response to 503', async () => {
     fetchMock.mockResolvedValue(ok({}, 500));
-    const svc = new EngineService(makeConfig({}));
+    const svc = new EngineService(makeConfig({}), makeLlmSettings());
 
     await expect(svc.getResult('j')).rejects.toThrow(
       ServiceUnavailableException,

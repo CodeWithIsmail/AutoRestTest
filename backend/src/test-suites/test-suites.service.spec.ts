@@ -145,6 +145,49 @@ describe('TestSuitesService', () => {
       expect(createArg.data.triggeredById).toBe(USER_ID);
     });
 
+    it('sanitizes excludedEndpointIds to only ids that belong to this project', async () => {
+      prisma.endpoint.count.mockResolvedValue(5);
+      prisma.endpoint.findMany.mockResolvedValue([{ id: 'endpoint-1' }]);
+      prisma.testSuite.create.mockResolvedValue({
+        id: SUITE_ID,
+        name: 'Smoke run',
+        status: SuiteStatus.pending,
+        targetUrl: 'http://localhost:8080',
+        timeBudget: 300,
+        mutationRate: 0.3,
+        totalEndpoints: 0,
+        coveredEndpoints: 0,
+        totalTestCases: 0,
+        passedTestCases: 0,
+        failedTestCases: 0,
+        createdAt: new Date(),
+        startedAt: null,
+        completedAt: null,
+        jobId: null,
+        triggeredById: USER_ID,
+        excludedEndpointIds: ['endpoint-1'],
+      });
+
+      await service.create(PROJECT_ID, USER_ID, {
+        ...dto,
+        excludedEndpointIds: ['endpoint-1', 'not-in-project'],
+      });
+
+      expect(prisma.endpoint.findMany).toHaveBeenCalledWith({
+        where: {
+          projectId: PROJECT_ID,
+          id: { in: ['endpoint-1', 'not-in-project'] },
+        },
+        select: { id: true },
+      });
+      const createCalls = prisma.testSuite.create.mock.calls as Array<
+        [{ data: { excludedEndpointIds: string[] } }]
+      >;
+      expect(createCalls[0][0].data.excludedEndpointIds).toEqual([
+        'endpoint-1',
+      ]);
+    });
+
     it('rejects creating a run when the project has no endpoints', async () => {
       prisma.endpoint.count.mockResolvedValue(0);
 
@@ -308,6 +351,7 @@ describe('TestSuitesService', () => {
         targetUrl: 'http://localhost:8080',
         timeBudget: 300,
         mutationRate: 0.2,
+        excludedEndpointIds: [],
       });
       prisma.apiSpecification.findUnique.mockResolvedValue({
         fileContent: 'openapi: 3.0.0',
@@ -355,6 +399,7 @@ describe('TestSuitesService', () => {
         timeBudget: 300,
         mutationRate: 0.2,
         customHeaders: { Authorization: 'Basic dXNlcjpwYXNz' },
+        excludedEndpointIds: [],
       });
       prisma.apiSpecification.findUnique.mockResolvedValue({
         fileContent: 'openapi: 3.0.0',
@@ -379,6 +424,47 @@ describe('TestSuitesService', () => {
         mutationRate: 0.2,
         customHeaders: { Authorization: 'Basic dXNlcjpwYXNz' },
       });
+    });
+
+    it('strips excluded endpoints out of the spec before starting the engine run', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.pending,
+        targetUrl: 'http://localhost:8080',
+        timeBudget: 300,
+        mutationRate: 0.2,
+        excludedEndpointIds: ['endpoint-1'],
+      });
+      prisma.apiSpecification.findUnique.mockResolvedValue({
+        fileContent:
+          'openapi: 3.0.0\npaths:\n  /articles/{slug}/favorite:\n    post:\n      summary: favorite\n  /tags:\n    get:\n      summary: list tags\n',
+      });
+      prisma.endpoint.findMany.mockResolvedValue([
+        { method: 'POST', path: '/articles/{slug}/favorite' },
+      ]);
+      engine.startRun.mockResolvedValue({
+        jobId: 'job-1',
+        status: 'pending',
+        error: null,
+      });
+      prisma.testSuite.update.mockResolvedValue({
+        id: SUITE_ID,
+        status: SuiteStatus.running,
+        jobId: 'job-1',
+      });
+
+      await service.run(PROJECT_ID, SUITE_ID, USER_ID);
+
+      expect(prisma.endpoint.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['endpoint-1'] }, projectId: PROJECT_ID },
+        select: { method: true, path: true },
+      });
+      const startRunCalls = engine.startRun.mock.calls as Array<
+        [{ spec: string }]
+      >;
+      const sentSpec = startRunCalls[0][0].spec;
+      expect(sentSpec).not.toContain('/articles/{slug}/favorite');
+      expect(sentSpec).toContain('/tags');
     });
 
     it('404s when the suite is not in the project', async () => {

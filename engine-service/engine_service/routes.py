@@ -87,6 +87,26 @@ def _validate_body(body: Any) -> Tuple[Dict[str, Any] | None, str | None]:
             isinstance(k, str) and isinstance(v, str) for k, v in ch.items()
         ):
             return None, "customHeaders must be an object of string to string"
+
+    # Optional per-job LLM overrides, forwarded verbatim into jobs.py's params
+    # dict -- see the comment in JobManager._execute for the fallback chain.
+    # llmEngine/llmApiBase/llmApiKey are free-form strings (provider-specific
+    # model names, arbitrary base URLs, provider keys), so only the numeric
+    # fields are validated here; jobs.py treats a falsy value the same as
+    # "not sent".
+    for numeric_field in ("llmRpmLimit", "llmMaxTokens"):
+        if numeric_field in body and body[numeric_field] is not None:
+            try:
+                body[numeric_field] = int(body[numeric_field])
+            except (TypeError, ValueError):
+                return None, f"{numeric_field} must be an integer"
+    for float_field in ("llmCreativeTemperature", "llmStrictTemperature"):
+        if float_field in body and body[float_field] is not None:
+            try:
+                body[float_field] = float(body[float_field])
+            except (TypeError, ValueError):
+                return None, f"{float_field} must be a number"
+
     body["timeBudget"] = tb
     body["mutationRate"] = mr
     return body, None
@@ -168,7 +188,21 @@ def create_generation():
         # Excluding .env keeps credentials out of both the prompt context and
         # the shell tool the pipeline hands to the model.
         "ignoreSufx": _split_list(request.form.get("ignoreSufx")) or ["env"],
+        # Optional per-request overrides -- set from the NestJS backend's
+        # admin-configurable SPEC_GENERATION settings when present, falling
+        # back to cfg.oops_model/cfg.oops_llm_api_url/cfg.oops_rpm_limit/
+        # cfg.oops_api_key otherwise (see GenerationManager._execute and
+        # oops_runner.oops_env).
+        "oopsModel": (request.form.get("oopsModel") or "").strip() or None,
+        "oopsApiBase": (request.form.get("oopsApiBase") or "").strip() or None,
+        "oopsApiKey": (request.form.get("oopsApiKey") or "").strip() or None,
     }
+    oops_rpm_limit_raw = (request.form.get("oopsRpmLimit") or "").strip()
+    if oops_rpm_limit_raw:
+        try:
+            params["oopsRpmLimit"] = int(oops_rpm_limit_raw)
+        except ValueError:
+            return jsonify({"error": "oopsRpmLimit must be an integer"}), 400
 
     try:
         gen = _generations().submit(params, upload.read())

@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { LlmSettingsService } from '../llm-settings/llm-settings.service';
 
 /** Input describing a failed endpoint, used to prompt the explanation. */
 export interface FailureContext {
@@ -26,29 +27,30 @@ interface ChatCompletion {
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
   private readonly mode: string;
-  private readonly apiKey?: string;
-  private readonly engine: string;
-  private readonly apiBase: string;
+  private readonly envApiKey?: string;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly llmSettings: LlmSettingsService,
+  ) {
     this.mode = (config.get<string>('LLM_MODE') ?? 'real').toLowerCase();
-    this.apiKey = config.get<string>('LLM_API_KEY') || undefined;
-    this.engine =
-      config.get<string>('LLM_ENGINE') ?? 'google/gemini-2.5-flash-lite';
-    this.apiBase = (
-      config.get<string>('LLM_API_BASE') ?? 'https://openrouter.ai/api/v1'
-    ).replace(/\/+$/, '');
+    this.envApiKey = config.get<string>('LLM_API_KEY') || undefined;
   }
 
   get isMock(): boolean {
     return this.mode === 'mock';
   }
 
-  /** Throws if a real explanation is requested but the client isn't configured. */
-  assertUsable(): void {
-    if (!this.isMock && !this.apiKey) {
+  /**
+   * Throws if a real explanation is requested but no key is configured,
+   * whether from the admin settings page or LLM_API_KEY.
+   */
+  async assertUsable(): Promise<void> {
+    if (this.isMock) return;
+    const { apiKey } = await this.llmSettings.getReportExplanationSettings();
+    if (!apiKey && !this.envApiKey) {
       throw new ServiceUnavailableException(
-        'LLM is not configured (set LLM_API_KEY or LLM_MODE=mock)',
+        'LLM is not configured (set an API key from /admin/llm-settings, or LLM_API_KEY, or LLM_MODE=mock)',
       );
     }
   }
@@ -59,15 +61,17 @@ export class LlmService {
     }
 
     const prompt = this.buildPrompt(ctx);
+    const { model, apiBase, apiKey } =
+      await this.llmSettings.getReportExplanationSettings();
     try {
-      const res = await fetch(`${this.apiBase}/chat/completions`, {
+      const res = await fetch(`${apiBase}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${apiKey ?? this.envApiKey ?? ''}`,
         },
         body: JSON.stringify({
-          model: this.engine,
+          model,
           temperature: 0.3,
           max_tokens: 300,
           messages: [

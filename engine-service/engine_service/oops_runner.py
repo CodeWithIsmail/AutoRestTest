@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from .config import Config
 
@@ -47,7 +47,14 @@ def java_available() -> bool:
         return False
 
 
-def oops_env(cfg: Config) -> Dict[str, str]:
+def oops_env(
+    cfg: Config,
+    *,
+    oops_model: Optional[str] = None,
+    oops_api_base: Optional[str] = None,
+    oops_rpm_limit: Optional[int] = None,
+    oops_api_key: Optional[str] = None,
+) -> Dict[str, str]:
     """Environment for the worker subprocess.
 
     Generation uses its own dedicated LLM credentials (``OOPS_API_KEY`` /
@@ -56,16 +63,24 @@ def oops_env(cfg: Config) -> Dict[str, str]:
     ``API_KEY`` / ``LLM_API_BASE`` so spec generation can run against a
     different provider (e.g. Gemini) than whatever the test-generation engine
     uses. The vendored project's own ``.env`` is never consulted.
+
+    ``oops_model``/``oops_api_base``/``oops_rpm_limit``/``oops_api_key`` are
+    optional per-request overrides (from the NestJS backend's
+    admin-configurable SPEC_GENERATION settings); when absent,
+    ``cfg.oops_model``/``cfg.oops_llm_api_url``/``cfg.oops_rpm_limit``/
+    ``cfg.oops_api_key`` (this service's own env vars) are used, exactly as
+    before this override existed.
     """
     env = os.environ.copy()
-    if cfg.oops_api_key:
-        env["LLM_API_KEY"] = cfg.oops_api_key
-    env["LLM_API_URL"] = cfg.oops_llm_api_url
-    env["OOPS_MODEL"] = cfg.oops_model
+    resolved_api_key = oops_api_key or cfg.oops_api_key
+    if resolved_api_key:
+        env["LLM_API_KEY"] = resolved_api_key
+    env["LLM_API_URL"] = oops_api_base or cfg.oops_llm_api_url
+    env["OOPS_MODEL"] = oops_model or cfg.oops_model
     env["OOPS_DIR"] = str(cfg.oops_dir)
     # Read by oops_worker.py to override OOPS's built-in pacing before the
     # pipeline is imported; see the comment there.
-    env["OOPS_RPM_LIMIT"] = str(cfg.oops_rpm_limit)
+    env["OOPS_RPM_LIMIT"] = str(oops_rpm_limit or cfg.oops_rpm_limit)
     env["OOPS_BATCH_SEMAPHORE"] = str(cfg.oops_batch_semaphore)
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
@@ -75,7 +90,15 @@ def oops_env(cfg: Config) -> Dict[str, str]:
     return env
 
 
-def run_oops(cfg: Config, job_dir: Path) -> int:
+def run_oops(
+    cfg: Config,
+    job_dir: Path,
+    *,
+    oops_model: Optional[str] = None,
+    oops_api_base: Optional[str] = None,
+    oops_rpm_limit: Optional[int] = None,
+    oops_api_key: Optional[str] = None,
+) -> int:
     """Run the generation pipeline for a prepared job directory.
 
     Returns the worker's exit code (see the EXIT_* constants). Raises only when
@@ -100,7 +123,13 @@ def run_oops(cfg: Config, job_dir: Path) -> int:
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            env=oops_env(cfg),
+            env=oops_env(
+                cfg,
+                oops_model=oops_model,
+                oops_api_base=oops_api_base,
+                oops_rpm_limit=oops_rpm_limit,
+                oops_api_key=oops_api_key,
+            ),
         )
         try:
             return process.wait(timeout=cfg.oops_timeout)

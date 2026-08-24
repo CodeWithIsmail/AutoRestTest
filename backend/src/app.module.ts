@@ -10,6 +10,7 @@ import { EmailModule } from './email/email.module';
 import { EndpointsModule } from './endpoints/endpoints.module';
 import { EngineModule } from './engine/engine.module';
 import { GraphModule } from './graph/graph.module';
+import { LlmSettingsModule } from './llm-settings/llm-settings.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { ReportsModule } from './reports/reports.module';
@@ -37,6 +38,10 @@ import { UsersModule } from './users/users.module';
 
     // EmailModule is @Global so the mailer is injectable anywhere.
     EmailModule,
+
+    // LlmSettingsModule is @Global so the live LLM-settings store is
+    // injectable anywhere (EngineService, Reports' LlmService).
+    LlmSettingsModule,
 
     // Rate-limit storage. Note there is NO APP_GUARD here: ThrottlerGuard is
     // applied per-controller (auth, users) instead. A global limit would also

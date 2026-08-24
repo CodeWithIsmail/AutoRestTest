@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/Button";
 import { FIELD_CLASS, FormField } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { errMsg } from "@/lib/api";
+import { endpointsOptions } from "@/lib/queries";
 import { qk } from "@/lib/query-keys";
 import { createSuite } from "@/lib/test-suites";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TestSuiteDetail } from "@/lib/types";
 
 interface CreateRunModalProps {
@@ -47,6 +48,24 @@ export function CreateRunModal({
   const [mutationRate, setMutationRate] = useState("");
   const [showHeaders, setShowHeaders] = useState(false);
   const [headers, setHeaders] = useState<HeaderRow[]>([]);
+  const [showEndpoints, setShowEndpoints] = useState(false);
+  const [excludedEndpointIds, setExcludedEndpointIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const { data: endpoints } = useQuery(endpointsOptions(projectId));
+
+  function toggleEndpoint(id: string) {
+    setExcludedEndpointIds((ids) => {
+      const next = new Set(ids);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
 
   function updateHeader(index: number, field: keyof HeaderRow, value: string) {
     setHeaders((rows) =>
@@ -73,6 +92,10 @@ export function CreateRunModal({
           mutationRate.trim() === "" ? undefined : Number(mutationRate),
         customHeaders:
           Object.keys(customHeaders).length > 0 ? customHeaders : undefined,
+        excludedEndpointIds:
+          excludedEndpointIds.size > 0
+            ? Array.from(excludedEndpointIds)
+            : undefined,
       });
     },
     onSuccess: (suite) => {
@@ -234,6 +257,51 @@ export function CreateRunModal({
             </div>
           )}
         </div>
+
+        {endpoints && endpoints.length > 0 && (
+          <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setShowEndpoints((v) => !v)}
+              className="text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
+            >
+              {showEndpoints ? "▾" : "▸"} Advanced: Exclude endpoints
+              {excludedEndpointIds.size > 0
+                ? ` (${excludedEndpointIds.size})`
+                : null}
+            </button>
+
+            {showEndpoints && (
+              <div className="mt-3 flex flex-col gap-2">
+                <p className="text-xs text-zinc-500">
+                  Unchecked endpoints are skipped entirely for this run — the
+                  engine never sees them in the spec it tests against.
+                </p>
+                <div className="max-h-56 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+                  {endpoints.map((ep) => (
+                    <label
+                      key={ep.id}
+                      className="flex cursor-pointer items-center gap-2 border-b border-zinc-100 px-2.5 py-1.5 text-sm last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!excludedEndpointIds.has(ep.id)}
+                        onChange={() => toggleEndpoint(ep.id)}
+                        className="h-4 w-4 shrink-0 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 dark:border-zinc-700"
+                      />
+                      <span className="w-14 shrink-0 font-mono text-xs font-medium text-zinc-500">
+                        {ep.method}
+                      </span>
+                      <span className="truncate font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                        {ep.path}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </Modal>
   );

@@ -126,6 +126,14 @@ export default function AppLayout({
                 onClick: () => router.push("/invitations"),
               },
               { label: "Settings", onClick: () => router.push("/settings") },
+              ...(user.isAdmin
+                ? [
+                    {
+                      label: "LLM settings",
+                      onClick: () => router.push("/admin/llm-settings"),
+                    },
+                  ]
+                : []),
               {
                 label: "Sign out",
                 separated: true,

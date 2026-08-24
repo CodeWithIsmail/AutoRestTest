@@ -40,6 +40,22 @@ export function emailVerificationRequired(): boolean {
   );
 }
 
+/**
+ * Platform-wide admin allowlist, for routes with no project to check a `Role`
+ * against (e.g. LLM settings) — `Role` only ever applies inside a Project.
+ * Comma-separated, case-insensitive. Read from `process.env` directly (see
+ * `emailVerificationRequired` above) so it stays usable from a plain function
+ * without a `ConfigService` DI hop, and so `toPublicUser` can compute it for
+ * every caller (login, getMe, JwtStrategy) from one place.
+ */
+export function isAdminEmail(email: string): boolean {
+  const allowlist = (process.env['ADMIN_EMAILS'] ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return allowlist.includes(email.trim().toLowerCase());
+}
+
 /** Public-safe projection of a User row. Never includes the password hash. */
 export interface PublicUser {
   id: string;
@@ -57,6 +73,8 @@ export interface PublicUser {
   notifyRunFinished: boolean;
   notifyInvitations: boolean;
   createdAt: Date;
+  /** Whether `email` is in `ADMIN_EMAILS`. Gates platform-wide admin routes. */
+  isAdmin: boolean;
 }
 
 /**
@@ -91,5 +109,9 @@ export interface UserRow {
 
 export function toPublicUser(row: UserRow): PublicUser {
   const { emailVerifiedAt, ...rest } = row;
-  return { ...rest, emailVerified: emailVerifiedAt !== null };
+  return {
+    ...rest,
+    emailVerified: emailVerifiedAt !== null,
+    isAdmin: isAdminEmail(row.email),
+  };
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toast";
+import { DeleteProjectModal } from "@/components/projects/DeleteProjectModal";
 import { ProjectFormModal } from "@/components/projects/ProjectFormModal";
 import {
   ProjectCard,
@@ -16,12 +17,10 @@ import {
 } from "@/components/projects/ProjectCard";
 import { Badge, roleTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DropdownMenu, type MenuItem } from "@/components/ui/DropdownMenu";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { errMsg } from "@/lib/api";
-import { deleteProject } from "@/lib/projects";
 import { projectOptions, projectsOptions } from "@/lib/queries";
 import { qk } from "@/lib/query-keys";
 import type { ProjectListItem, Role } from "@/lib/types";
@@ -158,19 +157,6 @@ export default function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<ProjectListItem | null>(
     null,
   );
-
-  const deleteMutation = useMutation({
-    mutationFn: (project: ProjectListItem) => deleteProject(project.id),
-    onSuccess: (_result, project) => {
-      toast.success("Project deleted.");
-      setDeleteTarget(null);
-      queryClient.removeQueries({ queryKey: qk.projects.detail(project.id) });
-      void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
-    },
-    onError: (err) => {
-      toast.error(errMsg(err, "Failed to delete project"));
-    },
-  });
 
   const visible = useMemo(() => {
     if (!projects) return [];
@@ -420,24 +406,19 @@ export default function ProjectsPage() {
         />
       )}
 
-      {/* Delete */}
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        title="Delete project"
-        message={
-          <>
-            Delete <span className="font-medium text-zinc-900 dark:text-zinc-100">
-              {deleteTarget?.name}
-            </span>
-            ? This permanently removes the project and all its data.
-          </>
-        }
-        confirmLabel="Delete"
-        danger
-        loading={deleteMutation.isPending}
-        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-      />
+      {/* Delete — mounted only when open, so the fields reset every time. */}
+      {deleteTarget && (
+        <DeleteProjectModal
+          project={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => {
+            toast.success("Project deleted.");
+            queryClient.removeQueries({ queryKey: qk.projects.detail(deleteTarget.id) });
+            void queryClient.invalidateQueries({ queryKey: qk.projects.list() });
+            setDeleteTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

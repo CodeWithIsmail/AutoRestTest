@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -10,8 +11,10 @@ import {
   SpecGenStatus,
   SuiteStatus,
 } from '../../generated/prisma/client';
+import { verifyPassword } from '../auth/password';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { DeleteProjectDto } from './dto/delete-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
 /** Default role assigned to a user when they create or own a project. */
@@ -319,11 +322,16 @@ export class ProjectsService {
   async remove(
     projectId: string,
     userId: string,
+    dto: DeleteProjectDto,
   ): Promise<{ message: string }> {
     // findUnique lets us distinguish 404 from 403 cleanly.
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, ownerId: true },
+      select: {
+        id: true,
+        ownerId: true,
+        owner: { select: { password: true } },
+      },
     });
 
     if (!project) {
@@ -334,6 +342,13 @@ export class ProjectsService {
       throw new ForbiddenException(
         'Only the project owner can delete this project',
       );
+    }
+
+    // A valid session is not enough for something this irreversible — an
+    // unattended laptop should not be able to destroy the project this way.
+    const matches = await verifyPassword(dto.password, project.owner.password);
+    if (!matches) {
+      throw new UnauthorizedException('Password is incorrect.');
     }
 
     // ProjectMember rows are removed automatically via the

@@ -17,6 +17,9 @@ export const qk = {
   /** Invitations addressed to the current user, across all projects. */
   myInvitations: ["my-invitations"] as const,
 
+  /** Admin-only live LLM settings (model/RPM/etc per scope). */
+  llmSettings: ["admin", "llm-settings"] as const,
+
   projects: {
     /** Root of the whole projects branch. Invalidate to refresh everything. */
     all: ["projects"] as const,

@@ -88,6 +88,17 @@ enum AuthTokenType {
   password_reset
 }
 
+// The three independent places the platform calls an LLM. Kept separate
+// (rather than one row) because each already runs against a different
+// provider/model in practice — OOPS spec-generation targets a cheaper model
+// than test-generation, and the Reports explainer is a third, unrelated
+// integration entirely. See LlmSettings.
+enum LlmScope {
+  TEST_ENGINE
+  SPEC_GENERATION
+  REPORT_EXPLANATION
+}
+
 // ----------------------------------------------------------------------------
 // User model — owns credentials for the AutoRestTest platform
 // ----------------------------------------------------------------------------
@@ -210,6 +221,41 @@ model PendingSignup {
   createdAt DateTime @default(now())
 
   @@map("pending_signups")
+}
+
+// ----------------------------------------------------------------------------
+// LlmSettings model — every live-editable LLM setting (model, base URL, RPM
+// limit, API key, ...) for one of the three LLM surfaces above, including the
+// provider key. One row per scope, upserted from the admin settings page.
+//
+// A field left null means "no admin override — fall back to that surface's
+// own environment default", not "use zero" or "use empty string". For
+// TEST_ENGINE/SPEC_GENERATION that default lives in engine-service's own env
+// (a separate process this one may not share a host with), so a null field is
+// simply omitted from the request to engine-service rather than guessed at
+// here. REPORT_EXPLANATION runs in this same process, so its null case
+// resolves against this service's own env vars instead (see
+// LlmSettingsService.getReportExplanationSettings).
+// ----------------------------------------------------------------------------
+model LlmSettings {
+  id    String   @id @default(uuid())
+  scope LlmScope @unique
+
+  model               String?
+  apiBase             String?
+  rpmLimit            Int?
+  // Only meaningful for TEST_ENGINE — the other two scopes never read them.
+  maxTokens           Int?
+  creativeTemperature Float?
+  strictTemperature   Float?
+  // Provider API key for this scope. Plain text, same as every other field
+  // here — the DB itself (Neon) is the trust boundary for this deployment.
+  apiKey              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("llm_settings")
 }
 
 // ----------------------------------------------------------------------------
@@ -421,6 +467,11 @@ model TestSuite {
   // (e.g. Authorization for Basic/Bearer/API-key auth). Write-only: never
   // selected back into read responses, since these are live credentials.
   customHeaders Json?
+  // Endpoint IDs excluded from this run's spec before it's sent to the
+  // engine — e.g. an operation known to be flaky/unsafe to fuzz. Not a real
+  // FK (an Endpoint can be deleted later); run() looks them up defensively
+  // and ignores any id that no longer resolves.
+  excludedEndpointIds String[] @default([])
 
   // Results summary — filled from the engine report
   totalEndpoints   Int @default(0)

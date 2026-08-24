@@ -38,8 +38,13 @@ export function updateProject(
   });
 }
 
-export function deleteProject(id: string): Promise<{ message: string }> {
+/** Irreversible. Requires the owner's password to confirm. */
+export function deleteProject(
+  id: string,
+  password: string,
+): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/projects/${id}`, {
     method: "DELETE",
+    body: { password },
   });
 }

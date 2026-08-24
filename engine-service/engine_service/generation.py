@@ -321,6 +321,7 @@ class GenerationManager:
     def _execute(self, gen_id: str) -> None:
         with self._lock:
             gen = self._gens.get(gen_id)
+            params = self._params.get(gen_id) or {}
         if gen is None:
             return  # deleted before it ran
 
@@ -332,7 +333,14 @@ class GenerationManager:
             self._transition(gen, status="completed", completed_at=_now())
             return
 
-        code = oops_runner.run_oops(self.cfg, job_dir)
+        code = oops_runner.run_oops(
+            self.cfg,
+            job_dir,
+            oops_model=params.get("oopsModel"),
+            oops_api_base=params.get("oopsApiBase"),
+            oops_rpm_limit=params.get("oopsRpmLimit"),
+            oops_api_key=params.get("oopsApiKey"),
+        )
 
         if code == oops_runner.EXIT_SWAGGER2_FALLBACK:
             self._transition(

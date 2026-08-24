@@ -12,9 +12,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { DeleteProjectDto } from './dto/delete-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectsService } from './projects.service';
 
@@ -22,6 +24,8 @@ interface AuthenticatedRequest extends Request {
   // JwtStrategy.validate returns a User-shaped object; we only need the id.
   user: { id: string };
 }
+
+const MINUTES = 60_000;
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -80,14 +84,19 @@ export class ProjectsController {
 
   /**
    * DELETE /projects/:id
-   * Deletes the project (and cascades to members). Owner-only.
+   * Deletes the project (and cascades to members). Owner-only; irreversible,
+   * so the owner's password is required in the body, and the route is
+   * throttled like account deletion.
    */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * MINUTES } })
   async remove(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: DeleteProjectDto,
   ) {
-    return this.projectsService.remove(id, req.user.id);
+    return this.projectsService.remove(id, req.user.id, dto);
   }
 }
