@@ -1,0 +1,37 @@
+# Applies to the repo-root Dockerfile (engine-service + autoresttest-core +
+# OOPS-final). Keeps local secrets, per-job artifacts, and dev-only virtual
+# environments/caches out of the image — several of these hold real values
+# (API keys, uploaded source zips) that must never end up in an image layer.
+
+**/__pycache__/
+**/*.pyc
+
+# Node / frontend / backend — not part of this image at all.
+frontend/
+backend/
+node_modules/
+
+# Dev-only virtualenvs (rebuilt fresh in the Dockerfile's own build stages).
+autoresttest-core/.venv/
+OOPS-final/.venv/
+engine-service/.venv/
+
+# Local caches and per-run data (regenerated at runtime, or served from the
+# Render persistent disk mounted over autoresttest-core/data in production).
+autoresttest-core/cache/
+autoresttest-core/data/
+OOPS-final/log/
+engine-service/jobs/
+
+# Secrets — never bake these into an image layer.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Misc repo cruft not needed inside the image.
+.git/
+.claude/
+resources/
+scripts/
+*.md
+sh.exe.stackdump
