@@ -33,6 +33,30 @@ def _default_oops_python(oops_dir: Path) -> Path:
     return oops_dir / ".venv" / "bin" / "python"
 
 
+def _interpreter_path(raw: str | Path) -> Path:
+    """Absolute path to an interpreter, WITHOUT resolving its final symlink.
+
+    Never use ``Path.resolve()`` on an interpreter. On POSIX a virtualenv's
+    ``bin/python`` is a symlink to the base interpreter (``/usr/local/bin/
+    python3``), and CPython decides whether it is running inside a venv from
+    the path it was *invoked* as -- ``sys.executable``'s own directory is where
+    it looks for ``pyvenv.cfg``. Resolve the symlink and you launch the base
+    interpreter directly: it starts fine, but sees none of the venv's
+    site-packages, so every OOPS dependency import fails with a bare
+    ``ModuleNotFoundError`` that looks like a broken install rather than the
+    wrong interpreter.
+
+    This only ever broke in the Linux container: Windows venvs copy
+    ``python.exe`` instead of symlinking it, so ``resolve()`` was a no-op in
+    local development.
+
+    ``os.path.abspath`` gives absoluteness and lexical ``..`` normalization --
+    the parts ``resolve()`` was wanted for -- while leaving the symlink itself
+    intact.
+    """
+    return Path(os.path.abspath(os.path.expanduser(str(raw))))
+
+
 def _default_engine_python() -> str:
     """Interpreter used to run graph_worker.py under the engine's environment.
 
@@ -89,9 +113,9 @@ class Config:
         oops_dir = Path(
             os.environ.get("OOPS_DIR", _SERVICE_ROOT.parent / "OOPS-final")
         ).resolve()
-        oops_python = Path(
+        oops_python = _interpreter_path(
             os.environ.get("OOPS_PYTHON", _default_oops_python(oops_dir))
-        ).resolve()
+        )
         return cls(
             core_dir=core_dir,
             jobs_dir=jobs_dir,
