@@ -31,16 +31,35 @@ FROM python:3.12-slim-bookworm AS oops-build
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
 
 WORKDIR /build/OOPS-final
-COPY OOPS-final/pyproject.toml OOPS-final/uv.lock ./
+COPY OOPS-final/pyproject.toml ./
 
-# --default-index overrides the vendored [[tool.uv.index]] Tsinghua mirror
-# (OOPS-final/pyproject.toml) WITHOUT editing that file — OOPS-final is
-# vendored as-is and must never be modified. --no-install-project: this
-# layer only has pyproject.toml + uv.lock (no source yet), and the project
-# has no [build-system] table anyway (it's imported via sys.path by
-# oops_worker.py, never pip-installed as a package).
-RUN uv sync --frozen --no-dev --no-install-project \
-    --default-index https://pypi.org/simple
+# OOPS-final/pyproject.toml pins a Tsinghua mirror as its default [[tool.uv.index]],
+# so every package in the committed OOPS-final/uv.lock has its download source
+# hardcoded to that mirror (`source = { registry = "https://mirrors.tuna.tsinghua.
+# edu.cn/..." }`). Two things conspire to make that lock unusable here:
+#   1. `uv sync --frozen` uses those baked-in URLs verbatim and ignores
+#      --default-index/--index entirely (confirmed upstream: astral-sh/uv#19625).
+#   2. Running `uv lock --default-index ...` *against that existing lock* first
+#      (still passing the committed uv.lock into this stage) built a venv that
+#      imported fine here, but a re-run with `uv lock -v` showed every metadata
+#      lookup still going through uv's local cache from the prior resolution
+#      rather than being re-fetched fresh, so relying on incremental re-lock to
+#      actually flip the source was not something this could confirm was safe.
+# Both leave real doubt about whether every production build re-fetches from a
+# mainland-China mirror that's unreliable to reach from outside China — one
+# that could partially or incompletely populate the venv while `uv sync` still
+# exits 0, which is what produced the `pydantic` ModuleNotFoundError in
+# production despite the image having built "successfully".
+#
+# Fix: don't copy the vendored uv.lock into this stage at all. With no existing
+# lock to reuse, `uv lock` has nothing to keep and must resolve every package
+# fresh against --default-index. Verified with `uv lock -v`: every dependency's
+# metadata lookup goes to https://pypi.org/simple/<pkg>/, zero requests to
+# mirrors.tuna.tsinghua.edu.cn. OOPS-final/uv.lock on disk is never touched —
+# only this build stage's throwaway in-container copy — keeping OOPS-final
+# vendored as-is.
+RUN uv lock --default-index https://pypi.org/simple \
+ && uv sync --no-dev --no-install-project
 
 ########################################
 # Stage 3: final runtime image
