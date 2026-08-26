@@ -9,9 +9,6 @@ export interface LlmSettingsRow {
   model: string | null;
   apiBase: string | null;
   rpmLimit: number | null;
-  maxTokens: number | null;
-  creativeTemperature: number | null;
-  strictTemperature: number | null;
   apiKey: string | null;
   updatedAt: Date | null;
 }
@@ -21,12 +18,12 @@ const SELECT = {
   model: true,
   apiBase: true,
   rpmLimit: true,
-  maxTokens: true,
-  creativeTemperature: true,
-  strictTemperature: true,
   apiKey: true,
   updatedAt: true,
 } as const;
+
+/** Requests per minute allowed to the explanation/description LLM by default. */
+const DEFAULT_RPM_LIMIT = 13;
 
 const SCOPES: LlmScope[] = [
   LlmScope.TEST_ENGINE,
@@ -72,16 +69,22 @@ export class LlmSettingsService {
   }
 
   /**
-   * Resolved model/API base/key for the Reports explainer. Unlike the other
-   * two scopes, this one always returns a usable model/apiBase: the DB
-   * override merged over this same process's `LLM_ENGINE`/`LLM_API_BASE` env
-   * vars. `apiKey` stays null when unset — the caller falls back to its own
-   * env-sourced key, exactly as before this override existed.
+   * Resolved settings for both in-process LLM features — failure explanations
+   * and test-case descriptions. Unlike the other two scopes, this one always
+   * returns a usable model/apiBase/rpmLimit: the DB override merged over this
+   * same process's env vars. `apiKey` stays null when unset — the caller falls
+   * back to its own env-sourced key, exactly as before this override existed.
+   *
+   * `rpmLimit` defaults to 13 rather than 0/unlimited because the free tier
+   * this runs against allows 15 requests a minute, and a describe pass issues
+   * calls in a tight loop. Unlimited is opt-in (set the field to 0), not the
+   * accident you get by leaving it blank.
    */
   async getReportExplanationSettings(): Promise<{
     model: string;
     apiBase: string;
     apiKey: string | null;
+    rpmLimit: number;
   }> {
     const override = await this.getOverride(LlmScope.REPORT_EXPLANATION);
     const apiBase =
@@ -95,7 +98,15 @@ export class LlmSettingsService {
         'google/gemini-2.5-flash-lite',
       apiBase: apiBase.replace(/\/+$/, ''),
       apiKey: override.apiKey,
+      rpmLimit: override.rpmLimit ?? this.envRpmLimit(),
     };
+  }
+
+  /** `LLM_RPM_LIMIT` from env, falling back to 13. Never negative. */
+  private envRpmLimit(): number {
+    const parsed = parseInt(this.config.get<string>('LLM_RPM_LIMIT') ?? '', 10);
+    if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_RPM_LIMIT;
+    return parsed;
   }
 
   /**
@@ -121,9 +132,6 @@ export class LlmSettingsService {
       model: pick('model'),
       apiBase: pick('apiBase'),
       rpmLimit: pick('rpmLimit'),
-      maxTokens: pick('maxTokens'),
-      creativeTemperature: pick('creativeTemperature'),
-      strictTemperature: pick('strictTemperature'),
       apiKey: pick('apiKey'),
     };
 
@@ -141,9 +149,6 @@ export class LlmSettingsService {
       model: null,
       apiBase: null,
       rpmLimit: null,
-      maxTokens: null,
-      creativeTemperature: null,
-      strictTemperature: null,
       apiKey: null,
       updatedAt: null,
     };

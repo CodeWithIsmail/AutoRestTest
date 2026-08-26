@@ -150,6 +150,35 @@ describe('ReportsService', () => {
       expect(out[0].failureExplanation).toBe('because reasons');
     });
 
+    it('reuses a stored explanation instead of calling the LLM again', async () => {
+      prisma.testSuite.findFirst.mockResolvedValue(COMPLETED_SUITE);
+      prisma.testCase.findMany.mockResolvedValue([
+        {
+          id: 'tc-2',
+          endpointId: 'ep-2',
+          responseBody: { statusCodes: { '500': 3 }, serverErrors: [{ x: 1 }] },
+          failureExplanation: 'explained last time',
+          endpoint: { method: HttpMethod.DELETE, path: '/pets/{id}' },
+        },
+        {
+          id: 'tc-3',
+          endpointId: 'ep-3',
+          responseBody: { statusCodes: { '404': 1 }, serverErrors: [] },
+          failureExplanation: null,
+          endpoint: { method: HttpMethod.GET, path: '/pets/{id}' },
+        },
+      ]);
+
+      const out = await service.explainFailures(PROJECT_ID, SUITE_ID, USER_ID);
+
+      // Only the unexplained one costs a call, but both come back.
+      expect(llm.explainFailure).toHaveBeenCalledTimes(1);
+      expect(prisma.testCase.update).toHaveBeenCalledTimes(1);
+      expect(out).toHaveLength(2);
+      expect(out[0].failureExplanation).toBe('explained last time');
+      expect(out[1].failureExplanation).toBe('because reasons');
+    });
+
     it('propagates an access-denied error', async () => {
       access.assertAccess.mockRejectedValue(new ForbiddenException());
       await expect(

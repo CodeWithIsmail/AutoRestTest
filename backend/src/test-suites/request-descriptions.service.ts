@@ -29,11 +29,17 @@ export interface DescribeRequestsResult {
  * user presses "Explain Requests" after a run finishes and the stored
  * request/response pairs are handed to the LLM in small batches.
  *
- * Work is capped per invocation (`maxPerCall`) rather than run to completion,
- * because a large suite takes minutes to describe and no HTTP request should be
- * held open that long. The caller polls: each response reports `remaining`, and
- * the client simply calls again until it reaches zero. That also makes the pass
- * resumable — an interrupted describe just leaves rows null for the next go.
+ * Work is capped per invocation (a wall-clock budget, plus `maxPerCall` as a
+ * ceiling on rows fetched) rather than run to completion, because a large suite
+ * takes minutes to describe and no HTTP request should be held open that long.
+ * The caller polls: each response reports `remaining`, and the client simply
+ * calls again until it reaches zero. That also makes the pass resumable — an
+ * interrupted describe just leaves rows null for the next go.
+ *
+ * Rate limiting is not done here: the LLM's requests-per-minute ceiling is a
+ * property of the credentials, configured per scope on /admin/llm-settings and
+ * enforced inside LlmService, so this pass and "Explain failures" share one
+ * budget instead of each inventing their own pacing.
  */
 @Injectable()
 export class RequestDescriptionsService {
@@ -45,10 +51,10 @@ export class RequestDescriptionsService {
    * inside a 500/day free tier.
    */
   private readonly batchSize: number;
-  /** Requests described per HTTP invocation, to bound the response time. */
+  /** Upper bound on rows pulled per HTTP invocation. */
   private readonly maxPerCall: number;
-  /** Optional pause between calls, for providers with a tight per-minute cap. */
-  private readonly delayMs: number;
+  /** Wall-clock budget for one HTTP invocation, after which it returns early. */
+  private readonly maxSeconds: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -64,7 +70,13 @@ export class RequestDescriptionsService {
       1,
       2000,
     );
-    this.delayMs = intFromEnv(config, 'LLM_DESCRIBE_DELAY_MS', 0, 0, 60_000);
+    this.maxSeconds = intFromEnv(
+      config,
+      'LLM_DESCRIBE_MAX_SECONDS',
+      45,
+      5,
+      300,
+    );
   }
 
   async describeSuite(
@@ -101,8 +113,15 @@ export class RequestDescriptionsService {
 
     let writtenNow = 0;
     let anySucceeded = pending.length === 0;
+    const deadline = Date.now() + this.maxSeconds * 1000;
 
     for (let i = 0; i < pending.length; i += this.batchSize) {
+      // Rate limiting means a batch can take seconds, so the guard against
+      // holding an HTTP request open too long has to be the clock rather than
+      // a request count — the same count means wildly different durations at
+      // 13 rpm and at 40. Whatever is left simply comes back as `remaining`.
+      if (Date.now() >= deadline) break;
+
       const batch = pending.slice(i, i + this.batchSize);
       const described = await this.llm.describeRequests(batch);
       if (described.size === 0) {
@@ -125,10 +144,6 @@ export class RequestDescriptionsService {
         ),
       );
       writtenNow += described.size;
-
-      if (this.delayMs > 0 && i + this.batchSize < pending.length) {
-        await sleep(this.delayMs);
-      }
     }
 
     const [total, remaining] = await this.prisma.$transaction([
@@ -158,8 +173,4 @@ function intFromEnv(
   const parsed = parseInt(config.get<string>(key) ?? '', 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -56,6 +56,34 @@ export class LlmService {
   }
 
   /**
+   * Earliest wall-clock time the next request may *start*. Both features share
+   * it because they share a key, and therefore a quota: LlmService is a single
+   * provider instance (ReportsModule exports it, TestSuitesModule imports it),
+   * so one budget covers "Explain failures" and "Explain requests" together.
+   */
+  private nextSlotAt = 0;
+
+  /**
+   * Holds the caller until its turn, spacing request *starts* 60s/rpm apart.
+   *
+   * Pacing from the start rather than sleeping a fixed amount after each reply
+   * is what makes this an actual rpm ceiling — a slow response spends its own
+   * interval instead of adding to it. The slot is claimed synchronously before
+   * the await, so concurrent callers queue behind each other rather than all
+   * reading the same free slot.
+   */
+  private async reserveSlot(rpm: number): Promise<void> {
+    if (rpm <= 0) return;
+    const interval = Math.ceil(60_000 / rpm);
+    const now = Date.now();
+    const slot = Math.max(now, this.nextSlotAt);
+    this.nextSlotAt = slot + interval;
+    if (slot > now) {
+      await new Promise((resolve) => setTimeout(resolve, slot - now));
+    }
+  }
+
+  /**
    * Throws if a real explanation is requested but no key is configured,
    * whether from the admin settings page or LLM_API_KEY.
    */
@@ -75,8 +103,9 @@ export class LlmService {
     }
 
     const prompt = this.buildPrompt(ctx);
-    const { model, apiBase, apiKey } =
+    const { model, apiBase, apiKey, rpmLimit } =
       await this.llmSettings.getReportExplanationSettings();
+    await this.reserveSlot(rpmLimit);
     try {
       const res = await fetch(`${apiBase}/chat/completions`, {
         method: 'POST',
@@ -87,7 +116,6 @@ export class LlmService {
         body: JSON.stringify({
           model,
           temperature: 0.3,
-          max_tokens: 300,
           messages: [
             {
               role: 'system',
@@ -138,8 +166,9 @@ export class LlmService {
       return out;
     }
 
-    const { model, apiBase, apiKey } =
+    const { model, apiBase, apiKey, rpmLimit } =
       await this.llmSettings.getReportExplanationSettings();
+    await this.reserveSlot(rpmLimit);
 
     try {
       const res = await fetch(`${apiBase}/chat/completions`, {
@@ -151,7 +180,6 @@ export class LlmService {
         body: JSON.stringify({
           model,
           temperature: 0.2,
-          max_tokens: 900,
           response_format: { type: 'json_object' },
           messages: [
             {

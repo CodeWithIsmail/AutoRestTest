@@ -65,9 +65,6 @@ describe('LlmSettingsService', () => {
       model: null,
       apiBase: null,
       rpmLimit: null,
-      maxTokens: null,
-      creativeTemperature: null,
-      strictTemperature: null,
       apiKey: 'sk-old-key',
       updatedAt: new Date(),
     });
@@ -90,9 +87,6 @@ describe('LlmSettingsService', () => {
       model: 'old-model',
       apiBase: null,
       rpmLimit: null,
-      maxTokens: null,
-      creativeTemperature: null,
-      strictTemperature: null,
       apiKey: 'sk-existing-key',
       updatedAt: new Date(),
     });
@@ -125,6 +119,7 @@ describe('LlmSettingsService', () => {
       model: 'env-model',
       apiBase: 'https://env-base',
       apiKey: null,
+      rpmLimit: 13,
     });
   });
 
@@ -134,9 +129,6 @@ describe('LlmSettingsService', () => {
       model: 'db-model',
       apiBase: 'https://db-base',
       rpmLimit: null,
-      maxTokens: null,
-      creativeTemperature: null,
-      strictTemperature: null,
       apiKey: 'sk-db-key',
       updatedAt: new Date(),
     });
@@ -145,6 +137,37 @@ describe('LlmSettingsService', () => {
       model: 'db-model',
       apiBase: 'https://db-base',
       apiKey: 'sk-db-key',
+      rpmLimit: 13,
     });
+  });
+
+  it('getReportExplanationSettings takes rpmLimit from the override, env, then 13', async () => {
+    prisma.llmSettings.findUnique.mockResolvedValue({
+      scope: LlmScope.REPORT_EXPLANATION,
+      model: null,
+      apiBase: null,
+      rpmLimit: 7,
+      apiKey: null,
+      updatedAt: new Date(),
+    });
+    expect((await service.getReportExplanationSettings()).rpmLimit).toBe(7);
+
+    // 0 is a real value ("no limit"), not an absent one, so it must survive.
+    prisma.llmSettings.findUnique.mockResolvedValue({
+      scope: LlmScope.REPORT_EXPLANATION,
+      model: null,
+      apiBase: null,
+      rpmLimit: 0,
+      apiKey: null,
+      updatedAt: new Date(),
+    });
+    expect((await service.getReportExplanationSettings()).rpmLimit).toBe(0);
+
+    const envService = new LlmSettingsService(
+      prisma as unknown as PrismaService,
+      cfg({ LLM_RPM_LIMIT: '25' }),
+    );
+    prisma.llmSettings.findUnique.mockResolvedValue(null);
+    expect((await envService.getReportExplanationSettings()).rpmLimit).toBe(25);
   });
 });

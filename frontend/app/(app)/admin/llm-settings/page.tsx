@@ -21,7 +21,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 const SCOPE_LABEL: Record<LlmScope, string> = {
   TEST_ENGINE: "Test engine",
   SPEC_GENERATION: "Spec generation",
-  REPORT_EXPLANATION: "Report explanations",
+  REPORT_EXPLANATION: "Explanation generation",
 };
 
 const SCOPE_DESCRIPTION: Record<LlmScope, string> = {
@@ -30,17 +30,7 @@ const SCOPE_DESCRIPTION: Record<LlmScope, string> = {
   SPEC_GENERATION:
     "The OOPS pipeline that turns an uploaded codebase into an OpenAPI spec.",
   REPORT_EXPLANATION:
-    "Plain-language failure explanations on a completed run's report.",
-};
-
-/** Fields not relevant to a scope stay hidden rather than disabled. */
-const SCOPE_FIELDS: Record<
-  LlmScope,
-  ("rpmLimit" | "maxTokens" | "temperatures")[]
-> = {
-  TEST_ENGINE: ["rpmLimit", "maxTokens", "temperatures"],
-  SPEC_GENERATION: ["rpmLimit"],
-  REPORT_EXPLANATION: [],
+    "Failure explanations on a run's report, and the plain-language test-case descriptions behind “Explain requests”.",
 };
 
 /**
@@ -53,28 +43,19 @@ const SCOPE_PLACEHOLDERS: Record<LlmScope, FormState> = {
   TEST_ENGINE: {
     model: "openai/gpt-oss-20b",
     apiBase: "https://integrate.api.nvidia.com/v1",
-    rpmLimit: "40",
-    maxTokens: "4096",
-    creativeTemperature: "1",
-    strictTemperature: "1",
+    rpmLimit: "unlimited",
     apiKey: "using engine-service's API_KEY",
   },
   SPEC_GENERATION: {
     model: "gemini-3.5-flash-lite",
     apiBase: "https://generativelanguage.googleapis.com/v1beta/openai/",
     rpmLimit: "12",
-    maxTokens: "",
-    creativeTemperature: "",
-    strictTemperature: "",
     apiKey: "using engine-service's OOPS_API_KEY",
   },
   REPORT_EXPLANATION: {
     model: "google/gemini-2.5-flash-lite",
     apiBase: "https://openrouter.ai/api/v1",
-    rpmLimit: "",
-    maxTokens: "",
-    creativeTemperature: "",
-    strictTemperature: "",
+    rpmLimit: "13",
     apiKey: "using backend's LLM_API_KEY",
   },
 };
@@ -84,9 +65,6 @@ interface FormState {
   model: string;
   apiBase: string;
   rpmLimit: string;
-  maxTokens: string;
-  creativeTemperature: string;
-  strictTemperature: string;
   apiKey: string;
 }
 
@@ -95,11 +73,6 @@ function toFormState(row: LlmSettingsRow): FormState {
     model: row.model ?? "",
     apiBase: row.apiBase ?? "",
     rpmLimit: row.rpmLimit === null ? "" : String(row.rpmLimit),
-    maxTokens: row.maxTokens === null ? "" : String(row.maxTokens),
-    creativeTemperature:
-      row.creativeTemperature === null ? "" : String(row.creativeTemperature),
-    strictTemperature:
-      row.strictTemperature === null ? "" : String(row.strictTemperature),
     apiKey: row.apiKey ?? "",
   };
 }
@@ -110,9 +83,6 @@ function toUpdateInput(form: FormState): UpdateLlmSettingsInput {
     model: form.model.trim() === "" ? null : form.model.trim(),
     apiBase: form.apiBase.trim() === "" ? null : form.apiBase.trim(),
     rpmLimit: num(form.rpmLimit),
-    maxTokens: num(form.maxTokens),
-    creativeTemperature: num(form.creativeTemperature),
-    strictTemperature: num(form.strictTemperature),
     apiKey: form.apiKey.trim() === "" ? null : form.apiKey.trim(),
   };
 }
@@ -206,7 +176,6 @@ function ScopeCard({ row }: { row: LlmSettingsRow }) {
     onError: (err) => toast.error(errMsg(err, "Could not save settings")),
   });
 
-  const fields = SCOPE_FIELDS[row.scope];
   const placeholder = SCOPE_PLACEHOLDERS[row.scope];
   const submitting = saveMutation.isPending;
 
@@ -253,55 +222,19 @@ function ScopeCard({ row }: { row: LlmSettingsRow }) {
           onChange={(e) => set("apiKey", e.target.value)}
         />
 
-        {(fields.includes("rpmLimit") || fields.includes("maxTokens")) && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {fields.includes("rpmLimit") && (
-              <FormField
-                label="RPM limit"
-                type="number"
-                min={0}
-                placeholder={placeholder.rpmLimit}
-                value={form.rpmLimit}
-                onChange={(e) => set("rpmLimit", e.target.value)}
-              />
-            )}
-            {fields.includes("maxTokens") && (
-              <FormField
-                label="Max tokens"
-                type="number"
-                min={1}
-                placeholder={placeholder.maxTokens}
-                value={form.maxTokens}
-                onChange={(e) => set("maxTokens", e.target.value)}
-              />
-            )}
-          </div>
-        )}
-
-        {fields.includes("temperatures") && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
-              label="Creative temperature"
-              type="number"
-              step="0.1"
-              min={0}
-              max={2}
-              placeholder={placeholder.creativeTemperature}
-              value={form.creativeTemperature}
-              onChange={(e) => set("creativeTemperature", e.target.value)}
-            />
-            <FormField
-              label="Strict temperature"
-              type="number"
-              step="0.1"
-              min={0}
-              max={2}
-              placeholder={placeholder.strictTemperature}
-              value={form.strictTemperature}
-              onChange={(e) => set("strictTemperature", e.target.value)}
-            />
-          </div>
-        )}
+        <div>
+          <FormField
+            label="RPM limit"
+            type="number"
+            min={0}
+            placeholder={placeholder.rpmLimit}
+            value={form.rpmLimit}
+            onChange={(e) => set("rpmLimit", e.target.value)}
+          />
+          <p className="mt-1.5 text-xs text-zinc-500">
+            Requests per minute. 0 removes the limit.
+          </p>
+        </div>
 
         <div>
           <Button type="submit" loading={submitting}>

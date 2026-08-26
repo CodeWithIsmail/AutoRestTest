@@ -15,6 +15,7 @@ function llmSettings(): LlmSettingsService {
         model: 'google/gemini-2.5-flash-lite',
         apiBase: 'https://openrouter.ai/api/v1',
         apiKey: null,
+        rpmLimit: 0,
       }),
   } as unknown as LlmSettingsService;
 }
@@ -59,6 +60,7 @@ describe('LlmService', () => {
           model: 'm',
           apiBase: 'https://x',
           apiKey: 'admin-key',
+          rpmLimit: 0,
         }),
     } as unknown as LlmSettingsService;
     const svc = new LlmService(cfg({ LLM_MODE: 'real' }), withKey);
@@ -89,6 +91,91 @@ describe('LlmService', () => {
     expect(url).toContain('/chat/completions');
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer k');
+  });
+
+  it('spaces requests apart to honour the RPM limit for the scope', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ choices: [{ message: { content: 'x' } }] }),
+      text: () => Promise.resolve(''),
+    });
+    // 600 rpm == one call per 100ms: long enough to measure, short enough that
+    // the test stays fast. The same arithmetic gives ~4.6s at the default 13.
+    const paced = {
+      getReportExplanationSettings: () =>
+        Promise.resolve({
+          model: 'm',
+          apiBase: 'https://x',
+          apiKey: 'k',
+          rpmLimit: 600,
+        }),
+    } as unknown as LlmSettingsService;
+
+    const svc = new LlmService(cfg({ LLM_MODE: 'real' }), paced);
+    const started = Date.now();
+    await svc.explainFailure(CTX);
+    await svc.explainFailure(CTX);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(95);
+  });
+
+  it('shares one rate budget between explanations and descriptions', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: '{"results":[{"id":"a","description":"d"}]}',
+              },
+            },
+          ],
+        }),
+      text: () => Promise.resolve(''),
+    });
+    const paced = {
+      getReportExplanationSettings: () =>
+        Promise.resolve({
+          model: 'm',
+          apiBase: 'https://x',
+          apiKey: 'k',
+          rpmLimit: 600,
+        }),
+    } as unknown as LlmSettingsService;
+
+    const svc = new LlmService(cfg({ LLM_MODE: 'real' }), paced);
+    const started = Date.now();
+    // One of each: they share a key, so they must share the budget too.
+    await svc.explainFailure(CTX);
+    await svc.describeRequests([
+      {
+        id: 'a',
+        method: 'GET',
+        path: '/pets',
+        url: 'https://api/pets',
+        requestBody: null,
+        statusCode: 200,
+        responseBody: null,
+      },
+    ]);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(95);
+  });
+
+  it('does not pace at all when the RPM limit is 0', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ choices: [{ message: { content: 'x' } }] }),
+      text: () => Promise.resolve(''),
+    });
+    const svc = new LlmService(cfg({ LLM_MODE: 'real' }), llmSettings());
+    const started = Date.now();
+    await svc.explainFailure(CTX);
+    await svc.explainFailure(CTX);
+    await svc.explainFailure(CTX);
+    expect(Date.now() - started).toBeLessThan(50);
   });
 
   it('falls back to a generic note when the API errors', async () => {

@@ -16,9 +16,6 @@ function makeLlmSettings(): LlmSettingsService {
     model: null,
     apiBase: null,
     rpmLimit: null,
-    maxTokens: null,
-    creativeTemperature: null,
-    strictTemperature: null,
     apiKey: null,
     updatedAt: null,
   });

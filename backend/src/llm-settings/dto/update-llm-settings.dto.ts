@@ -1,6 +1,5 @@
 import {
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   IsUrl,
@@ -43,22 +42,4 @@ export class UpdateLlmSettingsDto {
   @Min(0, { message: 'RPM limit must be at least 0 (0 disables the limit)' })
   @Max(1000, { message: 'RPM limit must be at most 1000' })
   rpmLimit?: number | null;
-
-  @IsOptional()
-  @IsInt({ message: 'Max tokens must be an integer' })
-  @Min(1, { message: 'Max tokens must be at least 1' })
-  @Max(200_000, { message: 'Max tokens must be at most 200000' })
-  maxTokens?: number | null;
-
-  @IsOptional()
-  @IsNumber({}, { message: 'Creative temperature must be a number' })
-  @Min(0, { message: 'Creative temperature must be at least 0' })
-  @Max(2, { message: 'Creative temperature must be at most 2' })
-  creativeTemperature?: number | null;
-
-  @IsOptional()
-  @IsNumber({}, { message: 'Strict temperature must be a number' })
-  @Min(0, { message: 'Strict temperature must be at least 0' })
-  @Max(2, { message: 'Strict temperature must be at most 2' })
-  strictTemperature?: number | null;
 }

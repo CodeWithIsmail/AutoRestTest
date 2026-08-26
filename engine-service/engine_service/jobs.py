@@ -249,7 +249,7 @@ class JobManager:
                     llm_rpm_limit=int(
                         params.get("llmRpmLimit") or self.cfg.llm_rpm_limit
                     ),
-                    llm_max_tokens=int(params.get("llmMaxTokens") or 4096),
+                    llm_max_tokens=int(params.get("llmMaxTokens") or 16384),
                     llm_creative_temperature=float(
                         params.get("llmCreativeTemperature") or 1
                     ),

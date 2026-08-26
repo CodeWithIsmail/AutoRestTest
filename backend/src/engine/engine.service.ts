@@ -26,9 +26,6 @@ export interface EngineRunPayload {
   llmEngine?: string;
   llmApiBase?: string;
   llmRpmLimit?: number;
-  llmMaxTokens?: number;
-  llmCreativeTemperature?: number;
-  llmStrictTemperature?: number;
   /**
    * Overrides engine-service's own `API_KEY` for this run only. Travels the
    * same way `customHeaders` already does — over the same
@@ -208,11 +205,6 @@ export class EngineService {
       llmEngine: payload.llmEngine ?? llm.model ?? undefined,
       llmApiBase: payload.llmApiBase ?? llm.apiBase ?? undefined,
       llmRpmLimit: payload.llmRpmLimit ?? llm.rpmLimit ?? undefined,
-      llmMaxTokens: payload.llmMaxTokens ?? llm.maxTokens ?? undefined,
-      llmCreativeTemperature:
-        payload.llmCreativeTemperature ?? llm.creativeTemperature ?? undefined,
-      llmStrictTemperature:
-        payload.llmStrictTemperature ?? llm.strictTemperature ?? undefined,
       llmApiKey: payload.llmApiKey ?? llm.apiKey ?? undefined,
     });
   }

@@ -12,10 +12,6 @@ export interface LlmSettingsRow {
   model: string | null;
   apiBase: string | null;
   rpmLimit: number | null;
-  /** Only meaningful for TEST_ENGINE. */
-  maxTokens: number | null;
-  creativeTemperature: number | null;
-  strictTemperature: number | null;
   apiKey: string | null;
   updatedAt: string | null;
 }
@@ -24,9 +20,6 @@ export interface UpdateLlmSettingsInput {
   model?: string | null;
   apiBase?: string | null;
   rpmLimit?: number | null;
-  maxTokens?: number | null;
-  creativeTemperature?: number | null;
-  strictTemperature?: number | null;
   apiKey?: string | null;
 }
 

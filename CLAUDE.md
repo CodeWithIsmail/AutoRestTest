@@ -195,21 +195,31 @@ The whole feature is three pieces: `LlmService.describeRequests()`
 (`src/reports/llm.service.ts`), `RequestDescriptionsService`
 (`src/test-suites/request-descriptions.service.ts`), and
 `POST /projects/:id/test-suites/:suiteId/describe`. `TestSuitesModule` imports
-`ReportsModule` for the LLM client alone — same admin-configured key and model
+`ReportsModule` for the LLM client alone — same `REPORT_EXPLANATION` credentials
 as the failure explainer.
 
-Two design points worth keeping:
+Three design points worth keeping:
 
-- **The pass is bounded and resumable, not one long request.** A call describes
-  at most `LLM_DESCRIBE_MAX_PER_CALL` requests and returns `remaining`; the
+- **The pass is bounded and resumable, not one long request.** A call runs until
+  `LLM_DESCRIBE_MAX_SECONDS` (default 45) is spent and returns `remaining`; the
   frontend loops until that is zero, showing progress. A run of 1,500 requests
-  takes minutes, and holding one HTTP request open that long would die at the
-  proxy. Because state lives in the nullable column rather than in memory, an
+  takes many minutes, and holding one HTTP request open that long would die at
+  the proxy. The guard is wall-clock rather than a request count because rate
+  limiting means the same count takes wildly different times at 13 rpm and at
+  40. Because state lives in the nullable column rather than in memory, an
   interrupted pass simply leaves rows null for the next attempt.
+- **Rate limiting belongs to the credentials, not to this feature.**
+  `LlmService.reserveSlot()` spaces request *starts* 60s/rpm apart using the
+  `rpmLimit` on the `REPORT_EXPLANATION` scope (default 13, under a Gemini free
+  tier's 15/min; 0 disables it). It is one shared budget: `LlmService` is a
+  single provider instance, so "Explain requests" and "Explain failures" queue
+  behind each other rather than each inventing its own pacing and jointly
+  blowing the limit. Pacing from the start, not sleeping after each reply, is
+  what makes it a real ceiling — a slow response spends its own interval.
 - **Batch size is set by the provider's *daily* cap, not its rate limit.** The
   default `LLM_DESCRIBE_BATCH_SIZE=4` keeps a 1,500-request run to 375 calls,
-  inside a Gemini free tier's 500/day. A provider limited per-minute instead
-  (NVIDIA NIM, ~40 rpm) wants a larger batch plus `LLM_DESCRIBE_DELAY_MS`.
+  inside a Gemini free tier's 500/day. It stays an env var precisely because it
+  answers a different question than the four settings-page fields do.
 
 If a whole batch comes back empty the pass stops instead of continuing: an empty
 result means the provider is failing, and the remaining quota should not be spent

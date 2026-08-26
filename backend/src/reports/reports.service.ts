@@ -154,6 +154,7 @@ export class ReportsService {
         id: true,
         endpointId: true,
         responseBody: true,
+        failureExplanation: true,
         endpoint: { select: { method: true, path: true } },
       },
     });
@@ -161,6 +162,24 @@ export class ReportsService {
     const results: ReportEndpoint[] = [];
     for (const tc of failed) {
       const stored = this.parseResponse(tc.responseBody);
+
+      // Reuse what is already stored rather than paying for it again. Since
+      // LlmService now paces calls to the scope's RPM limit, a suite with many
+      // failures can outlast the proxy on the first attempt; skipping finished
+      // cases is what lets a second press pick up where that one stopped.
+      if (tc.failureExplanation) {
+        results.push({
+          endpointId: tc.endpointId,
+          method: tc.endpoint.method,
+          path: tc.endpoint.path,
+          passed: false,
+          statusCodes: stored.statusCodes ?? {},
+          hasServerErrors: (stored.serverErrors?.length ?? 0) > 0,
+          failureExplanation: tc.failureExplanation,
+        });
+        continue;
+      }
+
       const explanation = await this.llm.explainFailure({
         method: tc.endpoint.method,
         path: tc.endpoint.path,

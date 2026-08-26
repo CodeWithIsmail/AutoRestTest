@@ -241,16 +241,15 @@ model LlmSettings {
   id    String   @id @default(uuid())
   scope LlmScope @unique
 
-  model               String?
-  apiBase             String?
-  rpmLimit            Int?
-  // Only meaningful for TEST_ENGINE — the other two scopes never read them.
-  maxTokens           Int?
-  creativeTemperature Float?
-  strictTemperature   Float?
+  // The four settings every scope exposes on /admin/llm-settings. Tuning knobs
+  // (max tokens, temperatures) deliberately live with each consumer's own
+  // defaults instead — see engine-service's jobs.py.
+  model    String?
+  apiBase  String?
+  rpmLimit Int?
   // Provider API key for this scope. Plain text, same as every other field
   // here — the DB itself (Neon) is the trust boundary for this deployment.
-  apiKey              String?
+  apiKey   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

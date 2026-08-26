@@ -96,7 +96,7 @@ def render_config_toml(
     custom_headers: Optional[Dict[str, str]],
     recursion_limit: int = 50,
     llm_rpm_limit: int = 0,
-    llm_max_tokens: int = 4096,
+    llm_max_tokens: int = 16384,
     llm_creative_temperature: float = 1,
     llm_strict_temperature: float = 1,
     value_workers: int = 8,
@@ -119,6 +119,8 @@ def render_config_toml(
     llm["creative_temperature"] = llm_creative_temperature
     llm["strict_temperature"] = llm_strict_temperature
     llm["api_base"] = llm_api_base
+    # Generous on purpose: a cap, not a reservation, so a high ceiling costs
+    # nothing but keeps a long value-generation reply from being truncated.
     llm["max_tokens"] = llm_max_tokens
     # Client-side request pacing (0 = disabled). Caps outgoing LLM calls per
     # minute across all threads to respect a provider's rate limit, e.g. 40 for

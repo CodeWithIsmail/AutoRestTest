@@ -90,8 +90,9 @@ describe('RequestDescriptionsService', () => {
 
     // Default batch size is 4, so 5 rows means two calls.
     expect(llm.describeRequests).toHaveBeenCalledTimes(2);
-    expect(llm.describeRequests.mock.calls[0][0]).toHaveLength(4);
-    expect(llm.describeRequests.mock.calls[1][0]).toHaveLength(1);
+    const calls = llm.describeRequests.mock.calls as [{ id: string }[]][];
+    expect(calls[0][0]).toHaveLength(4);
+    expect(calls[1][0]).toHaveLength(1);
     expect(result).toEqual({
       total: 5,
       described: 5,
@@ -114,6 +115,35 @@ describe('RequestDescriptionsService', () => {
     expect(result.writtenNow).toBe(0);
     expect(result.usedLlm).toBe(false);
     expect(result.remaining).toBe(8);
+  });
+
+  it('returns early once the time budget is spent, leaving the rest pending', async () => {
+    // 5s is the floor the clamp allows; each batch is made to burn past it so
+    // the loop stops after the first, however many rows were fetched.
+    service = build({
+      LLM_DESCRIBE_MAX_SECONDS: '5',
+      LLM_DESCRIBE_BATCH_SIZE: '2',
+    });
+    prisma.requestLog.findMany.mockResolvedValue(
+      ['a', 'b', 'c', 'd', 'e', 'f'].map(pendingRow),
+    );
+
+    const realNow = Date.now;
+    let clock = realNow();
+    jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    llm.describeRequests.mockImplementation((batch: { id: string }[]) => {
+      clock += 6_000; // one batch, budget blown
+      return new Map(batch.map((r) => [r.id, `describes ${r.id}`]));
+    });
+    prisma.requestLog.count.mockResolvedValueOnce(6).mockResolvedValueOnce(4);
+
+    const result = await service.describeSuite(PROJECT_ID, SUITE_ID, USER_ID);
+    Date.now = realNow;
+
+    expect(llm.describeRequests).toHaveBeenCalledTimes(1);
+    expect(result.writtenNow).toBe(2);
+    expect(result.remaining).toBe(4);
+    expect(result.usedLlm).toBe(true);
   });
 
   it('caps the work per invocation and leaves the rest for the next call', async () => {
