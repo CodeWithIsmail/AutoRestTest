@@ -187,9 +187,9 @@ column of a run's request list. It is a readability layer, nothing more.
 **The engine is not involved, and neither is the run.** `autoresttest-core/` and
 `engine-service/` are untouched; testing proceeds exactly as before. Descriptions
 are written *afterwards*, only when a user presses **Explain requests** on a
-completed run, which hands the stored request/response pairs to the LLM in small
-batches. Nothing is written at ingest, so `RequestLog.description` is null until
-someone asks.
+completed run, which hands the stored requests to the LLM in small batches.
+Nothing is written at ingest, so `RequestLog.description` is null until someone
+asks.
 
 The whole feature is three pieces: `LlmService.describeRequests()`
 (`src/reports/llm.service.ts`), `RequestDescriptionsService`
@@ -197,6 +197,37 @@ The whole feature is three pieces: `LlmService.describeRequests()`
 `POST /projects/:id/test-suites/:suiteId/describe`. `TestSuitesModule` imports
 `ReportsModule` for the LLM client alone — same `REPORT_EXPLANATION` credentials
 as the failure explainer.
+
+**What the model is shown decides how specific the output is.** Three things
+were added after the first version produced only generic sentences, and each is
+load-bearing:
+
+- **The templated path.** `RequestLog.path` is *concrete* (`/pets/%20fluffy%20`);
+  the template `/pets/{slug}` lives on the joined `Endpoint`. Without it the
+  model cannot know which segment is a parameter or what it is called, so
+  "leading and trailing spaces for 'path_params.slug'" is not unlikely — it is
+  unavailable. The prompt therefore sends the request *decomposed*
+  (`path_params`, `query_params`, `headers`, `body`), since binding values to
+  names is deterministic work that should not be left to inference. A null
+  `endpointId` is itself a finding: logs match on `METHOD:templatedPath`, so an
+  unmatched row means the method was mutated.
+- **The declared schema.** `spec-params.ts` parses and dereferences the project
+  spec once per invocation and indexes each operation's parameter types,
+  `required`, and constraints (`maxLength`, `enum`, `format`, …). It never
+  throws — an unparseable spec degrades the descriptions rather than failing the
+  pass.
+- **The engine's mutation vocabulary.** `MutationAgent.mutate_values`
+  (`marl.py:350`) applies a fixed, small set: wrong type (65%), boundary values
+  (25%, from a literal list), parameter rename/relocate (10%), auth-token
+  drop/fuzz (20%), media-type swap (2%), wrong HTTP method (1%). Listing those
+  in the system prompt turns open-ended writing into near-classification, which
+  is what makes output *consistent* across a run rather than merely fluent.
+
+The response is deliberately **not** sent. Shown a status code, the model drifts
+into describing the outcome ("Verifies the API returns 400") instead of the
+intent; a test case's description should read the same whether it passed or
+failed. `Authorization` is reduced to `present`/`absent` so no credential leaves
+the deployment.
 
 Three design points worth keeping:
 

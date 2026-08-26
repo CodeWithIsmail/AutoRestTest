@@ -4,6 +4,7 @@ import { Role } from '../../generated/prisma/client';
 import { ProjectAccessService } from '../common/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../reports/llm.service';
+import { buildSpecIndex, type SpecIndex } from './spec-params';
 
 /** Same roles that may trigger a run may also spend LLM budget describing one. */
 const DESCRIBE_ROLES: Role[] = [Role.admin, Role.tester];
@@ -98,18 +99,24 @@ export class RequestDescriptionsService {
 
     const pending = await this.prisma.requestLog.findMany({
       where: { testSuiteId: suiteId, description: null },
-      orderBy: { seq: 'asc' },
+      // Grouped by operation, not just by time: sibling requests to the same
+      // endpoint are the cheapest contrast the model can get (the mutated field
+      // is the one that differs), and it lets the spec block be sent once per
+      // batch rather than once per request.
+      orderBy: [{ endpointId: 'asc' }, { seq: 'asc' }],
       take: this.maxPerCall,
       select: {
         id: true,
         method: true,
         path: true,
         url: true,
+        requestHeaders: true,
         requestBody: true,
-        statusCode: true,
-        responseBody: true,
+        endpoint: { select: { method: true, path: true } },
       },
     });
+
+    const spec = await this.loadSpecIndex(projectId);
 
     let writtenNow = 0;
     let anySucceeded = pending.length === 0;
@@ -122,7 +129,24 @@ export class RequestDescriptionsService {
       // 13 rpm and at 40. Whatever is left simply comes back as `remaining`.
       if (Date.now() >= deadline) break;
 
-      const batch = pending.slice(i, i + this.batchSize);
+      const batch = pending.slice(i, i + this.batchSize).map((r) => {
+        const endpointMethod = r.endpoint?.method ?? null;
+        const endpointPath = r.endpoint?.path ?? null;
+        return {
+          id: r.id,
+          method: r.method,
+          path: r.path,
+          url: r.url,
+          requestHeaders: asHeaders(r.requestHeaders),
+          requestBody: r.requestBody,
+          endpointMethod,
+          endpointPath,
+          spec:
+            endpointMethod && endpointPath
+              ? (spec.get(`${endpointMethod}:${endpointPath}`) ?? null)
+              : null,
+        };
+      });
       const described = await this.llm.describeRequests(batch);
       if (described.size === 0) {
         // A whole batch coming back empty means the provider is failing, not
@@ -161,6 +185,29 @@ export class RequestDescriptionsService {
       usedLlm: anySucceeded && !this.llm.isMock,
     };
   }
+
+  /**
+   * The project's spec, indexed by operation. Without the declared type,
+   * `required` and constraints like maxLength/enum, a description cannot say
+   * what a value actually violated — only that it looks odd.
+   */
+  private async loadSpecIndex(projectId: string): Promise<SpecIndex> {
+    const spec = await this.prisma.apiSpecification.findUnique({
+      where: { projectId },
+      select: { fileContent: true },
+    });
+    return buildSpecIndex(spec?.fileContent ?? null);
+  }
+}
+
+/** Prisma hands back Json; only a flat string map is useful as headers. */
+function asHeaders(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (typeof v === 'string') out[k] = v;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 function intFromEnv(

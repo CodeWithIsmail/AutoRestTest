@@ -15,9 +15,9 @@ function pendingRow(id: string) {
     method: 'GET',
     path: `/things/${id}`,
     url: `http://api.test/things/${id}`,
+    requestHeaders: null,
     requestBody: null,
-    statusCode: 200,
-    responseBody: '{}',
+    endpoint: { method: 'GET', path: '/things/{id}' },
   };
 }
 
@@ -26,6 +26,7 @@ describe('RequestDescriptionsService', () => {
   let prisma: {
     testSuite: { findFirst: jest.Mock };
     requestLog: { findMany: jest.Mock; count: jest.Mock; update: jest.Mock };
+    apiSpecification: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
   let access: { assertAccess: jest.Mock };
@@ -52,6 +53,7 @@ describe('RequestDescriptionsService', () => {
     prisma = {
       testSuite: { findFirst: jest.fn() },
       requestLog: { findMany: jest.fn(), count: jest.fn(), update: jest.fn() },
+      apiSpecification: { findUnique: jest.fn().mockResolvedValue(null) },
       // Both call sites hand $transaction an array of promises, so awaiting
       // them all is a faithful enough stand-in for a real batch.
       $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
@@ -66,6 +68,29 @@ describe('RequestDescriptionsService', () => {
     prisma.testSuite.findFirst.mockResolvedValue({ id: SUITE_ID });
     prisma.requestLog.update.mockResolvedValue(undefined);
     service = build();
+  });
+
+  it('fetches pending rows grouped by operation, with the template and headers', async () => {
+    prisma.requestLog.findMany.mockResolvedValue([]);
+    prisma.requestLog.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+
+    await service.describeSuite(PROJECT_ID, SUITE_ID, USER_ID);
+
+    const findManyCalls = prisma.requestLog.findMany.mock.calls as [
+      { orderBy: unknown; select: Record<string, unknown> },
+    ][];
+    const args = findManyCalls[0][0];
+    // Same-endpoint requests must land in the same batch: that contrast is what
+    // lets the model see which field was mutated.
+    expect(args.orderBy).toEqual([{ endpointId: 'asc' }, { seq: 'asc' }]);
+    // The templated path is the whole reason a description can name a parameter.
+    expect(args.select.endpoint).toEqual({
+      select: { method: true, path: true },
+    });
+    expect(args.select.requestHeaders).toBe(true);
+    // The response is deliberately not fetched — it is not part of the intent.
+    expect(args.select.responseBody).toBeUndefined();
+    expect(args.select.statusCode).toBeUndefined();
   });
 
   it('rejects a suite that does not belong to the project', async () => {

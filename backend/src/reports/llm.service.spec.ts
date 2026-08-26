@@ -178,6 +178,105 @@ describe('LlmService', () => {
     expect(Date.now() - started).toBeLessThan(50);
   });
 
+  describe('describeRequests prompt', () => {
+    /** Runs one describe call and hands back the user message that was sent. */
+    async function promptFor(
+      input: Partial<Parameters<LlmService['describeRequests']>[0][0]>,
+    ): Promise<string> {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            choices: [{ message: { content: '{"results":[]}' } }],
+          }),
+        text: () => Promise.resolve(''),
+      });
+      global.fetch = fetchMock;
+
+      const svc = new LlmService(
+        cfg({ LLM_MODE: 'real', LLM_API_KEY: 'k' }),
+        llmSettings(),
+      );
+      await svc.describeRequests([
+        {
+          id: 'r1',
+          method: 'PUT',
+          path: '/pets/%20fluffy%20',
+          url: 'http://api.test/pets/%20fluffy%20?limit=99999',
+          requestHeaders: { 'Content-Type': 'text/plain', Host: 'api.test' },
+          requestBody: '{"name":""}',
+          endpointMethod: 'PUT',
+          endpointPath: '/pets/{slug}',
+          spec: {
+            fields: [
+              { name: 'slug', in: 'path', type: 'string', maxLength: 20 },
+              { name: 'name', in: 'body', type: 'string', required: true },
+            ],
+          },
+          ...input,
+        },
+      ]);
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      return body.messages[1].content;
+    }
+
+    it('names path parameters using the templated path, decoded', async () => {
+      const prompt = await promptFor({});
+      // Without the template the parameter has no name at all — this is the
+      // difference between "spaces in the path" and "spaces in path_params.slug".
+      expect(prompt).toContain('PUT /pets/{slug}');
+      expect(prompt).toContain('path_params');
+      expect(prompt).toContain('" fluffy "');
+      expect(prompt).toContain('query_params');
+      expect(prompt).toContain('99999');
+    });
+
+    it('carries the declared constraints from the spec', async () => {
+      const prompt = await promptFor({});
+      expect(prompt).toContain('maxLength');
+      expect(prompt).toContain('slug');
+      expect(prompt).toContain('required');
+    });
+
+    it('never sends the response, so descriptions cannot describe outcomes', async () => {
+      const prompt = await promptFor({});
+      expect(prompt).not.toContain('statusCode');
+      expect(prompt).not.toContain('responseBody');
+    });
+
+    it('keeps intent-bearing headers and drops transport noise', async () => {
+      const prompt = await promptFor({
+        requestHeaders: {
+          Authorization: 'Bearer super-secret-token',
+          'Content-Type': 'text/plain',
+          Host: 'api.test',
+          Connection: 'keep-alive',
+        },
+      });
+      expect(prompt).toContain('text/plain');
+      // Whether a token was sent is the signal; the token itself must not leave.
+      expect(prompt).toContain('present');
+      expect(prompt).not.toContain('super-secret-token');
+      expect(prompt).not.toContain('keep-alive');
+    });
+
+    it('flags an unmatched request instead of inventing a template', async () => {
+      const prompt = await promptFor({
+        method: 'DELETE',
+        endpointMethod: null,
+        endpointPath: null,
+        spec: null,
+      });
+      expect(prompt).toContain('no declared operation matches');
+      expect(prompt).not.toContain('{slug}');
+    });
+  });
+
   it('falls back to a generic note when the API errors', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('network'));
     const svc = new LlmService(
