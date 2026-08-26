@@ -15,6 +15,7 @@ import {
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateTestSuiteDto } from './dto/create-test-suite.dto';
+import { RequestDescriptionsService } from './request-descriptions.service';
 import { TestSuitesService } from './test-suites.service';
 
 interface AuthenticatedRequest extends Request {
@@ -24,7 +25,10 @@ interface AuthenticatedRequest extends Request {
 @Controller('projects/:projectId/test-suites')
 @UseGuards(JwtAuthGuard)
 export class TestSuitesController {
-  constructor(private readonly testSuitesService: TestSuitesService) {}
+  constructor(
+    private readonly testSuitesService: TestSuitesService,
+    private readonly requestDescriptions: RequestDescriptionsService,
+  ) {}
 
   /**
    * POST /projects/:projectId/test-suites
@@ -179,6 +183,28 @@ export class TestSuitesController {
         page: page ? parseInt(page, 10) : undefined,
         pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
       },
+    );
+  }
+
+  /**
+   * POST /projects/:projectId/test-suites/:suiteId/describe
+   * Writes a plain-language description onto captured requests that lack one.
+   * Owner/admin/tester.
+   *
+   * Bounded work per call: the response reports `remaining`, and the client
+   * calls again until it hits zero. Nothing about the run itself changes.
+   */
+  @Post(':suiteId/describe')
+  @HttpCode(HttpStatus.OK)
+  async describeRequests(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('suiteId', new ParseUUIDPipe()) suiteId: string,
+  ) {
+    return this.requestDescriptions.describeSuite(
+      projectId,
+      suiteId,
+      req.user.id,
     );
   }
 

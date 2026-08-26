@@ -6,5 +6,6 @@ import { LlmService } from './llm.service';
 @Module({
   controllers: [ReportsController],
   providers: [ReportsService, LlmService],
+  exports: [LlmService],
 })
 export class ReportsModule {}

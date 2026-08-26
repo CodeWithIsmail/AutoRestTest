@@ -270,6 +270,18 @@ export interface RequestLogListItem {
   path: string;
   statusCode: number | null;
   durationMs: number | null;
+  /** Plain-language summary; null until "Explain Requests" has been run. */
+  description: string | null;
+}
+
+/** Progress report from one POST .../describe call. */
+export interface DescribeRequestsResult {
+  total: number;
+  described: number;
+  /** Still undescribed. Call again while this is above zero. */
+  remaining: number;
+  writtenNow: number;
+  usedLlm: boolean;
 }
 
 export interface RequestLogPage {

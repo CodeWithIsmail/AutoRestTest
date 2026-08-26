@@ -24,6 +24,7 @@ import {
   suiteReportOptions,
 } from "@/lib/queries";
 import { qk } from "@/lib/query-keys";
+import { describeRequests } from "@/lib/request-logs";
 import { downloadReport, explainFailures } from "@/lib/reports";
 import { replaySuite, runSuite } from "@/lib/test-suites";
 import type { ReportEndpoint } from "@/lib/types";
@@ -224,6 +225,39 @@ export default function SuiteDetailPage() {
     onError: (err) => toast.error(errMsg(err, "Failed to explain failures")),
   });
 
+  /**
+   * Describes captured requests in plain language.
+   *
+   * The backend caps how much it does per call so no single HTTP request hangs
+   * for minutes, so this keeps calling until nothing is left. A call that
+   * writes nothing means the provider is failing — stop rather than loop.
+   */
+  const [describeProgress, setDescribeProgress] = useState<string | null>(null);
+  const describeMutation = useMutation({
+    mutationFn: async () => {
+      let result = await describeRequests(project.id, suiteId);
+      while (result.remaining > 0 && result.writtenNow > 0) {
+        setDescribeProgress(`${result.described} / ${result.total}`);
+        result = await describeRequests(project.id, suiteId);
+      }
+      return result;
+    },
+    onSettled: () => setDescribeProgress(null),
+    onSuccess: (result) => {
+      if (result.remaining > 0) {
+        toast.error(
+          `Described ${result.described} of ${result.total} requests — the AI provider stopped responding. Try again to continue.`,
+        );
+      } else {
+        toast.success(`Described all ${result.total} requests.`);
+      }
+      void queryClient.invalidateQueries({
+        queryKey: [...qk.suites.detail(project.id, suiteId), "logs"],
+      });
+    },
+    onError: (err) => toast.error(errMsg(err, "Failed to explain requests")),
+  });
+
   // Not cached: this streams a file to the browser rather than returning data.
   const exportMutation = useMutation({
     mutationFn: (format: "csv" | "pdf") =>
@@ -234,11 +268,13 @@ export default function SuiteDetailPage() {
   const onRun = () => runMutation.mutate();
   const onReplay = () => replayMutation.mutate();
   const onExplain = () => explainMutation.mutate();
+  const onDescribe = () => describeMutation.mutate();
   const onExport = (format: "csv" | "pdf") => exportMutation.mutate(format);
 
   const starting = runMutation.isPending;
   const replaying = replayMutation.isPending;
   const explaining = explainMutation.isPending;
+  const describing = describeMutation.isPending;
   const exporting = exportMutation.isPending;
 
   if (loading) {
@@ -314,6 +350,18 @@ export default function SuiteDetailPage() {
                     loading={explaining}
                   >
                     Explain failures
+                  </Button>
+                )}
+                {canRun && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={onDescribe}
+                    loading={describing}
+                  >
+                    {describing && describeProgress
+                      ? `Explaining ${describeProgress}`
+                      : "Explain requests"}
                   </Button>
                 )}
                 <Button

@@ -3,6 +3,7 @@
 
 import { apiFetch } from "./api";
 import type {
+  DescribeRequestsResult,
   RequestLogDetail,
   RequestLogEndpointSummary,
   RequestLogPage,
@@ -65,6 +66,22 @@ export function runRequestLog(
 ): Promise<RunRequestLogResult> {
   return apiFetch<RunRequestLogResult>(
     `/projects/${projectId}/test-suites/${suiteId}/request-logs/${logId}/run`,
+    { method: "POST" },
+  );
+}
+
+/**
+ * Asks the LLM to describe captured requests that have no description yet.
+ *
+ * Bounded per call, so a large run needs several: keep calling while the
+ * result's `remaining` is above zero.
+ */
+export function describeRequests(
+  projectId: string,
+  suiteId: string,
+): Promise<DescribeRequestsResult> {
+  return apiFetch<DescribeRequestsResult>(
+    `/projects/${projectId}/test-suites/${suiteId}/describe`,
     { method: "POST" },
   );
 }

@@ -178,6 +178,44 @@ actually hit:
   17-operation spec, 39 of 78 edges were cyclic. They are drawn dotted and bowed
   out to the side, anchored to node faces rather than centres.
 
+## Test-case descriptions ("Explain requests")
+
+Every captured request can carry a one-sentence plain-language description of
+what it tests — "Test with an empty title field" — shown in the Description
+column of a run's request list. It is a readability layer, nothing more.
+
+**The engine is not involved, and neither is the run.** `autoresttest-core/` and
+`engine-service/` are untouched; testing proceeds exactly as before. Descriptions
+are written *afterwards*, only when a user presses **Explain requests** on a
+completed run, which hands the stored request/response pairs to the LLM in small
+batches. Nothing is written at ingest, so `RequestLog.description` is null until
+someone asks.
+
+The whole feature is three pieces: `LlmService.describeRequests()`
+(`src/reports/llm.service.ts`), `RequestDescriptionsService`
+(`src/test-suites/request-descriptions.service.ts`), and
+`POST /projects/:id/test-suites/:suiteId/describe`. `TestSuitesModule` imports
+`ReportsModule` for the LLM client alone — same admin-configured key and model
+as the failure explainer.
+
+Two design points worth keeping:
+
+- **The pass is bounded and resumable, not one long request.** A call describes
+  at most `LLM_DESCRIBE_MAX_PER_CALL` requests and returns `remaining`; the
+  frontend loops until that is zero, showing progress. A run of 1,500 requests
+  takes minutes, and holding one HTTP request open that long would die at the
+  proxy. Because state lives in the nullable column rather than in memory, an
+  interrupted pass simply leaves rows null for the next attempt.
+- **Batch size is set by the provider's *daily* cap, not its rate limit.** The
+  default `LLM_DESCRIBE_BATCH_SIZE=4` keeps a 1,500-request run to 375 calls,
+  inside a Gemini free tier's 500/day. A provider limited per-minute instead
+  (NVIDIA NIM, ~40 rpm) wants a larger batch plus `LLM_DESCRIBE_DELAY_MS`.
+
+If a whole batch comes back empty the pass stops instead of continuing: an empty
+result means the provider is failing, and the remaining quota should not be spent
+on calls that will fail identically. `description` is only ever written, never
+cleared, so a failed call costs nothing already earned.
+
 ## Backend architecture & conventions
 
 The backend has no per-subproject CLAUDE.md, so the important bits live here.

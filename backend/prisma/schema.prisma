@@ -560,6 +560,10 @@ model RequestLog {
   responseBody      String?
   responseTruncated Boolean @default(false)
 
+  // Plain-language summary of what this request tests, written by the LLM on
+  // demand via POST /test-suites/:id/describe. Null until that runs.
+  description String?
+
   createdAt DateTime @default(now())
 
   @@index([testSuiteId, endpointId])

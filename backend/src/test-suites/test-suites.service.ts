@@ -89,6 +89,8 @@ export interface RequestLogListItem {
   path: string;
   statusCode: number | null;
   durationMs: number | null;
+  /** Plain-language summary; null until "Explain Requests" has been run. */
+  description: string | null;
 }
 
 export interface RequestLogPage {
@@ -765,6 +767,7 @@ export class TestSuitesService {
           path: true,
           statusCode: true,
           durationMs: true,
+          description: true,
         },
       }),
     ]);

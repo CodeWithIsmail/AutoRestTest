@@ -550,7 +550,7 @@ export default function CapturedRequestsPage() {
                 <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                   <th className="px-4 py-3 font-medium">#</th>
                   <th className="px-4 py-3 font-medium">Method</th>
-                  <th className="px-4 py-3 font-medium">Path</th>
+                  <th className="px-4 py-3 font-medium">Description</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Time</th>
                   <th className="px-4 py-3" />
@@ -573,8 +573,21 @@ export default function CapturedRequestsPage() {
                         <td className="px-4 py-3">
                           <MethodBadge method={r.method} />
                         </td>
-                        <td className="px-4 py-3 font-mono text-zinc-800 dark:text-zinc-200 break-all">
-                          {r.path}
+                        <td className="px-4 py-3 max-w-md">
+                          {r.description ? (
+                            <>
+                              <span className="text-zinc-800 dark:text-zinc-200">
+                                {r.description}
+                              </span>
+                              <span className="mt-0.5 block font-mono text-xs text-zinc-500 break-all">
+                                {r.path}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="font-mono text-zinc-800 dark:text-zinc-200 break-all">
+                              {r.path}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <Badge tone={httpTone(r.statusCode)}>

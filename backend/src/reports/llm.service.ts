@@ -14,9 +14,23 @@ export interface FailureContext {
   serverErrors: unknown[];
 }
 
+/** One captured request/response pair to be described in plain language. */
+export interface RequestDescriptionInput {
+  id: string;
+  method: string;
+  path: string;
+  url: string;
+  requestBody: string | null;
+  statusCode: number | null;
+  responseBody: string | null;
+}
+
 interface ChatCompletion {
   choices?: { message?: { content?: string } }[];
 }
+
+/** Keeps a single prompt bounded no matter how large the captured payload is. */
+const BODY_PROMPT_LIMIT = 600;
 
 /**
  * Small OpenRouter-compatible chat client used to turn a failed endpoint's raw
@@ -100,6 +114,105 @@ export class LlmService {
     }
   }
 
+  /**
+   * Describe a batch of captured requests in one call.
+   *
+   * Returns a map of request id -> one-sentence description. Ids the model did
+   * not answer for are simply absent; the caller leaves those rows undescribed
+   * so a later invocation can retry them. Never throws — a failed call returns
+   * an empty map rather than losing the run.
+   */
+  async describeRequests(
+    batch: RequestDescriptionInput[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (batch.length === 0) return out;
+
+    if (this.isMock) {
+      for (const r of batch) {
+        out.set(
+          r.id,
+          `Sends ${r.method} ${r.path} and expects a valid response (mock description).`,
+        );
+      }
+      return out;
+    }
+
+    const { model, apiBase, apiKey } =
+      await this.llmSettings.getReportExplanationSettings();
+
+    try {
+      const res = await fetch(`${apiBase}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey ?? this.envApiKey ?? ''}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          max_tokens: 900,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a REST API testing assistant. For each captured HTTP request you are given, write ONE short sentence (at most 15 words) describing what that test case checks — the intent, not a restatement of the URL. Prefer phrasing like "Test with an empty title field" or "Test fetching a user by a valid id". Reply with JSON only, in the form {"results":[{"id":"<id>","description":"<sentence>"}]}, covering every id given.',
+            },
+            { role: 'user', content: this.buildDescribePrompt(batch) },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        this.logger.error(`LLM describe ${res.status}: ${text}`);
+        return out;
+      }
+
+      const data = (await res.json()) as ChatCompletion;
+      const content = data.choices?.[0]?.message?.content?.trim();
+      if (!content) return out;
+
+      const parsed = JSON.parse(content) as {
+        results?: { id?: unknown; description?: unknown }[];
+      };
+      const known = new Set(batch.map((r) => r.id));
+      for (const row of parsed.results ?? []) {
+        const id = typeof row.id === 'string' ? row.id : null;
+        const description =
+          typeof row.description === 'string' ? row.description.trim() : '';
+        // Ignore ids we did not ask about, and refuse a paragraph where a
+        // sentence was requested.
+        if (!id || !known.has(id)) continue;
+        if (!description || description.length > 200) continue;
+        out.set(id, description);
+      }
+      return out;
+    } catch (err) {
+      this.logger.error(`LLM describe request failed: ${String(err)}`);
+      return out;
+    }
+  }
+
+  private buildDescribePrompt(batch: RequestDescriptionInput[]): string {
+    const items = batch.map((r) => ({
+      id: r.id,
+      request: `${r.method} ${r.path}${this.queryOf(r.url)}`,
+      requestBody: truncate(r.requestBody),
+      status: r.statusCode ?? 'no response',
+      responseBody: truncate(r.responseBody),
+    }));
+    return `Describe each of these ${batch.length} test cases:
+${JSON.stringify(items, null, 1)}`;
+  }
+
+  /** The query string carries most of the test intent for GETs — keep it. */
+  private queryOf(url: string): string {
+    const q = url.indexOf('?');
+    return q === -1 ? '' : url.slice(q);
+  }
+
   private buildPrompt(ctx: FailureContext): string {
     const dist = Object.entries(ctx.statusCodes)
       .map(([code, count]) => `${code}: ${count}`)
@@ -128,4 +241,11 @@ export class LlmService {
   private fallback(ctx: FailureContext): string {
     return `${ctx.method} ${ctx.path} did not return a successful response. Review the endpoint's expected inputs and server logs.`;
   }
+}
+
+function truncate(value: string | null): string | null {
+  if (!value) return null;
+  return value.length > BODY_PROMPT_LIMIT
+    ? `${value.slice(0, BODY_PROMPT_LIMIT)}…(truncated)`
+    : value;
 }
