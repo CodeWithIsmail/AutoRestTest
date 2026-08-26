@@ -2,36 +2,27 @@
 
 import { Select } from "@/components/ui/Select";
 import type { GraphStats } from "@/lib/types";
-import type { LayoutMode } from "./layout";
 
 /**
- * What to draw. The default is deliberately not "everything": a real spec's
- * semantic graph is near-complete, and showing all of it first is showing
- * nothing. Confirmed edges are the ones the RL agent actually stood behind.
+ * What to draw. Every edge on the diagram is already a dependency the engine
+ * would take — the backend resolves the semantic candidate set down to one
+ * producer per parameter — so this filters by how much the agent knows about
+ * them, not by how plausible they are.
  */
-export type EdgeFilter = "confirmed" | "likely" | "all";
-
-export type ViewMode = "graph" | "matrix";
+export type EdgeFilter = "confirmed" | "all";
 
 const FILTER_LABEL: Record<EdgeFilter, string> = {
-  confirmed: "Confirmed only",
-  likely: "Confirmed + likely",
+  confirmed: "Used by the agent",
   all: "All dependencies",
 };
 
 export interface GraphControlsProps {
   stats: GraphStats;
   visibleEdges: number;
-  view: ViewMode;
-  onViewChange: (value: ViewMode) => void;
   filter: EdgeFilter;
   onFilterChange: (value: EdgeFilter) => void;
-  minSimilarity: number;
-  onMinSimilarityChange: (value: number) => void;
   hideIsolated: boolean;
   onHideIsolatedChange: (value: boolean) => void;
-  layout: LayoutMode;
-  onLayoutChange: (value: LayoutMode) => void;
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: React.RefObject<HTMLInputElement | null>;
@@ -47,16 +38,10 @@ export interface GraphControlsProps {
 export function GraphControls({
   stats,
   visibleEdges,
-  view,
-  onViewChange,
   filter,
   onFilterChange,
-  minSimilarity,
-  onMinSimilarityChange,
   hideIsolated,
   onHideIsolatedChange,
-  layout,
-  onLayoutChange,
   search,
   onSearchChange,
   searchRef,
@@ -66,17 +51,6 @@ export function GraphControls({
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
-      <Toggle
-        options={[
-          { value: "graph", label: "Graph" },
-          { value: "matrix", label: "Matrix" },
-        ]}
-        value={view}
-        onChange={onViewChange}
-      />
-
-      <div className="h-5 w-px bg-zinc-100 dark:bg-zinc-800" aria-hidden />
-
       <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
         Show
         <Select
@@ -91,36 +65,6 @@ export function GraphControls({
           }))}
         />
       </label>
-
-      {filter !== "all" && (
-        <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-          Similarity ≥
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={minSimilarity}
-            onChange={(e) => onMinSimilarityChange(Number(e.target.value))}
-            aria-label="Minimum similarity"
-            className="w-24 accent-emerald-500"
-          />
-          <span className="w-8 font-mono text-zinc-700 dark:text-zinc-300">
-            {minSimilarity.toFixed(2)}
-          </span>
-        </label>
-      )}
-
-      {view === "graph" && (
-        <Toggle
-          options={[
-            { value: "layered", label: "Layered" },
-            { value: "circular", label: "Circular" },
-          ]}
-          value={layout}
-          onChange={onLayoutChange}
-        />
-      )}
 
       <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
         <input
@@ -144,10 +88,14 @@ export function GraphControls({
 
       <div className="flex w-full items-center gap-2 text-xs text-zinc-500">
         <span>
-          <span className="font-medium text-zinc-700 dark:text-zinc-300">{stats.operations}</span>{" "}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+            {stats.operations}
+          </span>{" "}
           operations ·{" "}
-          <span className="font-medium text-zinc-700 dark:text-zinc-300">{visibleEdges}</span> of{" "}
-          {stats.dependencies} dependencies
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+            {visibleEdges}
+          </span>{" "}
+          of {stats.dependencies} dependencies
         </span>
         {hidden > 0 && filter !== "all" && (
           <button
@@ -163,46 +111,16 @@ export function GraphControls({
   );
 }
 
-function Toggle<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex gap-0.5 rounded-md bg-white dark:bg-zinc-950 p-0.5" role="group">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-          className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-            value === option.value
-              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** A short dash sample, drawn in SVG so the dash pattern actually shows. */
-function Stroke({
-  color,
-  dash,
-}: {
-  color: string;
-  dash?: string;
-}) {
+function Stroke({ color, dash }: { color: string; dash?: string }) {
   return (
-    <svg width="26" height="6" viewBox="0 0 26 6" aria-hidden className="shrink-0">
+    <svg
+      width="26"
+      height="6"
+      viewBox="0 0 26 6"
+      aria-hidden
+      className="shrink-0"
+    >
       <line
         x1="0"
         y1="3"
@@ -218,13 +136,7 @@ function Stroke({
 }
 
 /** Inline legend, sized to sit under the canvas rather than beside it. */
-export function GraphLegend({
-  hasLearned,
-  showCycles,
-}: {
-  hasLearned: boolean;
-  showCycles: boolean;
-}) {
+export function GraphLegend({ hasLearned }: { hasLearned: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-xs text-zinc-500">
       {hasLearned && (
@@ -238,7 +150,10 @@ export function GraphLegend({
             Tried and penalized
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-[26px] text-center text-emerald-600 dark:text-emerald-400" aria-hidden>
+            <span
+              className="w-[26px] text-center text-emerald-600 dark:text-emerald-400"
+              aria-hidden
+            >
               ✦
             </span>
             Discovered at run time
@@ -249,17 +164,19 @@ export function GraphLegend({
         <Stroke color="#71717a" dash="6 5" />
         Predicted, never used
       </span>
-      {showCycles && (
-        <span
-          className="flex items-center gap-2"
-          title="Two operations that each need something the other produces. No top-to-bottom ordering can satisfy both, so these are routed around the side."
-        >
-          <Stroke color="#71717a" dash="2 4" />
-          Cyclic — curves out to the side
-        </span>
-      )}
-      <span className="ml-auto">
-        Arrows point from producer to consumer · click anything for detail
+      <span
+        className="flex items-center gap-2"
+        title="Two operations that each need something the other produces. No left-to-right ordering can satisfy both, so these curve over or under the rest."
+      >
+        <Stroke color="#71717a" dash="2 4" />
+        Cyclic — curves around
+      </span>
+      <span
+        className="ml-auto"
+        title="An edge is weighted by the semantic similarity between the parameter and the field that supplies it, until the agent exercises the dependency — from then on the number is the agent's learned confidence."
+      >
+        Weight: similarity, then learned confidence · arrows run producer →
+        consumer
       </span>
     </div>
   );

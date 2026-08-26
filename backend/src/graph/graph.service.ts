@@ -9,7 +9,7 @@ import { ProjectAccessService } from '../common/project-access.service';
 import { EngineService } from '../engine/engine.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { DependencyGraph } from './graph-merge';
-import { mergeGraph } from './graph-merge';
+import { mergeGraph, upgradeStoredGraph } from './graph-merge';
 
 /** Building a graph changes project state, so it needs write access. */
 const BUILD_ROLES = [Role.admin, Role.tester];
@@ -65,7 +65,7 @@ export class GraphService {
     }
     return {
       status: row.status,
-      graph: (row.graph as DependencyGraph | null) ?? null,
+      graph: upgradeStoredGraph(row.graph),
       error: row.error,
       completedAt: row.completedAt,
     };

@@ -426,6 +426,13 @@ export type GraphEdgeKind =
 
 export type GraphBuildStatus = "pending" | "running" | "ready" | "failed";
 
+/**
+ * Where the number drawn on an edge came from. It is one continuous quantity:
+ * an edge starts out weighted by semantic similarity and is replaced by the
+ * agent's learned confidence once the agent exercises it.
+ */
+export type GraphWeightKind = "similarity" | "confidence";
+
 /** One parameter the consumer needs and the producer field that supplies it. */
 export interface GraphMatch {
   param: string;
@@ -454,7 +461,11 @@ export interface GraphNode {
 /**
  * Edges point the way the data flows: `from` produces the value, `to` consumes
  * it. The backend flips the engine's own (consumer -> producer) direction once,
- * so top-to-bottom reads as execution order.
+ * so left-to-right reads as execution order.
+ *
+ * One edge per (producer, consumer) pair that actually resolves a parameter —
+ * the backend picks a single producer per parameter the way the Dependency
+ * Agent does, so the losing candidates never reach here.
  */
 export interface GraphEdge {
   from: string;
@@ -463,12 +474,18 @@ export interface GraphEdge {
   maxSimilarity: number | null;
   maxQ: number | null;
   tentative: boolean;
+  /** The parameters this pair resolves — usually one, occasionally a few. */
   matches: GraphMatch[];
+  /** The single number drawn on the edge. */
+  weight: number | null;
+  weightKind: GraphWeightKind;
 }
 
 export interface GraphStats {
   operations: number;
   dependencies: number;
+  /** Candidate edges the semantic pass proposed, before resolution. */
+  candidates: number;
   confirmed: number;
   predicted: number;
   penalized: number;
@@ -479,6 +496,8 @@ export interface GraphStats {
 }
 
 export interface DependencyGraph {
+  /** Payload version; the backend brings older stored graphs forward. */
+  schema: number;
   /** "spec" = built from the specification alone; "run" = with learned weights. */
   source: "spec" | "run";
   generatedAt: string;

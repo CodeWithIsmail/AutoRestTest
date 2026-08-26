@@ -84,11 +84,22 @@ function EdgeRow({
           </span>
         )}
         <span className="ml-auto flex items-center gap-2">
-          {edge.maxQ !== null && (
+          {edge.weight !== null && (
             <span
-              className={`font-mono ${edge.maxQ > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
+              className={`font-mono ${
+                edge.weightKind === "similarity"
+                  ? "text-zinc-500"
+                  : edge.weight > 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-amber-600 dark:text-amber-400"
+              }`}
+              title={
+                edge.weightKind === "similarity"
+                  ? "Semantic similarity"
+                  : "Learned confidence"
+              }
             >
-              {edge.maxQ.toFixed(2)}
+              {edge.weight.toFixed(2)}
             </span>
           )}
           <Badge tone={KIND_TONE[edge.kind]}>{KIND_LABEL[edge.kind]}</Badge>
@@ -130,12 +141,34 @@ export function GraphInspector({
           {selectedEdge.tentative && <Badge tone="zinc">tentative</Badge>}
         </div>
         <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-          <span className="font-medium text-zinc-700 dark:text-zinc-300">{selectedEdge.to}</span>{" "}
-          needs values that{" "}
-          <span className="font-medium text-zinc-700 dark:text-zinc-300">{selectedEdge.from}</span>{" "}
-          supplies.
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+            {selectedEdge.to}
+          </span>{" "}
+          takes{" "}
+          {selectedEdge.matches.length === 1 ? "a value" : "values"} from{" "}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+            {selectedEdge.from}
+          </span>
+          .
         </p>
-        <Section title="Matched fields" count={selectedEdge.matches.length}>
+
+        {selectedEdge.weight !== null && (
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {selectedEdge.weight.toFixed(2)}
+            </span>
+            <span className="text-xs text-zinc-500">
+              {selectedEdge.weightKind === "similarity"
+                ? "semantic similarity — the agent has not used this yet"
+                : "learned confidence, after the agent used it"}
+            </span>
+          </div>
+        )}
+
+        {/* The parameters this pair resolves. Producers that lost the pick for
+            a parameter are not carried here — the diagram and this panel both
+            describe the dependency the engine would actually take. */}
+        <Section title="Resolves" count={selectedEdge.matches.length}>
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
             {selectedEdge.matches.map((m, i) => (
               <MatchRow key={`${m.param}-${m.producedBy}-${i}`} match={m} />

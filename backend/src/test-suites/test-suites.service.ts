@@ -22,7 +22,7 @@ import {
   EngineService,
 } from '../engine/engine.service';
 import type { DependencyGraph } from '../graph/graph-merge';
-import { mergeGraph } from '../graph/graph-merge';
+import { mergeGraph, upgradeStoredGraph } from '../graph/graph-merge';
 import { CreateTestSuiteDto } from './dto/create-test-suite.dto';
 
 /** Run configuration + results summary as returned in list views. */
@@ -887,7 +887,7 @@ export class TestSuitesService {
     if (!suite) {
       throw new NotFoundException('Test suite not found');
     }
-    return { graph: (suite.dependencyGraph as DependencyGraph | null) ?? null };
+    return { graph: upgradeStoredGraph(suite.dependencyGraph) };
   }
 
   private async assertSuiteInProject(

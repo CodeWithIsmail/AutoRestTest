@@ -144,6 +144,23 @@ The pipeline: `autoresttest-core` writes `data/<spec>/graph.json` and
 halves in `src/graph/graph-merge.ts` → the frontend draws it as hand-rolled
 inline SVG (`components/graph/`).
 
+**What is drawn is not what the engine exports.** `graph.json` is a *candidate*
+set: the comparator's 0.8 similarity threshold over field names matches almost
+everything against almost everything, so it is quadratic — 19 operations give
+149 edges, 76 give 2,589, 145 give 16,598. Drawn whole it is a hairball, and no
+layout rescues it; the first version of this view shipped a circular layout and
+an adjacency matrix precisely because the layered drawing was unreadable, and
+those were unreadable too.
+
+The engine never uses that set. `DependencyAgent.get_best_action`
+(`agents/dependency_agent.py`) walks each consumer parameter and takes the
+single highest-Q producer. So `graph-merge.ts` **resolves** the candidates the
+same way — one winner per (consumer, parameter), grouped into one edge per
+(producer, consumer) pair — and the result is sparse and nearly acyclic: those
+same specs give 20, 69 and 372 edges, with 2, 2 and 29 cycles. That is what
+makes a layered drawing the right answer rather than a compromise, and it is why
+there is now exactly one view.
+
 Things that will bite whoever touches this next, each one a bug that was
 actually hit:
 
@@ -168,15 +185,40 @@ actually hit:
   `data/<spec_name>/`** — `jobs.py` rmtree's that directory before every run.
   It also must not touch the shelve cache: `dbm` is not concurrency-safe and a
   test run may be holding it.
+- **Resolution's tie-break is doing most of the work.** Similarity is capped at
+  1.0 and the threshold is 0.8, so ties at the maximum are the norm, not the
+  exception — 118 of 119 parameters on a 76-operation spec. `better()` breaks
+  them toward `producedIn: 'response'`: a value the producer *returns* is a data
+  dependency, while a `params` match only means two operations accept a
+  similarly named argument. Ranking by producer id alone would have produced an
+  arbitrary picture that still looked plausible.
+- **Response-only filtering is not a substitute for the tie-break.** Two of the
+  sample specs document no response schemas at all, and filtering to
+  `producedIn: 'response'` empties their graphs entirely.
 - **Layered layout degenerates on dense graphs.** After cycle-breaking, a
   near-complete graph's precedence relation is a total order, so longest-path
   layering produces one node per layer. `layout.ts` falls back to BFS depth past
-  a threshold; width-capping does not help, because the chain is the precedence
-  itself. Past ~70 edges the matrix view is the default — it has zero occlusion.
+  a threshold. Resolution makes this rare rather than impossible, so the
+  fallback stays.
+- **Ranks are wrapped, not stacked.** REST specs are shallow and wide — a rank
+  can hold 33 of 52 nodes while the graph is four ranks deep — and stacked
+  literally that is a tall ribbon inside a short, wide card. An over-full rank
+  spills into adjacent slots, which keeps the whole rank between its neighbours
+  and so changes nothing about the precedence reading.
+- **Paths are truncated from the front.** `…/gasrecords/delete`, not
+  `/api/vehicle/gasrec…`. Half a spec shares one prefix, so trimming the tail
+  renders a dozen distinct operations as the same string.
+- **Weight labels are their own SVG layer, above every curve.** Drawn inside
+  each edge's group, a later edge's stroke paints over an earlier edge's pill —
+  exactly where curves are densest and the number is most needed.
 - **Back edges are real information, not a rendering artifact.** They are
-  dependency cycles, inherent to symmetric field-name matching; on a real
-  17-operation spec, 39 of 78 edges were cyclic. They are drawn dotted and bowed
-  out to the side, anchored to node faces rather than centres.
+  dependency cycles, inherent to symmetric field-name matching. They are drawn
+  dotted and bowed over or under, anchored to node faces rather than centres.
+- **Old run snapshots hold the unresolved shape.** `TestSuite.dependencyGraph`
+  stores the merged payload, so runs from before this change hold every
+  candidate. `upgradeStoredGraph` re-resolves anything below `schema: 2` on
+  read — the v1 `matches` carry every field resolution needs. Both read paths
+  (project row and suite snapshot) go through it.
 
 ## Test-case descriptions ("Explain requests")
 

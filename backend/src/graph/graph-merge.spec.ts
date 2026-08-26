@@ -3,7 +3,12 @@ import type {
   EngineOperationResult,
   EngineStaticGraph,
 } from '../engine/engine.service';
-import { mergeGraph } from './graph-merge';
+import {
+  GRAPH_SCHEMA,
+  mergeGraph,
+  upgradeStoredGraph,
+  type DependencyGraph,
+} from './graph-merge';
 
 function node(operationId: string, method = 'GET', path = `/${operationId}`) {
   return {
@@ -22,19 +27,21 @@ function edge(
   producer: string,
   param = 'id|path',
   producedBy = 'id',
+  similarity = 1,
+  producedIn = 'response',
 ) {
   return {
     consumer,
     producer,
     tentative: false,
-    maxSimilarity: 1,
+    maxSimilarity: similarity,
     matches: [
       {
         param,
         paramIn: 'params',
         producedBy,
-        producedIn: 'response',
-        similarity: 1,
+        producedIn,
+        similarity,
       },
     ],
   };
@@ -61,10 +68,19 @@ function learned(
   };
 }
 
+/**
+ * Two independent dependencies, so both survive resolution: `getUserById`
+ * takes its id from `getUsers` and its email from `createUser`. Give two
+ * producers the *same* parameter instead and they compete — that is what the
+ * `resolution` block below exercises.
+ */
 const STATIC: EngineStaticGraph = {
   specName: 'test',
   nodes: [node('getUsers'), node('createUser', 'POST'), node('getUserById')],
-  edges: [edge('getUserById', 'getUsers'), edge('getUserById', 'createUser')],
+  edges: [
+    edge('getUserById', 'getUsers'),
+    edge('getUserById', 'createUser', 'email|query', 'email'),
+  ],
 };
 
 describe('mergeGraph', () => {
@@ -76,6 +92,146 @@ describe('mergeGraph', () => {
       const e = graph.edges.find((x) => x.from === 'getUsers');
       expect(e).toBeDefined();
       expect(e!.to).toBe('getUserById');
+    });
+  });
+
+  describe('resolution', () => {
+    // The comparator proposes every plausible producer for every parameter,
+    // which is quadratic and unreadable. The agent uses exactly one of them
+    // per parameter (`DependencyAgent.get_best_action`), and that is what the
+    // graph draws.
+    const contested: EngineStaticGraph = {
+      specName: 'test',
+      nodes: [node('listA'), node('listB'), node('getThing')],
+      edges: [
+        edge('getThing', 'listA', 'id|path', 'id', 0.82),
+        edge('getThing', 'listB', 'id|path', 'id', 0.97),
+      ],
+    };
+
+    it('draws one edge per parameter, not one per candidate', () => {
+      const graph = mergeGraph({ staticGraph: contested });
+      expect(graph.edges).toHaveLength(1);
+      expect(graph.edges[0].from).toBe('listB');
+      expect(graph.stats.candidates).toBe(2);
+      expect(graph.stats.dependencies).toBe(1);
+    });
+
+    it('prefers the higher Q even when its similarity is lower', () => {
+      // The agent compares Q and nothing else; an unexercised candidate sits
+      // at zero, so a positive Q beats any similarity score.
+      const graph = mergeGraph({
+        staticGraph: contested,
+        learned: learned('getThing', 'listA', 0.6),
+      });
+      expect(graph.edges).toHaveLength(1);
+      expect(graph.edges[0].from).toBe('listA');
+      expect(graph.edges[0].kind).toBe('confirmed');
+    });
+
+    it('breaks a similarity tie toward a value the producer returns', () => {
+      // Near every parameter on a real spec ties at maximum similarity, so
+      // this tie-break is what decides the picture. A `params` match only says
+      // two operations accept a similarly named argument; a `response` match
+      // is an actual value handed from one operation to the next.
+      const tied: EngineStaticGraph = {
+        specName: 'test',
+        nodes: [node('listA'), node('listB'), node('getThing')],
+        edges: [
+          edge('getThing', 'listA', 'id|path', 'id', 1, 'params'),
+          edge('getThing', 'listB', 'id|path', 'id', 1, 'response'),
+        ],
+      };
+      expect(mergeGraph({ staticGraph: tied }).edges[0].from).toBe('listB');
+    });
+
+    it('is stable across rebuilds when everything else ties', () => {
+      const tied: EngineStaticGraph = {
+        specName: 'test',
+        nodes: [node('listZ'), node('listA'), node('getThing')],
+        edges: [edge('getThing', 'listZ'), edge('getThing', 'listA')],
+      };
+      const reversed: EngineStaticGraph = {
+        ...tied,
+        edges: [...tied.edges].reverse(),
+      };
+      expect(mergeGraph({ staticGraph: tied }).edges[0].from).toBe('listA');
+      expect(mergeGraph({ staticGraph: reversed }).edges[0].from).toBe('listA');
+    });
+
+    it('collapses several parameters of one pair into a single edge', () => {
+      const wide: EngineStaticGraph = {
+        specName: 'test',
+        nodes: [node('createUser', 'POST'), node('getOrders')],
+        edges: [
+          edge('getOrders', 'createUser', 'userId|path', 'id'),
+          edge('getOrders', 'createUser', 'email|query', 'email'),
+        ],
+      };
+      const graph = mergeGraph({ staticGraph: wide });
+      expect(graph.edges).toHaveLength(1);
+      expect(graph.edges[0].matches.map((m) => m.param).sort()).toEqual([
+        'email|query',
+        'userId|path',
+      ]);
+    });
+
+    it('drops a candidate that would make an operation depend on itself', () => {
+      const selfish: EngineStaticGraph = {
+        specName: 'test',
+        nodes: [node('getThing')],
+        edges: [edge('getThing', 'getThing')],
+      };
+      expect(mergeGraph({ staticGraph: selfish }).edges).toEqual([]);
+    });
+
+    it('lets a Q-table entry outrank the field the comparator proposed', () => {
+      // Same parameter, different source field. The Q-table is the record of
+      // what the agent actually did, so its entry competes for the slot rather
+      // than being ignored because the comparator picked another field.
+      const graph = mergeGraph({
+        staticGraph: STATIC,
+        learned: learned('getUserById', 'getUsers', 0.9, 'id|path', 'userId'),
+      });
+      const e = graph.edges.find((x) => x.from === 'getUsers')!;
+      expect(e.matches[0].producedBy).toBe('userId');
+      expect(e.maxQ).toBe(0.9);
+      // The pair was in the static graph, so it is confirmed, not discovered.
+      expect(e.kind).toBe('confirmed');
+    });
+  });
+
+  describe('weight', () => {
+    it('is the similarity score until the agent exercises the edge', () => {
+      const graph = mergeGraph({
+        staticGraph: {
+          ...STATIC,
+          edges: [edge('getUserById', 'getUsers', 'id|path', 'id', 0.93)],
+        },
+      });
+      const e = graph.edges[0];
+      expect(e.weight).toBe(0.93);
+      expect(e.weightKind).toBe('similarity');
+    });
+
+    it('becomes the learned confidence once there is a Q-value', () => {
+      const graph = mergeGraph({
+        staticGraph: STATIC,
+        learned: learned('getUserById', 'getUsers', 0.42),
+      });
+      const e = graph.edges.find((x) => x.from === 'getUsers')!;
+      expect(e.weight).toBe(0.42);
+      expect(e.weightKind).toBe('confidence');
+    });
+
+    it('falls back to similarity when the agent recorded an exact zero', () => {
+      const graph = mergeGraph({
+        staticGraph: STATIC,
+        learned: learned('getUserById', 'getUsers', 0),
+      });
+      const e = graph.edges.find((x) => x.from === 'getUsers')!;
+      expect(e.weightKind).toBe('similarity');
+      expect(e.weight).toBe(1);
     });
   });
 
@@ -130,6 +286,7 @@ describe('mergeGraph', () => {
       expect(e!.kind).toBe('discovered');
       // Nothing proposed it semantically, so there is no similarity to report.
       expect(e!.maxSimilarity).toBeNull();
+      expect(e!.weightKind).toBe('confidence');
     });
 
     it('drops a discovered edge naming an operation the graph does not have', () => {
@@ -168,16 +325,11 @@ describe('mergeGraph', () => {
       expect(e.matches[0].q).toBeNull();
     });
 
-    it('does not join a Q-value onto a different producing field', () => {
-      // Same parameter, different source field — a real distinction, since one
-      // producer can supply a parameter from several of its response fields.
-      const graph = mergeGraph({
-        staticGraph: STATIC,
-        learned: learned('getUserById', 'getUsers', 0.9, 'id|path', 'userId'),
-      });
+    it('carries only the parameters the edge actually resolves', () => {
+      const graph = mergeGraph({ staticGraph: STATIC });
       const e = graph.edges.find((x) => x.from === 'getUsers')!;
-      expect(e.matches[0].q).toBeNull();
-      expect(e.kind).toBe('predicted');
+      expect(e.matches).toHaveLength(1);
+      expect(e.matches[0].param).toBe('id|path');
     });
   });
 
@@ -232,6 +384,7 @@ describe('mergeGraph', () => {
       expect(graph.stats).toMatchObject({
         operations: 3,
         dependencies: 2,
+        candidates: 2,
         confirmed: 1,
         predicted: 1,
         isolated: 0,
@@ -254,7 +407,8 @@ describe('mergeGraph', () => {
 
   describe('truncation', () => {
     it('keeps learned edges and drops predicted ones when over the cap', () => {
-      // 1700 operations in a chain: more edges than the cap, so pruning runs.
+      // A 1700-operation chain: more resolved edges than the cap, so pruning
+      // runs. Resolution alone does not save a spec this size.
       const nodes = Array.from({ length: 1700 }, (_, i) => node(`op${i}`));
       const edges = nodes
         .slice(1)
@@ -265,7 +419,7 @@ describe('mergeGraph', () => {
       });
 
       expect(graph.truncated).toBe(true);
-      expect(graph.edges.length).toBe(1500);
+      expect(graph.edges.length).toBe(600);
       // The one edge the agent actually learned about must survive the cull.
       expect(
         graph.edges.some((e) => e.from === 'op0' && e.kind === 'confirmed'),
@@ -282,5 +436,109 @@ describe('mergeGraph', () => {
     expect(graph.nodes).toEqual([]);
     expect(graph.edges).toEqual([]);
     expect(graph.stats.operations).toBe(0);
+  });
+});
+
+describe('upgradeStoredGraph', () => {
+  /** The shape a run stored before resolution existed: every candidate drawn. */
+  const legacy = {
+    source: 'run',
+    generatedAt: '2026-01-01T00:00:00.000Z',
+    truncated: false,
+    nodes: [
+      {
+        id: 'listA',
+        method: 'GET',
+        path: '/a',
+        summary: null,
+        parameters: [],
+        hasRequestBody: false,
+      },
+      {
+        id: 'listB',
+        method: 'GET',
+        path: '/b',
+        summary: null,
+        parameters: [],
+        hasRequestBody: false,
+      },
+      {
+        id: 'getThing',
+        method: 'GET',
+        path: '/t/{id}',
+        summary: null,
+        parameters: [],
+        hasRequestBody: false,
+      },
+    ],
+    edges: [
+      {
+        from: 'listA',
+        to: 'getThing',
+        kind: 'predicted',
+        maxSimilarity: 0.82,
+        maxQ: null,
+        tentative: false,
+        matches: [
+          {
+            param: 'id|path',
+            paramIn: 'params',
+            producedBy: 'id',
+            producedIn: 'response',
+            similarity: 0.82,
+            q: null,
+          },
+        ],
+      },
+      {
+        from: 'listB',
+        to: 'getThing',
+        kind: 'confirmed',
+        maxSimilarity: 0.8,
+        maxQ: 0.3,
+        tentative: false,
+        matches: [
+          {
+            param: 'id|path',
+            paramIn: 'params',
+            producedBy: 'id',
+            producedIn: 'response',
+            similarity: 0.8,
+            q: 0.3,
+          },
+        ],
+      },
+    ],
+    stats: {
+      operations: 3,
+      dependencies: 2,
+      confirmed: 1,
+      predicted: 1,
+      penalized: 0,
+      discovered: 0,
+      isolated: 0,
+      entryPoints: ['listA', 'listB'],
+      mostDependedUpon: { id: 'listA', count: 1 },
+    },
+  } as unknown as DependencyGraph;
+
+  it('re-resolves a payload stored before the schema bump', () => {
+    const graph = upgradeStoredGraph(legacy)!;
+    expect(graph.schema).toBe(GRAPH_SCHEMA);
+    // Both candidates were drawn; only the learned one is a dependency.
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.edges[0].from).toBe('listB');
+    expect(graph.edges[0].weight).toBe(0.3);
+    expect(graph.stats.candidates).toBe(2);
+  });
+
+  it('leaves a current payload alone', () => {
+    const current = mergeGraph({ staticGraph: STATIC });
+    expect(upgradeStoredGraph(current)).toBe(current);
+  });
+
+  it('returns null for an absent or unrecognizable row', () => {
+    expect(upgradeStoredGraph(null)).toBeNull();
+    expect(upgradeStoredGraph({ nodes: 'nope' })).toBeNull();
   });
 });

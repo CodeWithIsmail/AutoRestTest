@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphEdge, GraphNode } from "@/lib/types";
-import type { LayoutMode } from "./layout";
 import { computeLayout, NODE_HEIGHT, NODE_WIDTH } from "./layout";
 
 // Hex values mirror the Tailwind classes used elsewhere, because SVG `fill` and
@@ -65,6 +64,15 @@ function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+/**
+ * Paths are cut from the *front*, not the back. REST paths share long prefixes
+ * — half this spec is `/api/vehicle/...` — so trimming the tail renders a dozen
+ * distinct operations as the same string. The tail is what identifies them.
+ */
+function truncatePath(path: string, max: number): string {
+  return path.length > max ? `…${path.slice(path.length - max + 1)}` : path;
+}
+
 /** Outcome colour for a node's border in run mode. */
 function outcomeColor(node: GraphNode): string {
   if (!node.statusCodes) return ZINC_700; // never called
@@ -95,14 +103,31 @@ const PAINT_ORDER: Record<GraphEdge["kind"], number> = {
   discovered: 3,
 };
 
+/**
+ * The number drawn on the edge, as in the paper's own figure. It is one
+ * quantity with two phases: the semantic similarity the comparator assigned,
+ * replaced by the agent's learned confidence once the agent has used the
+ * dependency. A discovered edge is prefixed, since it has no similarity phase.
+ */
+function weightLabel(edge: GraphEdge): string | null {
+  if (edge.weight === null) return null;
+  const value = edge.weight.toFixed(2);
+  return edge.kind === "discovered" ? `✦ ${value}` : value;
+}
+
+/** No text measurement available in SVG, so size the pill by character count. */
+function labelWidth(text: string): number {
+  return 10 + text.length * 6.4;
+}
+
 function edgeTitle(edge: GraphEdge, back: boolean): string {
-  const top = edge.matches[0];
   const parts = [`${edge.from} → ${edge.to}`];
-  if (top) parts.push(`${top.param} ← ${top.producedBy}`);
-  if (top?.similarity !== null && top?.similarity !== undefined) {
-    parts.push(`sim ${top.similarity.toFixed(2)}`);
-  }
-  if (edge.maxQ !== null) parts.push(`q ${edge.maxQ.toFixed(2)}`);
+  for (const m of edge.matches) parts.push(`${m.param} ← ${m.producedBy}`);
+  parts.push(
+    edge.weightKind === "confidence"
+      ? `learned confidence ${edge.maxQ?.toFixed(3) ?? "—"}`
+      : `similarity ${edge.maxSimilarity?.toFixed(2) ?? "—"}`,
+  );
   if (back) parts.push("part of a dependency cycle");
   return parts.join(" · ");
 }
@@ -110,7 +135,6 @@ function edgeTitle(edge: GraphEdge, back: boolean): string {
 export interface GraphCanvasProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  mode: LayoutMode;
   selectedId: string | null;
   onSelectNode: (id: string | null) => void;
   onSelectEdge: (edge: GraphEdge | null) => void;
@@ -119,7 +143,6 @@ export interface GraphCanvasProps {
 export function GraphCanvas({
   nodes,
   edges,
-  mode,
   selectedId,
   onSelectNode,
   onSelectEdge,
@@ -131,15 +154,12 @@ export function GraphCanvas({
   const [hoverId, setHoverId] = useState<string | null>(null);
   const drag = useRef<{ x: number; y: number; view: ViewBox } | null>(null);
 
-  const layout = useMemo(
-    () => computeLayout(nodes, edges, mode),
-    [nodes, edges, mode],
-  );
+  const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
 
   // Reset the pan/zoom whenever the drawing changes shape. Done during render
   // (React's "adjusting state when props change") rather than in an effect,
   // which would paint the old viewBox over the new layout for one frame first.
-  const shapeKey = `${mode}:${nodes.length}:${edges.length}`;
+  const shapeKey = `${nodes.length}:${edges.length}`;
   const [lastShape, setLastShape] = useState(shapeKey);
   if (shapeKey !== lastShape) {
     setLastShape(shapeKey);
@@ -148,6 +168,10 @@ export function GraphCanvas({
 
   const extent: ViewBox = { x: 0, y: 0, w: layout.width, h: layout.height };
   const current = view ?? extent;
+  // Weight labels are fixed-size text in user space, so below roughly half
+  // scale they overlap into an unreadable smear. Drop them rather than let
+  // them destroy the shape of the graph they are annotating.
+  const showWeights = current.w > 0 && layout.width / current.w > 0.45;
 
   const fit = useCallback(() => setView(null), []);
 
@@ -247,6 +271,16 @@ export function GraphCanvas({
 
   const dimmed = (id: string) => Boolean(neighbourhood && !neighbourhood.has(id));
 
+  // Sorted once, then walked twice — curves first, then the weight labels over
+  // them — so both passes agree on order and on the key each edge gets.
+  const painted = useMemo(
+    () =>
+      [...layout.edges].sort(
+        (a, b) => PAINT_ORDER[a.edge.kind] - PAINT_ORDER[b.edge.kind],
+      ),
+    [layout.edges],
+  );
+
   if (layout.nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -297,33 +331,83 @@ export function GraphCanvas({
         </defs>
 
         <g>
-          {[...layout.edges]
-            .sort(
-              (a, b) => PAINT_ORDER[a.edge.kind] - PAINT_ORDER[b.edge.kind],
-            )
-            .map(({ edge, path, midX, midY, back }, i) => {
+          {painted.map(({ edge, path, back }, i) => {
+            const color = EDGE_COLOR[edge.kind];
+            const marker =
+              edge.kind === "penalized"
+                ? "amber"
+                : edge.kind === "predicted"
+                  ? "zinc"
+                  : "emerald";
+            const faded = dimmed(edge.from) && dimmed(edge.to);
+            // Anything touching the focused node is brought fully forward,
+            // which is what makes one operation legible in a dense graph.
+            const lit = Boolean(
+              focusId && (edge.from === focusId || edge.to === focusId),
+            );
+            const opacity = faded
+              ? 0.07
+              : lit
+                ? 1
+                : EDGE_OPACITY[edge.kind];
+            return (
+              <g
+                key={`${edge.from}-${edge.to}-${i}`}
+                opacity={opacity}
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectEdge(edge);
+                  onSelectNode(null);
+                }}
+              >
+                <title>{edgeTitle(edge, back)}</title>
+                {/* Invisible fat stroke: a 1px curve is near-impossible to hit. */}
+                <path
+                  d={path}
+                  stroke="transparent"
+                  strokeWidth={14}
+                  fill="none"
+                />
+                <path
+                  d={path}
+                  stroke={color}
+                  strokeWidth={lit ? edgeWidth(edge) + 1 : edgeWidth(edge)}
+                  strokeLinecap="round"
+                  // A back edge is dotted rather than dashed, so a cyclic
+                  // dependency is distinguishable from an ordinary predicted
+                  // one instead of looking like the same line drawn wrong.
+                  strokeDasharray={
+                    back
+                      ? "2 4"
+                      : edge.kind === "predicted"
+                        ? "6 5"
+                        : undefined
+                  }
+                  fill="none"
+                  markerEnd={`url(#arrow-${marker})`}
+                />
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Weights are a layer of their own, above every curve. Drawn inside
+            each edge's group instead, a later edge's stroke paints straight
+            over an earlier edge's pill — which is exactly where curves are
+            densest and the number is most needed. */}
+        {showWeights && (
+          <g>
+            {painted.map(({ edge, midX, midY, back }, i) => {
+              const label = weightLabel(edge);
+              if (label === null) return null;
               const color = EDGE_COLOR[edge.kind];
-              const marker =
-                edge.kind === "penalized"
-                  ? "amber"
-                  : edge.kind === "predicted"
-                    ? "zinc"
-                    : "emerald";
+              const w = labelWidth(label);
               const faded = dimmed(edge.from) && dimmed(edge.to);
-              // Anything touching the focused node is brought fully forward,
-              // which is what makes one operation legible in a dense graph.
-              const lit = Boolean(
-                focusId && (edge.from === focusId || edge.to === focusId),
-              );
-              const opacity = faded
-                ? 0.07
-                : lit
-                  ? 1
-                  : EDGE_OPACITY[edge.kind];
               return (
                 <g
-                  key={`${edge.from}-${edge.to}-${i}`}
-                  opacity={opacity}
+                  key={`w-${edge.from}-${edge.to}-${i}`}
+                  opacity={faded ? 0.07 : 1}
                   className="cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -332,48 +416,33 @@ export function GraphCanvas({
                   }}
                 >
                   <title>{edgeTitle(edge, back)}</title>
-                  {/* Invisible fat stroke: a 1px curve is near-impossible to hit. */}
-                  <path
-                    d={path}
-                    stroke="transparent"
-                    strokeWidth={14}
-                    fill="none"
-                  />
-                  <path
-                    d={path}
+                  <rect
+                    x={midX - w / 2}
+                    y={midY - 9}
+                    width={w}
+                    height={18}
+                    rx={9}
+                    fill={SURFACE}
                     stroke={color}
-                    strokeWidth={lit ? edgeWidth(edge) + 1 : edgeWidth(edge)}
-                    strokeLinecap="round"
-                    // A back edge is dotted rather than dashed, so a cyclic
-                    // dependency is distinguishable from an ordinary predicted
-                    // one instead of looking like the same line drawn wrong.
-                    strokeDasharray={
-                      back
-                        ? "2 4"
-                        : edge.kind === "predicted"
-                          ? "6 5"
-                          : undefined
-                    }
-                    fill="none"
-                    markerEnd={`url(#arrow-${marker})`}
+                    strokeOpacity={0.35}
+                    strokeWidth={1}
                   />
-                  {edge.kind === "discovered" && (
-                    // Marks a dependency the spec never implied — the agent
-                    // found it by trying. Worth calling out, not blending in.
-                    <text
-                      x={midX}
-                      y={midY + 4}
-                      textAnchor="middle"
-                      fontSize={13}
-                      fill={EMERALD_LIGHT}
-                    >
-                      ✦
-                    </text>
-                  )}
+                  <text
+                    x={midX}
+                    y={midY + 4}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fontWeight={600}
+                    fill={edge.kind === "predicted" ? MUTED : color}
+                    fontFamily="var(--font-geist-mono), monospace"
+                  >
+                    {label}
+                  </text>
                 </g>
               );
             })}
-        </g>
+          </g>
+        )}
 
         <g>
           {layout.nodes.map(({ node, x, y }) => {
@@ -425,17 +494,17 @@ export function GraphCanvas({
                 />
                 {/* Method chip */}
                 <rect
-                  x={10}
-                  y={10}
-                  width={52}
+                  x={9}
+                  y={8}
+                  width={48}
                   height={16}
                   rx={8}
                   fill={methodColor}
                   fillOpacity={0.15}
                 />
                 <text
-                  x={36}
-                  y={22}
+                  x={33}
+                  y={20}
                   textAnchor="middle"
                   fontSize={9}
                   fontWeight={600}
@@ -444,17 +513,21 @@ export function GraphCanvas({
                 >
                   {method}
                 </text>
-                <text x={70} y={22} fontSize={11} fontWeight={600} fill={TEXT}>
-                  {truncate(node.id, 15)}
-                </text>
+                {/* `METHOD /path` is how the paper labels an operation and how
+                    a tester recognizes one; the generated operationId is the
+                    join key, so it stays but reads as the secondary line. */}
                 <text
-                  x={10}
-                  y={42}
-                  fontSize={10}
-                  fill={MUTED}
+                  x={64}
+                  y={20}
+                  fontSize={10.5}
+                  fontWeight={500}
+                  fill={TEXT}
                   fontFamily="var(--font-geist-mono), monospace"
                 >
-                  {truncate(node.path ?? "—", 28)}
+                  {truncatePath(node.path ?? "—", 21)}
+                </text>
+                <text x={10} y={38} fontSize={9.5} fill={MUTED}>
+                  {truncate(node.id, 30)}
                 </text>
               </g>
             );
