@@ -220,6 +220,53 @@ actually hit:
   read — the v1 `matches` carry every field resolution needs. Both read paths
   (project row and suite snapshot) go through it.
 
+### The only view is one operation — there is no whole-graph drawing
+
+Resolution made the graph sparse; it did not make it *flat*. The resolved graph
+is hub-and-spoke, because a REST API typically has one identifier that most
+operations consume and several that could supply it. On the 76-operation sample
+spec, **49 of the 69 resolved edges leave a single node**, and 118 of its 119
+parameters tie at maximum similarity — so which node becomes the hub is settled
+by `better()`'s tie-break rather than by evidence, until a run attaches
+Q-values. Drawn whole that is a fan, and it is the fan the user saw and called
+meaningless. Nothing about it is redundant: every spoke is a real dependency.
+
+What is legible is one operation's own neighbourhood. Measured across five real
+`graph.json` files, the median operation has **1-3 neighbours** and the 90th
+percentile has 2-10; only the hubs are large. So `components/graph/FocusView.tsx`
+draws producers → the selected operation → consumers, and that is the whole
+view on both the project Dependencies tab and a run's report.
+
+The layered canvas, the circular layout, the adjacency matrix, the edge
+filters, the similarity slider and the side inspector were all built and all
+deleted. Only two files remain — `FocusView.tsx` and the `DependencyGraphView`
+wrapper — and the graph components import nothing but `Card` and the types.
+**Do not reintroduce a whole-graph drawing**; every attempt so far produced a
+picture that was faithful, unreadable, and useless.
+
+Points worth keeping:
+
+- **The drawing is bounded by one node's degree, not by spec size.** A
+  500-operation API renders like a 10-operation one. There is no layout
+  algorithm — three fixed columns, positions are arithmetic — and therefore no
+  pan, no zoom, and nothing to get lost in.
+- **A hub's remaining spokes are stated, not drawn.** Past `MAX_SIDE = 8` the
+  rest fold into a `+N more` card, expandable. Fifty arrows out of one node is
+  the fact; fifty *lines* is what made the whole-graph drawing unreadable.
+- **Resource grouping was tried and rejected.** Collapsing operations by path
+  prefix gives 2 group-edges on one sample spec and 70 on another — it depends
+  entirely on how the API happens to structure its paths, so it is not a
+  reliable simplification.
+- **Cycles are the one structural fact a single node cannot show**, so the
+  wrapper counts mutual pairs from the edge list into the summary line. A cycle
+  still shows up in the diagram itself: the other operation simply appears on
+  both sides of the focused one.
+- **The operation list is sorted by degree, not alphabetically.** Alphabetical
+  order buries every operation worth looking at; the first row is the hub, and
+  it is also what the view opens on.
+- The backend is untouched by all of this — `graph-merge.ts` already resolves
+  the candidate set, and this is only the drawing of it.
+
 ## Test-case descriptions ("Explain requests")
 
 Every captured request can carry a one-sentence plain-language description of
