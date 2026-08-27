@@ -1,0 +1,3031 @@
+openapi: 3.0.3
+info:
+  title: AutoRestTest Backend API (safe subset)
+  version: 1.0.0
+  description: 'The subset of the AutoRestTest backend that is safe to exercise with an automated request
+    generator.
+
+
+    **23 of 58 operations have been removed** because they send email, spend LLM quota, start engine runs
+    against arbitrary hosts, revoke the session the test engine is authenticated with, or destroy the
+    project under test. The full document is `autoresttest-backend.yaml`; the reasoning for each removal
+    is in `EXCLUDED_ENDPOINTS.md`.
+
+
+    Run this against a **dedicated throwaway project and account**. Several of the operations left in
+    are still destructive within their own project (deleting endpoints, deleting runs, removing members)
+    — that is deliberate, because they are worth testing, but they will damage real data.'
+  contact:
+    name: AutoRestTest
+    url: https://autoresttest.vercel.app
+servers:
+- url: http://localhost:3000
+  description: Local development
+- url: https://autoresttest-backend.onrender.com
+  description: Production
+tags:
+- name: Authentication
+  description: Register, verify, sign in, reset a password.
+- name: Account
+  description: What a signed-in user does to their own account.
+- name: Projects
+  description: The workspace everything else hangs off.
+- name: Specification
+  description: Upload an OpenAPI document, or generate one from source.
+- name: Endpoints
+  description: Operations extracted from the spec, plus manual ones.
+- name: Dependency Graph
+  description: The Semantic Property Dependency Graph.
+- name: Test Runs
+  description: Configure, execute, replay and inspect runs.
+- name: Captured Requests
+  description: Every request the engine sent, and re-sending them.
+- name: Reports
+  description: Computed results, export and AI explanations.
+- name: Collaboration
+  description: Members, roles and invitations.
+- name: Admin
+  description: Platform-wide settings, gated by an email allowlist.
+security:
+- bearerAuth: []
+paths:
+  /auth/me:
+    get:
+      tags:
+      - Authentication
+      operationId: getMe
+      summary: Get the current user
+      description: The client bootstrap call. The user row is re-fetched from the database on every protected
+        request, so a deleted or revoked account is rejected immediately.
+      responses:
+        '200':
+          description: The signed-in user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUser'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users/me:
+    patch:
+      tags:
+      - Account
+      operationId: updateProfile
+      summary: Update my profile
+      description: Accepts only `name` and `avatarColor`. The username is immutable and the global whitelist
+        pipe turns an attempt at `username` or `email` into a 400.
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUser'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+  /users/me/notifications:
+    patch:
+      tags:
+      - Account
+      operationId: updateNotifications
+      summary: Update notification preferences
+      description: Covers only the two recurring emails. Security mail is always sent and cannot be switched
+        off.
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUser'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationsRequest'
+  /projects:
+    post:
+      tags:
+      - Projects
+      operationId: createProject
+      summary: Create a project
+      description: The caller becomes the owner.
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetail'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+    get:
+      tags:
+      - Projects
+      operationId: listProjects
+      summary: List my projects
+      description: Projects the caller owns or is a member of.
+      responses:
+        '200':
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectListItem'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /projects/{id}:
+    get:
+      tags:
+      - Projects
+      operationId: getProject
+      summary: Get one project
+      description: Includes the owner and every member. Any member.
+      responses:
+        '200':
+          description: The project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetail'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: The project id.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+    patch:
+      tags:
+      - Projects
+      operationId: updateProject
+      summary: Update a project
+      description: Owner only. At least one field must be present.
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetail'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: The project id.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+  /projects/{projectId}/spec:
+    get:
+      tags:
+      - Specification
+      operationId: getSpec
+      summary: Get the stored spec
+      description: Any member. Includes the raw document text.
+      responses:
+        '200':
+          description: The spec
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecDetail'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/spec/generate:
+    get:
+      tags:
+      - Specification
+      operationId: getSpecGeneration
+      summary: Poll the generation job
+      description: Any member. Returns progress while running and the generated document once complete.
+      responses:
+        '200':
+          description: Job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecGeneration'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+    delete:
+      tags:
+      - Specification
+      operationId: discardSpecGeneration
+      summary: Discard the generated spec
+      description: Owner/admin. Throws the result away without applying it.
+      responses:
+        '200':
+          description: Discarded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/spec/generate/apply:
+    post:
+      tags:
+      - Specification
+      operationId: applySpecGeneration
+      summary: Apply the generated spec
+      description: Owner/admin. Promotes the reviewed document to the project's specification, marked
+        `generatedByAI`. Same cascade as replacing an uploaded spec.
+      responses:
+        '201':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecSummary'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflicts with existing state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/endpoints:
+    get:
+      tags:
+      - Endpoints
+      operationId: listEndpoints
+      summary: List the project's endpoints
+      description: Any member. Operations extracted from the spec plus any added by hand.
+      responses:
+        '200':
+          description: Endpoints
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Endpoint'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+    post:
+      tags:
+      - Endpoints
+      operationId: createEndpoint
+      summary: Add an endpoint manually
+      description: Owner/admin. For operations the spec does not cover.
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Endpoint'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflicts with existing state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEndpointRequest'
+  /projects/{projectId}/endpoints/{endpointId}:
+    delete:
+      tags:
+      - Endpoints
+      operationId: deleteEndpoint
+      summary: Delete an endpoint
+      description: Owner/admin.
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: endpointId
+        in: path
+        required: true
+        description: The endpoint to delete.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/graph:
+    get:
+      tags:
+      - Dependency Graph
+      operationId: getProjectGraph
+      summary: Get the project's dependency graph
+      description: 'Any member. Returns a `pending` placeholder rather than 404 when none has been built.
+        Edge direction reads as execution order: `from` produces, `to` consumes.'
+      responses:
+        '200':
+          description: Graph state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphState'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites:
+    post:
+      tags:
+      - Test Runs
+      operationId: createTestSuite
+      summary: Configure a test run
+      description: Owner/admin/tester. Creates the run record only; execution is a separate call. Rejected
+        with 400 if the project has no endpoints yet.
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuiteDetail'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTestSuiteRequest'
+    get:
+      tags:
+      - Test Runs
+      operationId: listTestSuites
+      summary: List test runs
+      description: Any member. Newest first.
+      responses:
+        '200':
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestSuiteSummary'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}:
+    get:
+      tags:
+      - Test Runs
+      operationId: getTestSuite
+      summary: Get one test run
+      description: Any member. Poll this while a run is executing.
+      responses:
+        '200':
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuiteDetail'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+    delete:
+      tags:
+      - Test Runs
+      operationId: deleteTestSuite
+      summary: Delete a test run
+      description: Owner/admin. Cascades to its test cases and captured requests.
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}/history:
+    get:
+      tags:
+      - Test Runs
+      operationId: getRunHistory
+      summary: Get a run and all its replays
+      description: Any member. Pass the origin id or any replay id — the same chain comes back, oldest
+        first.
+      responses:
+        '200':
+          description: The chain
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestSuiteSummary'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}/test-cases:
+    get:
+      tags:
+      - Test Runs
+      operationId: getTestCases
+      summary: Per-endpoint results of a run
+      description: Any member.
+      responses:
+        '200':
+          description: Results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestCase'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}/graph:
+    get:
+      tags:
+      - Test Runs
+      operationId: getSuiteGraph
+      summary: The dependency graph snapshotted for a run
+      description: 'Any member. Same structure as the project graph, with the agent''s learned Q-values
+        as edge weights (`weightKind: confidence`).'
+      responses:
+        '200':
+          description: The run's graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteGraph'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}/request-logs/summary:
+    get:
+      tags:
+      - Captured Requests
+      operationId: getRequestLogSummary
+      summary: Per-endpoint rollup of captured requests
+      description: Any member.
+      responses:
+        '200':
+          description: Rollup
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequestLogEndpointSummary'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}/request-logs:
+    get:
+      tags:
+      - Captured Requests
+      operationId: listRequestLogs
+      summary: List captured requests
+      description: Any member. Paginated, filterable by endpoint and by status class or exact code.
+      responses:
+        '200':
+          description: A page of requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestLogPage'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: endpointId
+        in: query
+        required: false
+        description: Restrict to one endpoint.
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        description: A status class (`2xx`, `3xx`, `4xx`, `5xx`) or an exact code.
+        schema:
+          type: string
+          example: 5xx
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+  /projects/{projectId}/test-suites/{suiteId}/request-logs/{logId}:
+    get:
+      tags:
+      - Captured Requests
+      operationId: getRequestLog
+      summary: One captured request in full
+      description: Any member. Both header maps, both bodies, and the truncation flags.
+      responses:
+        '200':
+          description: The exchange
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestLogDetail'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: logId
+        in: path
+        required: true
+        description: The captured request.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}/report:
+    get:
+      tags:
+      - Reports
+      operationId: getReport
+      summary: Computed report for a run
+      description: Any member. 409 while the run has not completed.
+      responses:
+        '200':
+          description: The report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteReport'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflicts with existing state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/test-suites/{suiteId}/report/export:
+    get:
+      tags:
+      - Reports
+      operationId: exportReport
+      summary: Download the report as CSV or PDF
+      description: Any member.
+      responses:
+        '200':
+          description: The report file
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflicts with existing state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: suiteId
+        in: path
+        required: true
+        description: The test run.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: format
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - csv
+          - pdf
+  /projects/{projectId}/invitations:
+    get:
+      tags:
+      - Collaboration
+      operationId: listInvitations
+      summary: List a project's invitations
+      description: Owner/admin.
+      responses:
+        '200':
+          description: Invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invitation'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/invitations/{invitationId}:
+    delete:
+      tags:
+      - Collaboration
+      operationId: revokeInvitation
+      summary: Revoke a pending invitation
+      description: Owner/admin.
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflicts with existing state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: invitationId
+        in: path
+        required: true
+        description: The invitation.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/members:
+    get:
+      tags:
+      - Collaboration
+      operationId: listMembers
+      summary: List the owner and members
+      description: Any member.
+      responses:
+        '200':
+          description: The team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberList'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /projects/{projectId}/members/{userId}:
+    patch:
+      tags:
+      - Collaboration
+      operationId: updateMemberRole
+      summary: Change a member's role
+      description: Owner/admin. The owner is not a member and cannot be demoted.
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: userId
+        in: path
+        required: true
+        description: The member.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRoleRequest'
+    delete:
+      tags:
+      - Collaboration
+      operationId: removeMember
+      summary: Remove a member
+      description: Owner/admin. The owner cannot be removed.
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Validation failed, or the request is not valid in this state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        description: The project the resource belongs to.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      - name: userId
+        in: path
+        required: true
+        description: The member.
+        schema:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+  /invitations:
+    get:
+      tags:
+      - Collaboration
+      operationId: listMyInvitations
+      summary: My pending invitations
+      description: Pending, non-expired invitations matched to the caller's account email.
+      responses:
+        '200':
+          description: Invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MyInvitation'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /invitations/{token}/accept:
+    post:
+      tags:
+      - Collaboration
+      operationId: acceptInvitation
+      summary: Accept an invitation
+      description: The caller's email must match the address the invitation was sent to.
+      responses:
+        '201':
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflicts with existing state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: The token or invitation has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: token
+        in: path
+        required: true
+        description: The invitation token from the email.
+        schema:
+          type: string
+  /invitations/{token}/decline:
+    post:
+      tags:
+      - Collaboration
+      operationId: declineInvitation
+      summary: Decline an invitation
+      description: The caller's email must match the address the invitation was sent to.
+      responses:
+        '201':
+          description: Declined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          description: Missing, invalid or revoked access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated, but the caller lacks the required role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Not found, or the caller has no access to the parent project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflicts with existing state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: The token or invitation has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: token
+        in: path
+        required: true
+        description: The invitation token from the email.
+        schema:
+          type: string
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'Send `Authorization: Bearer <accessToken>` from login. Seven-day expiry.'
+  schemas:
+    Error:
+      type: object
+      description: The error envelope every failing route returns.
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        message:
+          description: A single message, or one per failed validation rule.
+          oneOf:
+          - type: string
+          - type: array
+            items:
+              type: string
+          example:
+          - Name is required
+        error:
+          type: string
+          example: Bad Request
+      required:
+      - statusCode
+      - message
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Done
+      required:
+      - message
+    Role:
+      type: string
+      enum:
+      - admin
+      - tester
+      - viewer
+      description: A collaborator role on a project. The owner is implicit and never one of these.
+    HttpMethod:
+      type: string
+      enum:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+    SuiteStatus:
+      type: string
+      enum:
+      - pending
+      - running
+      - completed
+      - failed
+    SpecGenStatus:
+      type: string
+      enum:
+      - pending
+      - running
+      - completed
+      - failed
+    GraphStatus:
+      type: string
+      enum:
+      - pending
+      - running
+      - ready
+      - failed
+    TestRunType:
+      type: string
+      enum:
+      - generated
+      - replay
+    InvitationStatus:
+      type: string
+      enum:
+      - pending
+      - accepted
+      - declined
+      - expired
+    LlmScope:
+      type: string
+      enum:
+      - TEST_ENGINE
+      - SPEC_GENERATION
+      - REPORT_EXPLANATION
+      description: One of the platform's three LLM surfaces.
+    AvatarColor:
+      type: string
+      enum:
+      - emerald
+      - blue
+      - purple
+      - amber
+      - rose
+      - cyan
+      - zinc
+    PublicUser:
+      type: object
+      description: The user shape returned everywhere. Never includes the password hash.
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        username:
+          type: string
+          example: ismail
+        email:
+          type: string
+          format: email
+          example: ismail@example.com
+        name:
+          type: string
+          nullable: true
+          example: Ismail
+        avatarColor:
+          allOf:
+          - $ref: '#/components/schemas/AvatarColor'
+          nullable: true
+        emailVerified:
+          type: boolean
+          example: true
+        notifyRunFinished:
+          type: boolean
+          example: true
+        notifyInvitations:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        isAdmin:
+          type: boolean
+          description: From the ADMIN_EMAILS allowlist, not a project role.
+          example: false
+      required:
+      - id
+      - username
+      - email
+      - emailVerified
+      - createdAt
+      - isAdmin
+    AuthSession:
+      type: object
+      description: Returned by login and by finishing signup.
+      properties:
+        accessToken:
+          type: string
+          description: JWT bearer token, seven-day expiry.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/PublicUser'
+      required:
+      - accessToken
+      - user
+    RegisterAccepted:
+      type: object
+      description: No account exists yet at this point — a six-digit code was emailed.
+      properties:
+        message:
+          type: string
+        verificationRequired:
+          type: boolean
+          description: False when the deployment has verification switched off and the account was created
+            outright.
+      required:
+      - message
+    ProjectMember:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/Role'
+        joinedAt:
+          type: string
+          format: date-time
+      required:
+      - userId
+      - username
+      - email
+      - role
+      - joinedAt
+    ProjectOwner:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+      required:
+      - id
+      - username
+      - email
+    ProjectDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        name:
+          type: string
+          example: Pet Store API
+        description:
+          type: string
+          nullable: true
+        ownerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        owner:
+          $ref: '#/components/schemas/ProjectOwner'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectMember'
+      required:
+      - id
+      - name
+      - ownerId
+      - createdAt
+      - updatedAt
+      - owner
+      - members
+    ProjectListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        ownerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        memberCount:
+          type: integer
+          example: 3
+        role:
+          $ref: '#/components/schemas/Role'
+        specStatus:
+          type: string
+          enum:
+          - none
+          - uploaded
+          - generated
+        generationStatus:
+          allOf:
+          - $ref: '#/components/schemas/SpecGenStatus'
+          nullable: true
+        lastRun:
+          type: object
+          nullable: true
+          properties:
+            status:
+              $ref: '#/components/schemas/SuiteStatus'
+            createdAt:
+              type: string
+              format: date-time
+            completedAt:
+              type: string
+              format: date-time
+              nullable: true
+        lastActivityAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - name
+      - ownerId
+      - role
+      - specStatus
+    SpecSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+          example: petstore.yaml
+        generatedByAI:
+          type: boolean
+        uploadedAt:
+          type: string
+          format: date-time
+        openapiVersion:
+          type: string
+          example: 3.0.3
+        title:
+          type: string
+          example: Swagger Petstore
+        endpointCount:
+          type: integer
+          example: 19
+      required:
+      - id
+      - fileName
+      - generatedByAI
+      - uploadedAt
+      - openapiVersion
+      - title
+      - endpointCount
+    SpecDetail:
+      allOf:
+      - $ref: '#/components/schemas/SpecSummary'
+      - type: object
+        properties:
+          fileContent:
+            type: string
+            description: The raw specification document as uploaded or generated.
+        required:
+        - fileContent
+    SpecGeneration:
+      type: object
+      description: An asynchronous source-code-to-OpenAPI job. Poll until status is completed or failed.
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SpecGenStatus'
+        sourceName:
+          type: string
+          example: my-api.zip
+        step:
+          type: string
+          nullable: true
+          example: Analysing controllers
+        stepIndex:
+          type: integer
+          example: 3
+        stepTotal:
+          type: integer
+          example: 7
+        generatedSpec:
+          type: string
+          nullable: true
+          description: Present only once the job has completed and is awaiting review.
+        operationCount:
+          type: integer
+        warnings:
+          type: array
+          items:
+            type: string
+        error:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - status
+      - sourceName
+      - stepIndex
+      - stepTotal
+      - operationCount
+      - warnings
+    Endpoint:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        method:
+          $ref: '#/components/schemas/HttpMethod'
+        path:
+          type: string
+          example: /pets/{petId}
+        description:
+          type: string
+          nullable: true
+        addedManually:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - method
+      - path
+      - addedManually
+      - createdAt
+    TestSuiteSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        name:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/SuiteStatus'
+        targetUrl:
+          type: string
+          example: http://localhost:8080
+        timeBudget:
+          type: integer
+          example: 30
+        mutationRate:
+          type: number
+          format: float
+          example: 0.2
+        totalEndpoints:
+          type: integer
+        coveredEndpoints:
+          type: integer
+        totalTestCases:
+          type: integer
+        passedTestCases:
+          type: integer
+        failedTestCases:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        runType:
+          $ref: '#/components/schemas/TestRunType'
+        originSuiteId:
+          type: string
+          format: uuid
+          nullable: true
+          description: 'Set on a replay: the run whose captured requests were resent.'
+      required:
+      - id
+      - status
+      - targetUrl
+      - timeBudget
+      - mutationRate
+      - createdAt
+      - runType
+    TestSuiteDetail:
+      allOf:
+      - $ref: '#/components/schemas/TestSuiteSummary'
+      - type: object
+        properties:
+          jobId:
+            type: string
+            nullable: true
+          triggeredById:
+            type: string
+            format: uuid
+            nullable: true
+          customHeaders:
+            type: object
+            nullable: true
+            additionalProperties:
+              type: string
+          excludedEndpointIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+    TestCase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        endpointId:
+          type: string
+          format: uuid
+        method:
+          $ref: '#/components/schemas/HttpMethod'
+        path:
+          type: string
+        statusCode:
+          type: integer
+          nullable: true
+          example: 200
+        passed:
+          type: boolean
+        responseBody:
+          nullable: true
+        failureExplanation:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - endpointId
+      - method
+      - path
+      - passed
+      - createdAt
+    RequestLogEndpointSummary:
+      type: object
+      properties:
+        endpointId:
+          type: string
+          format: uuid
+          nullable: true
+        method:
+          type: string
+          nullable: true
+        path:
+          type: string
+          nullable: true
+        total:
+          type: integer
+        passed:
+          type: integer
+          description: 2xx responses.
+        failed:
+          type: integer
+          description: Non-2xx responses.
+        statusClasses:
+          type: object
+          additionalProperties:
+            type: integer
+        statusCodes:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+      - total
+      - passed
+      - failed
+    RequestLogListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        seq:
+          type: integer
+        method:
+          type: string
+        path:
+          type: string
+        statusCode:
+          type: integer
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        description:
+          type: string
+          nullable: true
+          description: Null until the describe pass has been run.
+      required:
+      - id
+      - seq
+      - method
+      - path
+    RequestLogPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestLogListItem'
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+      required:
+      - items
+      - total
+      - page
+      - pageSize
+    RequestLogDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+        endpointId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means the engine mutated the HTTP method, so the log matched no endpoint.
+        method:
+          type: string
+        path:
+          type: string
+        url:
+          type: string
+        statusCode:
+          type: integer
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        requestHeaders:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+        requestBody:
+          type: string
+          nullable: true
+        requestTruncated:
+          type: boolean
+        responseHeaders:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+        responseBody:
+          type: string
+          nullable: true
+        responseTruncated:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - seq
+      - method
+      - path
+      - url
+      - requestTruncated
+      - responseTruncated
+      - createdAt
+    RunRequestLogResult:
+      type: object
+      description: The fresh response from live-resending one captured request. Nothing is persisted.
+      properties:
+        method:
+          type: string
+        url:
+          type: string
+        statusCode:
+          type: integer
+          nullable: true
+        durationMs:
+          type: integer
+        responseHeaders:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+        responseBody:
+          type: string
+          nullable: true
+        responseTruncated:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+          description: Set instead of a response when the fetch itself failed.
+        ranAt:
+          type: string
+          format: date-time
+      required:
+      - method
+      - url
+      - durationMs
+      - responseTruncated
+      - ranAt
+    DescribeRequestsResult:
+      type: object
+      properties:
+        total:
+          type: integer
+        described:
+          type: integer
+        remaining:
+          type: integer
+          description: Call again while this is above zero.
+        writtenNow:
+          type: integer
+        usedLlm:
+          type: boolean
+      required:
+      - total
+      - described
+      - remaining
+      - writtenNow
+      - usedLlm
+    ReportEndpoint:
+      type: object
+      properties:
+        endpointId:
+          type: string
+          format: uuid
+        method:
+          $ref: '#/components/schemas/HttpMethod'
+        path:
+          type: string
+        passed:
+          type: boolean
+        statusCodes:
+          type: object
+          additionalProperties:
+            type: integer
+        hasServerErrors:
+          type: boolean
+        failureExplanation:
+          type: string
+          nullable: true
+      required:
+      - endpointId
+      - method
+      - path
+      - passed
+      - hasServerErrors
+    SuiteReport:
+      type: object
+      properties:
+        overview:
+          type: object
+          properties:
+            suiteId:
+              type: string
+              format: uuid
+            name:
+              type: string
+              nullable: true
+            status:
+              $ref: '#/components/schemas/SuiteStatus'
+            targetUrl:
+              type: string
+            startedAt:
+              type: string
+              format: date-time
+              nullable: true
+            completedAt:
+              type: string
+              format: date-time
+              nullable: true
+            durationSeconds:
+              type: integer
+              nullable: true
+            totalEndpoints:
+              type: integer
+            coveredEndpoints:
+              type: integer
+            coveragePct:
+              type: number
+            totalTestCases:
+              type: integer
+            passedTestCases:
+              type: integer
+            failedTestCases:
+              type: integer
+            passRatePct:
+              type: number
+        statusCodeDistribution:
+          type: object
+          additionalProperties:
+            type: integer
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportEndpoint'
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportEndpoint'
+      required:
+      - overview
+      - statusCodeDistribution
+      - endpoints
+      - failures
+    GraphMatch:
+      type: object
+      properties:
+        param:
+          type: string
+        paramIn:
+          type: string
+        producedBy:
+          type: string
+        producedIn:
+          type: string
+        similarity:
+          type: number
+          nullable: true
+        q:
+          type: number
+          nullable: true
+    GraphNode:
+      type: object
+      properties:
+        id:
+          type: string
+          example: get-/pets/{petId}
+        method:
+          type: string
+          nullable: true
+        path:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        parameters:
+          type: array
+          items:
+            type: string
+        hasRequestBody:
+          type: boolean
+        statusCodes:
+          type: object
+          additionalProperties:
+            type: integer
+        totalRequests:
+          type: integer
+        hasServerErrors:
+          type: boolean
+      required:
+      - id
+      - parameters
+      - hasRequestBody
+    GraphEdge:
+      type: object
+      description: from produces a value that to consumes. Arrows read as execution order.
+      properties:
+        from:
+          type: string
+          description: The producing operation.
+        to:
+          type: string
+          description: The consuming operation.
+        kind:
+          type: string
+        maxSimilarity:
+          type: number
+          nullable: true
+        maxQ:
+          type: number
+          nullable: true
+        tentative:
+          type: boolean
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphMatch'
+        weight:
+          type: number
+          nullable: true
+        weightKind:
+          type: string
+          enum:
+          - similarity
+          - confidence
+      required:
+      - from
+      - to
+      - kind
+      - tentative
+      - matches
+    DependencyGraph:
+      type: object
+      properties:
+        schema:
+          type: integer
+        source:
+          type: string
+          enum:
+          - spec
+          - run
+        generatedAt:
+          type: string
+          format: date-time
+        truncated:
+          type: boolean
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+        stats:
+          type: object
+          properties:
+            operations:
+              type: integer
+            dependencies:
+              type: integer
+            candidates:
+              type: integer
+            confirmed:
+              type: integer
+            predicted:
+              type: integer
+            penalized:
+              type: integer
+            discovered:
+              type: integer
+            isolated:
+              type: integer
+            entryPoints:
+              type: array
+              items:
+                type: string
+            mostDependedUpon:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: string
+                count:
+                  type: integer
+      required:
+      - schema
+      - source
+      - nodes
+      - edges
+      - stats
+    GraphState:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/GraphStatus'
+        graph:
+          allOf:
+          - $ref: '#/components/schemas/DependencyGraph'
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - status
+    SuiteGraph:
+      type: object
+      properties:
+        graph:
+          allOf:
+          - $ref: '#/components/schemas/DependencyGraph'
+          nullable: true
+      required:
+      - graph
+    MemberList:
+      type: object
+      properties:
+        owner:
+          $ref: '#/components/schemas/ProjectOwner'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectMember'
+      required:
+      - owner
+      - members
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/Role'
+        status:
+          $ref: '#/components/schemas/InvitationStatus'
+        token:
+          type: string
+          example: 8900fff2c1a94b0e9d3f
+        acceptUrl:
+          type: string
+          example: /invitations/8900fff2c1a94b0e9d3f/accept
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - email
+      - role
+      - status
+      - token
+      - acceptUrl
+      - expiresAt
+      - createdAt
+    MyInvitation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        projectName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        token:
+          type: string
+        acceptUrl:
+          type: string
+        invitedBy:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - projectId
+      - projectName
+      - role
+      - token
+      - acceptUrl
+      - invitedBy
+      - expiresAt
+      - createdAt
+    LlmSettings:
+      type: object
+      description: 'A null field means no admin override: fall back to that surface''s environment default.'
+      properties:
+        scope:
+          $ref: '#/components/schemas/LlmScope'
+        model:
+          type: string
+          nullable: true
+          example: google/gemini-2.5-flash-lite
+        apiBase:
+          type: string
+          nullable: true
+          example: https://openrouter.ai/api/v1
+        rpmLimit:
+          type: integer
+          nullable: true
+          example: 13
+        apiKey:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - scope
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: ^[a-zA-Z0-9_]+$
+          description: Letters, numbers and underscores only. Immutable once created.
+          example: ismail
+        email:
+          type: string
+          format: email
+          example: ismail@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: secret123
+      required:
+      - username
+      - email
+      - password
+    LoginRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+          maxLength: 255
+          description: An email address OR a username. Told apart by the @ that usernames forbid.
+          example: ismail@example.com
+        password:
+          type: string
+          format: password
+          example: secret123
+      required:
+      - identifier
+      - password
+    VerifySignupRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          pattern: ^\d{6}$
+          example: '123456'
+      required:
+      - email
+      - code
+    EmailOnlyRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    ResetPasswordRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          maxLength: 200
+          description: The raw hex secret from the emailed link.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+      required:
+      - token
+      - password
+    UpdateProfileRequest:
+      type: object
+      description: Deliberately does not accept username or email; both are rejected as unknown fields.
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          description: An empty string clears it back to the username.
+        avatarColor:
+          $ref: '#/components/schemas/AvatarColor'
+    UpdateNotificationsRequest:
+      type: object
+      properties:
+        notifyRunFinished:
+          type: boolean
+        notifyInvitations:
+          type: boolean
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+      required:
+      - currentPassword
+      - newPassword
+    PasswordConfirmRequest:
+      type: object
+      description: A valid session is not enough for an irreversible delete.
+      properties:
+        password:
+          type: string
+          format: password
+      required:
+      - password
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Pet Store API
+        description:
+          type: string
+          maxLength: 500
+      required:
+      - name
+    UpdateProjectRequest:
+      type: object
+      description: Both fields optional, but at least one must be present.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+    CreateEndpointRequest:
+      type: object
+      properties:
+        method:
+          $ref: '#/components/schemas/HttpMethod'
+        path:
+          type: string
+          maxLength: 1000
+          pattern: ^/
+          example: /pets/{petId}
+        description:
+          type: string
+          maxLength: 500
+      required:
+      - method
+      - path
+    CreateTestSuiteRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: Nightly smoke run
+        targetUrl:
+          type: string
+          maxLength: 2000
+          description: Live base URL the engine sends requests to. Must include http(s)://.
+          example: http://localhost:8080
+        timeBudget:
+          type: integer
+          minimum: 1
+          maximum: 3600
+          example: 30
+        mutationRate:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.2
+        customHeaders:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 4000
+          maxProperties: 20
+          description: At most 20 pairs. Names must be RFC 7230 tokens; values may not contain CR or LF.
+          example:
+            Authorization: Bearer eyJhbGciOi...
+        excludedEndpointIds:
+          type: array
+          maxItems: 500
+          items:
+            type: string
+            format: uuid
+          description: Endpoint ids stripped from the spec before this run.
+      required:
+      - targetUrl
+      - timeBudget
+    CreateInvitationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/Role'
+      required:
+      - email
+      - role
+    UpdateMemberRoleRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+      required:
+      - role
+    UpdateLlmSettingsRequest:
+      type: object
+      description: Partial update. Omit a key to leave it unchanged; send null to clear the override.
+      properties:
+        model:
+          type: string
+          maxLength: 200
+          nullable: true
+        apiKey:
+          type: string
+          maxLength: 2000
+          nullable: true
+        apiBase:
+          type: string
+          maxLength: 500
+          nullable: true
+          description: Valid URL including http(s)://.
+        rpmLimit:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          nullable: true
+          description: 0 disables the limit.

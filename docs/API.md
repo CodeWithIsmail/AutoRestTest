@@ -9,6 +9,12 @@ REST API for the AutoRestTest platform (NestJS + Prisma + PostgreSQL).
 
 > Run the server with `npm run start:dev` from the `backend/` folder.
 
+> **Machine-readable version:** [`openapi/autoresttest-backend.yaml`](openapi/autoresttest-backend.yaml)
+> (and `.json`) describe the same 58 routes as OpenAPI 3.0.3 — import them into
+> Postman, generate a client, or feed them to AutoRestTest itself. If you are
+> testing this API with AutoRestTest, read
+> [`openapi/EXCLUDED_ENDPOINTS.md`](openapi/EXCLUDED_ENDPOINTS.md) first.
+
 ---
 
 ## Modules at a glance

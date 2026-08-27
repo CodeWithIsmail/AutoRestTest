@@ -77,6 +77,7 @@ Step-by-step walkthroughs of every screen are in the
 | **[User Guide](docs/USER_GUIDE.md)** | Every page and feature, in the order a new user meets them |
 | **[API Reference](docs/API.md)** | All 58 backend routes — payloads, responses, roles, error codes |
 | **[Test Report](docs/TEST_REPORT.md)** | 87 test cases across 16 functional modules |
+| **[OpenAPI spec](docs/openapi/)** | Machine-readable description of all 58 routes, in YAML and JSON |
 | **[RUNNING.md](RUNNING.md)** | Local setup, mock vs. real engine modes, production deployment |
 | **[CLAUDE.md](CLAUDE.md)** | Architecture and conventions across the monorepo |
 | [backend/README](backend/README.md) · [frontend/README](frontend/README.md) | Per-subproject setup and conventions |
