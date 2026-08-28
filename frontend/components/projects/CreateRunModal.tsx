@@ -155,7 +155,7 @@ export function CreateRunModal({
         <p className="-mt-2 text-xs text-zinc-500">
           The live base URL the engine sends requests to.
         </p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField
             label="Time budget (seconds)"
             name="timeBudget"

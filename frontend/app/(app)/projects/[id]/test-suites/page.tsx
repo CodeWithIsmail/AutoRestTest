@@ -71,7 +71,7 @@ export default function TestSuitesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Configure and run AI-generated test suites against a live API.
         </p>
@@ -80,7 +80,7 @@ export default function TestSuitesPage() {
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+      <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         {isPending ? (
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
@@ -115,7 +115,7 @@ export default function TestSuitesPage() {
             )}
           </div>
         ) : (
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[48rem] text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                 <th className="px-5 py-3 font-medium">Run</th>

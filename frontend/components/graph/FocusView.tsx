@@ -71,6 +71,13 @@ const PAD = 16;
  */
 const MAX_SIDE = 8;
 
+/**
+ * Narrowest the canvas is allowed to render at before it scrolls instead of
+ * shrinking further. Below this the three columns of node cards scale down past
+ * legibility; above it (any laptop) nothing changes.
+ */
+const MIN_CANVAS_W = 640;
+
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
@@ -227,7 +234,10 @@ export function FocusView({
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
-      <Card className="flex h-[34rem] w-full flex-col overflow-hidden p-0 lg:w-72 lg:shrink-0">
+      {/* Stacked on a narrow screen the two cards are one above the other, so
+          the operation list gets a shorter box there — two 34rem panels in a
+          column is most of a phone screen spent scrolling past the picker. */}
+      <Card className="flex h-72 w-full flex-col overflow-hidden p-0 lg:h-[34rem] lg:w-72 lg:shrink-0">
         <div className="border-b border-zinc-200 p-2 dark:border-zinc-800">
           <input
             type="search"
@@ -286,7 +296,7 @@ export function FocusView({
         </ul>
       </Card>
 
-      <Card className="flex h-[34rem] flex-1 flex-col overflow-hidden p-0">
+      <Card className="flex h-[28rem] min-w-0 flex-1 flex-col overflow-hidden p-0 sm:h-[34rem]">
         {focus ? (
           <>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
@@ -401,10 +411,14 @@ function Diagram({
           called on its own.
         </p>
       )}
+      {/* The drawing is three fixed-width columns, so below a certain box it
+          scales down to illegible rather than reflowing. Past that floor it
+          keeps its size and the canvas scrolls sideways instead. */}
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
         height="100%"
+        style={{ minWidth: MIN_CANVAS_W }}
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label={`Direct dependencies of ${focus.id}`}

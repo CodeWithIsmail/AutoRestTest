@@ -120,20 +120,20 @@ export default function EndpointsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <input
           type="search"
           placeholder="Search endpoints…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-10 w-full max-w-xs rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          className="h-10 w-full min-w-0 flex-1 sm:max-w-xs rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
         />
         {canManage && (
           <Button onClick={() => setAddOpen(true)}>+ Add endpoint</Button>
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+      <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         {isPending ? (
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
@@ -178,7 +178,7 @@ export default function EndpointsPage() {
             )}
           </div>
         ) : (
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[52rem] text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                 <th className="w-8 px-2 py-3" />
@@ -261,18 +261,27 @@ export default function EndpointsPage() {
                     {expanded && (
                       <tr className="border-b border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-950/40">
                         <td colSpan={colSpan} className="px-5 py-5">
-                          {detail ? (
-                            <EndpointDetailPanel detail={detail} />
-                          ) : (
-                            <p className="text-sm text-zinc-500">
-                              No spec detail available for this endpoint
-                              {e.addedManually
-                                ? " (added manually)."
-                                : spec
-                                  ? "."
-                                  : " — upload an API spec to see parameters, request body, and auth."}
-                            </p>
-                          )}
+                          {/* The table carries a min-width so its columns stay
+                              readable, which would otherwise stretch this prose
+                              panel to that same width and force the reader to
+                              scroll sideways through it. Capping it to the
+                              viewport and pinning it left keeps it in view
+                              wherever the table happens to be scrolled to; on a
+                              screen wide enough for the table, neither applies. */}
+                          <div className="sticky left-0 max-w-[calc(100vw-3.5rem)]">
+                            {detail ? (
+                              <EndpointDetailPanel detail={detail} />
+                            ) : (
+                              <p className="text-sm text-zinc-500">
+                                No spec detail available for this endpoint
+                                {e.addedManually
+                                  ? " (added manually)."
+                                  : spec
+                                    ? "."
+                                    : " — upload an API spec to see parameters, request body, and auth."}
+                              </p>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )}

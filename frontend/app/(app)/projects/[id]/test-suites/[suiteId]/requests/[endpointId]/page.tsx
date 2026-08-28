@@ -457,7 +457,7 @@ export default function CapturedRequestsPage() {
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           {endpointMeta && <MethodBadge method={endpointMeta.method ?? ""} />}
-          <h2 className="font-mono text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          <h2 className="break-all font-mono text-base font-semibold text-zinc-900 dark:text-zinc-50 sm:text-lg">
             {title}
           </h2>
         </div>
@@ -475,7 +475,7 @@ export default function CapturedRequestsPage() {
           value={endpointId}
           onChange={chooseEndpoint}
           aria-label="Filter by endpoint"
-          className="max-w-xs"
+          className="w-full min-w-0 sm:w-auto sm:max-w-xs"
           options={[
             { value: "all", label: "All requests" },
             ...(summary ?? []).map((s) =>
@@ -544,8 +544,8 @@ export default function CapturedRequestsPage() {
         </Card>
       ) : (
         <>
-          <Card className="overflow-hidden">
-            <table className="w-full text-left text-sm">
+          <Card className="overflow-x-auto">
+            <table className="w-full min-w-[46rem] text-left text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                   <th className="px-4 py-3 font-medium">#</th>
@@ -604,6 +604,11 @@ export default function CapturedRequestsPage() {
                       {open && (
                         <tr>
                           <td colSpan={6} className="p-0">
+                            {/* Pinned and capped to the viewport for the same
+                                reason as the endpoints table: the row's
+                                min-width must not drag this request/response
+                                panel out of view. */}
+                            <div className="sticky left-0 max-w-[calc(100vw-2rem)]">
                             {detailLoading && !details[r.id] ? (
                               <div className="flex justify-center py-8">
                                 <Spinner className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
@@ -622,6 +627,7 @@ export default function CapturedRequestsPage() {
                                 }
                               />
                             ) : null}
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -633,7 +639,7 @@ export default function CapturedRequestsPage() {
           </Card>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
             <span>
               Showing {rangeStart}–{rangeEnd} of {total}
             </span>

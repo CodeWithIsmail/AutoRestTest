@@ -16,6 +16,7 @@ Each subproject has its own agent docs — **read them before working in that su
 - `autoresttest-core/CLAUDE.md` — full architecture of the Python engine (pipeline phases, the seven Q-learning agents, caching, config).
 - `OOPS-final/CLAUDE.md` — architecture of the spec-generation pipeline.
 - `frontend/AGENTS.md` (referenced from `frontend/CLAUDE.md`) — **critical:** this is a non-standard Next.js version with breaking changes; consult `node_modules/next/dist/docs/` before writing frontend code rather than relying on training data.
+- `frontend/README.md` — component layout, the dependency-graph components (**do not reintroduce a whole-graph drawing**), and the **Responsive layout** rules. Read that section before touching a table, a tab row, or any row that pairs a title with buttons: each rule there is a bug that was already hit once.
 
 There is no root-level package manager or workspace tool — `cd` into the relevant subproject directory to run any command.
 

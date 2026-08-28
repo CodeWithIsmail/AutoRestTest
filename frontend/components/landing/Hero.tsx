@@ -6,8 +6,12 @@ export function Hero() {
     <section className="px-4 pb-12 pt-16 sm:px-6 sm:pt-24">
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-5xl">
-          Your API is stateful.
-          <br className="hidden sm:block" /> Most API test tools aren&apos;t.
+          Your API is stateful.{" "}
+          {/* Forces the second sentence onto its own line where there is room
+              for it. The space above it is what keeps the two from running
+              together as "stateful.Most" once the break is hidden. */}
+          <br className="hidden sm:block" />
+          Most API test tools aren&apos;t.
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400">
           AutoRestTest reads your OpenAPI spec, works out which endpoints feed

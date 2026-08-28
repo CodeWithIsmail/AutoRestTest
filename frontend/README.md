@@ -102,6 +102,46 @@ single node — so every whole-graph rendering was faithful, unreadable and
 useless. One operation's neighbourhood (median 1–3 neighbours) is the thing that
 is legible, and it renders identically whether the API has 10 operations or 500.
 
+## Responsive layout
+
+The UI is laid out mobile-first and verified from 360px to 1440px. Everything is
+Tailwind breakpoints — there is no JS measurement, no container queries and no
+separate mobile component tree, so a page has exactly one implementation.
+
+Five rules carry most of the weight, each one a bug that was actually hit:
+
+- **A wide table scrolls inside its own card; the page never scrolls
+  sideways.** The five data tables (projects, endpoints, run list, per-endpoint
+  results, captured requests) sit in an `overflow-x-auto` wrapper and carry a
+  `min-w-[…]` sized to their column count. Without the floor the columns crush
+  into unreadable slivers instead of scrolling; with `overflow-hidden` (what
+  was there before) they crush *and* clip.
+- **An expanded detail row must not inherit that `min-w`.** The endpoints and
+  captured-requests tables expand a row into a prose panel. Left alone it
+  stretches to the table's min-width — 936px inside a 390px screen — and has to
+  be read by scrolling sideways. Both panels are `sticky left-0` and capped to
+  `calc(100vw - …)`, so they stay pinned in view while the row scrolls behind
+  them. Neither rule engages on a screen wide enough for the table.
+- **An `overflow-x-auto` tab row needs `overflow-y-hidden`.** The project tab
+  nav and `SegmentedControl` put their active border a pixel outside the row's
+  box via `-mb-px`; an x-scroller answers that pixel with a stray *vertical*
+  scrollbar. The border also belongs on the inner `w-max min-w-full` element,
+  not the scroller, or it stops spanning the full width.
+- **Never put `shrink-0` on a `flex-wrap` child that must wrap internally.** A
+  `shrink-0` flex item keeps its max-content width, so the run report's five
+  action buttons ran off the side rather than wrapping onto a second line. Use
+  `min-w-0` and let the group wrap; pair it with `flex-wrap` on the row so the
+  whole group can drop below the title when it has to.
+- **`fixed right-4 w-full max-w-sm` overflows below `sm`.** The toast stack put
+  its left edge at −16px on a 360px screen. Inset from both sides at base and
+  only pin to the right from `sm` up.
+
+Two smaller ones: the dependency graph's canvas is three fixed-width columns, so
+it has a `MIN_CANVAS_W` floor (640px) below which it scrolls rather than scaling
+to illegible; and long values that can't wrap (`targetUrl`, spec filenames,
+concrete request paths) need `break-all`, not `truncate`, when the whole value
+matters.
+
 ## Polling
 
 Long-running backend work is polled, not streamed: test runs and graph builds

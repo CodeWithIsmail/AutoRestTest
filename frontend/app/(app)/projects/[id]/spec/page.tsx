@@ -285,16 +285,18 @@ export default function SpecPage() {
       {modeTabs}
       {hiddenInput}
       <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="break-all text-base font-semibold text-zinc-900 dark:text-zinc-50">
                 {spec.title || spec.fileName}
               </h2>
               <Badge tone="blue">OpenAPI {spec.openapiVersion}</Badge>
               {spec.generatedByAI && <Badge tone="purple">AI-generated</Badge>}
             </div>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{spec.fileName}</p>
+            <p className="mt-1 break-all text-sm text-zinc-600 dark:text-zinc-400">
+              {spec.fileName}
+            </p>
           </div>
           {canManage && (
             <div className="flex shrink-0 gap-2">
@@ -317,7 +319,7 @@ export default function SpecPage() {
           )}
         </div>
 
-        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-zinc-200 dark:border-zinc-800 pt-4 text-sm sm:grid-cols-3">
+        <dl className="mt-5 grid grid-cols-1 gap-4 border-t border-zinc-200 dark:border-zinc-800 pt-4 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-zinc-500">Endpoints</dt>
             <dd className="mt-0.5 text-zinc-800 dark:text-zinc-200">{spec.endpointCount}</dd>

@@ -63,7 +63,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast, success, error, info }}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2">
+      {/* Insets on both sides at base: `w-full` plus `right-4` would put the
+          left edge off-screen on a viewport narrower than max-w-sm. */}
+      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col gap-2 sm:left-auto sm:w-full sm:max-w-sm">
         {toasts.map((t) => {
           const style = STYLES[t.variant];
           return (

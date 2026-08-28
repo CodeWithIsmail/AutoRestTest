@@ -96,9 +96,9 @@ export default function ProjectLayout({
       <div className="mx-auto max-w-7xl">
         {/* No breadcrumb: the top bar's project switcher already names the
             project and carries the way back out to the list. */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div className="min-w-0">
+            <h1 className="break-words text-xl font-semibold text-zinc-900 dark:text-zinc-50 sm:text-2xl">
               {project.name}
             </h1>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
@@ -125,9 +125,13 @@ export default function ProjectLayout({
           )}
         </div>
 
-        {/* Tab nav */}
-        <div className="mt-5 border-b border-zinc-200 dark:border-zinc-800">
-          <div className="flex gap-6">
+        {/* Tab nav. Six tabs do not fit a phone, so the row scrolls sideways
+            within itself rather than widening the whole page. */}
+        {/* overflow-y-hidden matters: the links' `-mb-px` puts their bottom
+            border a pixel past the row's box, which an x-scroller would
+            otherwise answer with a stray vertical scrollbar. */}
+        <div className="mt-5 overflow-x-auto overflow-y-hidden">
+          <div className="flex w-max min-w-full gap-5 border-b border-zinc-200 dark:border-zinc-800 sm:gap-6">
             {TABS.map((tab) => {
               const href = `${base}${tab.segment ? `/${tab.segment}` : ""}`;
               // Overview matches exactly; other tabs also match their sub-routes
@@ -139,7 +143,7 @@ export default function ProjectLayout({
                 <Link
                   key={tab.label}
                   href={href}
-                  className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                  className={`-mb-px whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                     active
                       ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
                       : "border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"

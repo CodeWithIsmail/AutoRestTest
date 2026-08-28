@@ -323,18 +323,25 @@ export default function SuiteDetailPage() {
         >
           ← Test runs
         </Link>
-        <div className="mt-2 flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{runLabel}</h2>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 sm:text-xl">
+                {runLabel}
+              </h2>
               <StatusBadge status={suite.status} />
               {isReplay && <Badge tone="purple">Replay</Badge>}
             </div>
-            <p className="mt-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+            <p className="mt-1 break-all font-mono text-xs text-zinc-600 dark:text-zinc-400">
               {suite.targetUrl}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {/* Up to five actions here on a completed run, so this wraps rather
+              than shrinking — a squeezed row of buttons is unreadable. */}
+          {/* Not shrink-0: this group holds five buttons on a completed run,
+              and a shrink-0 flex child keeps its max-content width, so the row
+              would run off the side instead of wrapping within itself. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
             {suite.status === "pending" && canRun && (
               <Button onClick={onRun} loading={starting}>
                 Run tests
@@ -617,7 +624,7 @@ export default function SuiteDetailPage() {
 
             {/* Per-endpoint results */}
             <Card className="overflow-hidden">
-              <div className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 px-5 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-zinc-200 dark:border-zinc-800 px-5 py-3">
                 <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                   Per-endpoint results
                 </h3>
@@ -661,7 +668,8 @@ export default function SuiteDetailPage() {
                   </Button>
                 </div>
               ) : (
-                <table className="w-full text-left text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[56rem] text-left text-sm">
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                       <th className="px-5 py-3 font-medium">Method</th>
@@ -724,6 +732,7 @@ export default function SuiteDetailPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               )}
             </Card>
 

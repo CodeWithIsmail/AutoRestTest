@@ -232,7 +232,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Projects</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
@@ -244,13 +244,13 @@ export default function ProjectsPage() {
 
       {/* Filters + view toggle */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
           <input
             type="search"
             placeholder="Search projects…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-56 shrink-0 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            className="h-10 w-full min-w-0 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 sm:w-56 sm:shrink-0"
           />
           <Select
             value={roleFilter}
@@ -318,8 +318,8 @@ export default function ProjectsPage() {
           ))}
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <table className="w-full text-left text-sm">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <table className="w-full min-w-[46rem] text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
                 {SORT_COLUMNS.map((col) => (

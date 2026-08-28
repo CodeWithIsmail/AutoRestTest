@@ -80,7 +80,7 @@ export default function AppLayout({
   // address has been proven, so every user that reaches this shell is verified.
   return (
     <div className="flex flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-900 sm:px-6">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-900 sm:px-6">
         <Link
           href="/projects"
           className="shrink-0 text-base font-semibold tracking-tight text-zinc-900 transition-opacity hover:opacity-80 dark:text-zinc-50"
@@ -145,7 +145,7 @@ export default function AppLayout({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
     </div>
   );
 }

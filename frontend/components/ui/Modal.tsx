@@ -40,17 +40,19 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className={`flex max-h-[85vh] w-full ${SIZES[size]} flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50`}
+        className={`flex max-h-[90vh] w-full ${SIZES[size]} flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50 sm:max-h-[85vh]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3.5 dark:border-zinc-800 sm:px-5 sm:py-4">
+          <h3 className="min-w-0 text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {title}
+          </h3>
           <button
             onClick={onClose}
             aria-label="Close"
@@ -71,9 +73,9 @@ export function Modal({
             </svg>
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 px-4 py-4 dark:border-zinc-800 sm:px-5">
             {footer}
           </div>
         )}

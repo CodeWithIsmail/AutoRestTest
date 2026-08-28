@@ -222,8 +222,8 @@ export default function TeamPage() {
         </div>
         <ul>
           {/* Owner */}
-          <li className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3">
-            <div className="min-w-0">
+          <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-zinc-900 dark:text-zinc-100">
                 {memberData.owner.username}
                 {memberData.owner.userId === user?.id && (
@@ -243,16 +243,16 @@ export default function TeamPage() {
             return (
               <li
                 key={m.userId}
-                className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3 last:border-0"
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3 last:border-0"
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-zinc-900 dark:text-zinc-100">
                     {m.username}
                     {isSelf && <span className="ml-1 text-zinc-500">(you)</span>}
                   </p>
                   <p className="truncate text-xs text-zinc-500">{m.email}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {canManage && !isSelf ? (
                     <>
                       <Select
@@ -315,9 +315,9 @@ export default function TeamPage() {
               {invitations.map((inv) => (
                 <li
                   key={inv.id}
-                  className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3 last:border-0"
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-zinc-200 dark:border-zinc-800/60 px-5 py-3 last:border-0"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-zinc-900 dark:text-zinc-100">
                       {inv.email}
                     </p>
@@ -325,7 +325,7 @@ export default function TeamPage() {
                       {inv.role} · expires {formatDate(inv.expiresAt)}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <Badge tone={inviteTone(inv.status)}>{inv.status}</Badge>
                     {inv.status === "pending" && (
                       <>

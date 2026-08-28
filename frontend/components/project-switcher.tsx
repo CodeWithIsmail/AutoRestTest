@@ -62,7 +62,7 @@ export function ProjectSwitcher() {
         label="Switch project"
         align="left"
         menuClassName="w-64"
-        triggerClassName="flex items-center gap-1.5 px-2 py-1 max-w-[16rem]"
+        triggerClassName="flex min-w-0 items-center gap-1.5 px-2 py-1 max-w-[8rem] sm:max-w-[16rem]"
         items={items}
         trigger={
           <>

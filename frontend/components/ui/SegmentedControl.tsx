@@ -24,24 +24,28 @@ export function SegmentedControl<T extends string>({
   className = "",
 }: SegmentedControlProps<T>) {
   return (
-    <div className={`flex gap-6 border-b border-zinc-200 dark:border-zinc-800 ${className}`}>
-      {segments.map((segment) => {
-        const active = segment.value === value;
-        return (
-          <button
-            key={segment.value}
-            type="button"
-            onClick={() => onChange(segment.value)}
-            className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
-              active
-                ? "border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400"
-                : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-          >
-            {segment.label}
-          </button>
-        );
-      })}
+    // The scroller is the outer element so a long set of segments slides
+    // sideways on a narrow screen instead of widening the page.
+    <div className={`overflow-x-auto overflow-y-hidden ${className}`}>
+      <div className="flex w-max min-w-full gap-5 border-b border-zinc-200 dark:border-zinc-800 sm:gap-6">
+        {segments.map((segment) => {
+          const active = segment.value === value;
+          return (
+            <button
+              key={segment.value}
+              type="button"
+              onClick={() => onChange(segment.value)}
+              className={`-mb-px whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                active
+                  ? "border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400"
+                  : "border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {segment.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
