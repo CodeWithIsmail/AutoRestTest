@@ -2,8 +2,8 @@
 
 /* `dark:` utilities apply when the nearest `data-theme` ancestor is "dark".
    Toggled on <html> — see ThemeToggle and the inline anti-flash script in
-   app/layout.tsx. Charcoal + emerald dark theme (KushoAI-inspired) stays the
-   default; light mode is additive. */
+   app/layout.tsx. Light theme is the default; dark mode is enabled when
+   data-theme="dark". */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {

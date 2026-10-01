@@ -52,7 +52,7 @@ export function RunHistoryPanel({
     return null;
   }
 
-  let replayIndex = 0;
+  const replays = history.filter((s) => s.runType === "replay");
 
   return (
     <Card className="overflow-hidden">
@@ -67,7 +67,7 @@ export function RunHistoryPanel({
       <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
         {history.map((s) => {
           const isReplay = s.runType === "replay";
-          if (isReplay) replayIndex += 1;
+          const replayIndex = isReplay ? replays.indexOf(s) + 1 : 0;
           const isCurrent = s.id === currentSuiteId;
           return (
             <li key={s.id}>

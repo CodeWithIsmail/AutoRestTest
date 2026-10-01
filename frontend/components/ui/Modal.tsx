@@ -5,17 +5,20 @@ import { useEffect } from "react";
 interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title: string;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  icon?: React.ReactNode;
   children: React.ReactNode;
   /** Optional footer (e.g. action buttons). */
   footer?: React.ReactNode;
   /** Dialog width. Defaults to "md" (unchanged from before this prop existed). */
-  size?: "md" | "lg";
+  size?: "md" | "lg" | "xl";
 }
 
 const SIZES = {
   md: "max-w-md",
   lg: "max-w-2xl",
+  xl: "max-w-3xl",
 };
 
 /** Centered dialog with a dark backdrop. Closes on backdrop click + Esc. */
@@ -23,6 +26,8 @@ export function Modal({
   open,
   onClose,
   title,
+  description,
+  icon,
   children,
   footer,
   size = "md",
@@ -40,23 +45,33 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-xs sm:p-4"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className={`flex max-h-[90vh] w-full ${SIZES[size]} flex-col rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50 sm:max-h-[85vh]`}
+        className={`flex max-h-[90vh] w-full ${SIZES[size]} flex-col rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/60 sm:max-h-[85vh]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3.5 dark:border-zinc-800 sm:px-5 sm:py-4">
-          <h3 className="min-w-0 text-base font-semibold text-zinc-900 dark:text-zinc-50">
-            {title}
-          </h3>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <div className="flex min-w-0 items-center gap-3">
+            {icon && <div className="shrink-0">{icon}</div>}
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                {title}
+              </h3>
+              {description && (
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {description}
+                </p>
+              )}
+            </div>
+          </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           >
             <svg
               className="h-5 w-5"
@@ -73,9 +88,9 @@ export function Modal({
             </svg>
           </button>
         </div>
-        <div className="overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 px-4 py-4 dark:border-zinc-800 sm:px-5">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5 border-t border-zinc-200 bg-zinc-50/60 px-5 py-3.5 dark:border-zinc-800 dark:bg-zinc-950/40 sm:px-6">
             {footer}
           </div>
         )}

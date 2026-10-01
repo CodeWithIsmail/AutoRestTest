@@ -48,9 +48,9 @@ const SORT_COLUMNS: { key: SortKey; label: string }[] = [
 
 function readStoredView(): ViewMode {
   try {
-    return localStorage.getItem(VIEW_KEY) === "cards" ? "cards" : "table";
+    return localStorage.getItem(VIEW_KEY) === "table" ? "table" : "cards";
   } catch {
-    return "table";
+    return "cards";
   }
 }
 
@@ -103,9 +103,9 @@ function ViewToggle({
   value: ViewMode;
   onChange: (v: ViewMode) => void;
 }) {
-  const options: { value: ViewMode; label: string; Icon: typeof TableIcon }[] = [
-    { value: "table", label: "Table view", Icon: TableIcon },
+  const options: { value: ViewMode; label: string; Icon: typeof CardsIcon }[] = [
     { value: "cards", label: "Cards view", Icon: CardsIcon },
+    { value: "table", label: "Table view", Icon: TableIcon },
   ];
 
   return (

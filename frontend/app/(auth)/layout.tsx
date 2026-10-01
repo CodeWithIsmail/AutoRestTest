@@ -12,10 +12,12 @@ export default function AuthLayout({
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Auto<span className="text-emerald-600 dark:text-emerald-500">Rest</span>Test
+            Auto
+            <span className="text-emerald-600 dark:text-emerald-500">Rest</span>
+            Test
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            AI-powered REST API testing
+            An AI-Powered Platform for Automated REST API Testing
           </p>
         </div>
         {children}

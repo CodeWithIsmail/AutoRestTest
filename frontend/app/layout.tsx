@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   description: "AI-powered platform for automated REST API testing",
 };
 
-// Applied before hydration so a saved "light" preference never flashes dark
-// first (the server always renders the data-theme="dark" default below).
+// Applied before hydration so a saved "dark" preference never flashes light
+// first (the server always renders the data-theme="light" default below).
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("autoresttest-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
 
 export default function RootLayout({
@@ -32,7 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      data-theme="dark"
+      data-theme="light"
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
