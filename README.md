@@ -53,6 +53,50 @@ back exactly what broke and why.
   and rate limits power every AI-driven part of the platform from a settings
   page — no redeploy required.
 
+## 📸 Platform Screenshots
+
+<details>
+<summary><strong>Authentication & Dashboard</strong></summary>
+
+| Landing Page | Register | Login |
+|:---:|:---:|:---:|
+| <img src="resources/ui/1.%20landing%20page.png" width="100%"> | <img src="resources/ui/2.%20register.png" width="100%"> | <img src="resources/ui/4.%20login.png" width="100%"> |
+| **Email Verification** | **Dashboard** | **Project Overview** |
+| <img src="resources/ui/3.%20email%20verification.png" width="100%"> | <img src="resources/ui/7.%20homepage%20dashboard.png" width="100%"> | <img src="resources/ui/9.%20project%20overview.png" width="100%"> |
+
+</details>
+
+<details>
+<summary><strong>API Setup & Graph</strong></summary>
+
+| API Spec | Generate Spec (AI) | Dependency Graph |
+|:---:|:---:|:---:|
+| <img src="resources/ui/10.1%20api%20spec.png" width="100%"> | <img src="resources/ui/10.2%20generate%20api%20spec.png" width="100%"> | <img src="resources/ui/12.%20graph.png" width="100%"> |
+| **Endpoints** | **Add Endpoint** | **Create Project** |
+| <img src="resources/ui/11.1.%20endpoints.png" width="100%"> | <img src="resources/ui/11.2%20add%20endpoint.png" width="100%"> | <img src="resources/ui/8.%20new%20project%20create.png" width="100%"> |
+
+</details>
+
+<details>
+<summary><strong>Testing & Results</strong></summary>
+
+| Create Test Suite | Test Results | Request Logs |
+|:---:|:---:|:---:|
+| <img src="resources/ui/13.%20test%20suit%20create.png" width="100%"> | <img src="resources/ui/14.1%20test%20result.png" width="100%"> | <img src="resources/ui/14.2%20request%20log.png" width="100%"> |
+
+</details>
+
+<details>
+<summary><strong>Team & Settings</strong></summary>
+
+| Team Management | Invite Member | My Invitations |
+|:---:|:---:|:---:|
+| <img src="resources/ui/15.1%20team%20manage.png" width="100%"> | <img src="resources/ui/15.2%20invite%20member.png" width="100%"> | <img src="resources/ui/15.3%20my%20invitation.png" width="100%"> |
+| **Profile Settings** | **Password Reset (1)** | **Password Reset (2)** |
+| <img src="resources/ui/16.%20profile%20settings.png" width="100%"> | <img src="resources/ui/5.1%20password%20reset%201.png" width="100%"> | <img src="resources/ui/5.2%20password%20reset%202.png" width="100%"> |
+
+</details>
+
 ## Getting started
 
 The fastest way to try it is the live deployment:
