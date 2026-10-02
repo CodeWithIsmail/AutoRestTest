@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+# We define a dummy NEXT_PUBLIC_API_BASE_URL for build time if needed,
+# though it can be overridden at runtime by starting the server with it.
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+# Expose default API base URL for standard Docker Compose setups
+ENV NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
+
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+EXPOSE 3001
+CMD ["npm", "run", "start"]

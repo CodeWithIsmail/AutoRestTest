@@ -134,9 +134,27 @@ credentials, separate from test runs — a multi-hour generation must not block
 them. The generated document is parked for review and only becomes the
 project's spec when the user explicitly applies it.
 
-## Developing or self-hosting
+## Self-Hosting (Docker)
 
-See **[RUNNING.md](RUNNING.md)** for the full setup. The short version:
+The easiest way to run the entire AutoRestTest platform on your own infrastructure is using our pre-built Docker images. This allows you to securely test your internal APIs and use your own LLM API keys without your data ever leaving your network.
+
+**1. Get the configuration files**
+Download `docker-compose.prod.yml` and `docker-compose.env.example` from this repository. (Alternatively, just clone this repository to your machine).
+
+**2. Set up your environment**
+Rename `docker-compose.env.example` to `.env`. 
+Open the `.env` file and set your `ADMIN_EMAILS` (this is the account that will have access to configure the LLM API keys in the UI).
+
+**3. Start the platform**
+Run the following command to download the pre-built images and start the system:
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+Once the startup is complete, open **http://localhost:3001** in your browser and log in with your Admin Email!
+
+## Local Development
+
+If you wish to modify the source code, see **[RUNNING.md](RUNNING.md)** for the full setup. The short version:
 
 ```bash
 # engine-service

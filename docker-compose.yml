@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: autorest_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword123}
+      POSTGRES_DB: autorest_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autorest_user -d autorest_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  testing-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: autoresttest-engine:latest
+    environment:
+      - ENGINE_MODE=real
+      - SERVICE_TOKEN=${SHARED_INTERNAL_TOKEN:-autoresttest-super-secret-token}
+    ports:
+      - "5000:5000"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: autoresttest-backend:latest
+    environment:
+      - DATABASE_URL=postgresql://autorest_user:${POSTGRES_PASSWORD:-securepassword123}@database:5432/autorest_db?schema=public
+      - ENGINE_SERVICE_URL=http://testing-engine:5000
+      - ENGINE_SERVICE_TOKEN=${SHARED_INTERNAL_TOKEN:-autoresttest-super-secret-token}
+      - APP_URL=http://localhost:3001
+      - CORS_ORIGIN=http://localhost:3001
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-admin@example.com}
+      - JWT_SECRET=${JWT_SECRET:-fallback-secret-for-jwt-123456789012345678901234567890}
+      # Email options can be customized via .env
+      - EMAIL_MODE=${EMAIL_MODE:-mock}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-AutoRestTest <noreply@example.com>}
+    ports:
+      - "3000:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+      testing-engine:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: autoresttest-frontend:latest
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
