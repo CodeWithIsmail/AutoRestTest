@@ -313,6 +313,7 @@ export default function SuiteDetailPage() {
     ? classifyOutcomes(report.statusCodeDistribution)
     : null;
   const faults = outcomes?.serverErrors ?? 0;
+  const faultyEndpoints = report?.endpoints.filter((e) => endpointOutcome(e) === "server").length ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -578,7 +579,7 @@ export default function SuiteDetailPage() {
             </div>
 
             {/* KPI row */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
               <StatCard
                 label="Coverage"
                 value={`${report.overview.coveragePct}%`}
@@ -606,6 +607,11 @@ export default function SuiteDetailPage() {
                 label="Server errors (5xx)"
                 value={outcomes?.serverErrors ?? 0}
                 tone={faults > 0 ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"}
+              />
+              <StatCard
+                label="Faulty Endpoints"
+                value={faultyEndpoints}
+                tone={faultyEndpoints > 0 ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"}
               />
             </div>
 
