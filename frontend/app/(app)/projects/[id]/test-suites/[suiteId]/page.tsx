@@ -546,33 +546,33 @@ export default function SuiteDetailPage() {
                 API correctly rejecting bad requests, not failures. */}
             <div
               className={`flex items-center gap-4 rounded-xl border p-5 ${
-                faults > 0
+                faultyEndpoints > 0
                   ? "border-red-500/40 bg-red-500/10"
                   : "border-emerald-500/30 bg-emerald-500/10"
               }`}
             >
               <div
                 className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl ${
-                  faults > 0
+                  faultyEndpoints > 0
                     ? "bg-red-500/15 text-red-600 dark:text-red-400"
                     : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                 }`}
               >
-                {faults > 0 ? "⚠" : "✓"}
+                {faultyEndpoints > 0 ? "⚠" : "✓"}
               </div>
               <div className="min-w-0">
                 <p
                   className={`text-2xl font-semibold ${
-                    faults > 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"
+                    faultyEndpoints > 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"
                   }`}
                 >
-                  {faults > 0
-                    ? `${faults} fault${faults === 1 ? "" : "s"} detected`
+                  {faultyEndpoints > 0
+                    ? `${faultyEndpoints} faulty endpoint${faultyEndpoints === 1 ? "" : "s"} detected`
                     : "No faults detected"}
                 </p>
                 <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
-                  {faults > 0
-                    ? "5xx server errors — unhandled conditions that likely indicate defects in the API."
+                  {faultyEndpoints > 0
+                    ? `${faults} total 5xx server error${faults === 1 ? "" : "s"} triggered — unhandled conditions that likely indicate defects in the API.`
                     : "No 5xx server errors were returned in this run."}
                 </p>
               </div>
