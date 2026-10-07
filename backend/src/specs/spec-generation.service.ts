@@ -271,7 +271,7 @@ export class SpecGenerationService {
   private ignorePaths(raw: string | undefined): string[] {
     const supplied = (raw ?? '')
       .split(',')
-      .map((part) => part.trim())
+      .map((part) => part.trim().replace(/^\/+|\/+$/g, ''))
       .filter(Boolean);
     return Array.from(new Set([...DEFAULT_IGNORE_PATHS, ...supplied]));
   }

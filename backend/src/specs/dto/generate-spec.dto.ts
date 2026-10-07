@@ -28,6 +28,6 @@ export class GenerateSpecDto {
    */
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
+  @MaxLength(5000)
   ignorePath?: string;
 }

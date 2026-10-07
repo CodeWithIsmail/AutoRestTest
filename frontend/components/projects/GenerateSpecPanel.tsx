@@ -7,8 +7,14 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FormField } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 import { errMsg } from "@/lib/api";
+import {
+  DEFAULT_PRESET_ID,
+  FRAMEWORK_PRESETS,
+  getPresetById,
+} from "@/lib/framework-presets";
 import { generationOptions } from "@/lib/queries";
 import { qk } from "@/lib/query-keys";
 import {
@@ -21,9 +27,6 @@ import type { SpecGeneration } from "@/lib/types";
 
 /** Refresh rate of the elapsed-time readout, which counts in seconds. */
 const CLOCK_MS = 1000;
-
-/** Vendored trees dominate both analysis cost and wall time. */
-const DEFAULT_IGNORE = "node_modules, dist, build, coverage, venv, __pycache__";
 
 interface GenerateSpecPanelProps {
   projectId: string;
@@ -68,7 +71,19 @@ export function GenerateSpecPanel({
 
   const [title, setTitle] = useState(projectName);
   const [version, setVersion] = useState("1.0.0");
-  const [ignorePath, setIgnorePath] = useState(DEFAULT_IGNORE);
+  const [selectedPresetId, setSelectedPresetId] =
+    useState<string>(DEFAULT_PRESET_ID);
+  const [ignorePath, setIgnorePath] = useState(
+    () => getPresetById(DEFAULT_PRESET_ID)?.directories.join(", ") ?? "",
+  );
+
+  function handlePresetChange(presetId: string) {
+    setSelectedPresetId(presetId);
+    const preset = getPresetById(presetId);
+    if (preset) {
+      setIgnorePath(preset.directories.join(", "));
+    }
+  }
 
   // The fetch itself is now the query's `refetchInterval`. This interval is
   // only a clock: `elapsedSince` reads `Date.now()`, so without something
@@ -339,6 +354,24 @@ export function GenerateSpecPanel({
           value={version}
           onChange={(e) => setVersion(e.target.value)}
           placeholder="1.0.0"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="framework-preset"
+          className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          Language / Framework
+        </label>
+        <Select
+          id="framework-preset"
+          value={selectedPresetId}
+          onChange={handlePresetChange}
+          options={FRAMEWORK_PRESETS.map((p) => ({
+            value: p.id,
+            label: p.name,
+          }))}
         />
       </div>
 
