@@ -2,7 +2,7 @@
 
 # AutoRestTest
 
-**Automated REST API testing: multi-agent reinforcement learning and LLMs find the bugs, and plain-language explanations tell you why.**
+**An AI-Powered Platform for Automated REST API Testing**
 
 [![Live app](https://img.shields.io/badge/live%20app-autoresttest.vercel.app-black?logo=vercel)](https://autoresttest.vercel.app)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)
@@ -19,7 +19,11 @@
 
 ## Demo
 
-https://github.com/user-attachments/assets/5994a914-5f1f-4b07-8415-3331acd74687
+
+
+https://github.com/user-attachments/assets/60480f30-fcc8-462f-8d5e-b3e9c55a5866
+
+
 
 ## Contents
 
@@ -71,16 +75,8 @@ You upload a spec (or generate one), point the engine at a live API with a time 
 
 ## Screenshots
 
-<table>
-  <tr>
-    <td align="center"><img src="resources/ui/7.%20homepage%20dashboard.png" alt="Dashboard listing the user's projects" width="100%"><br><sub>Dashboard</sub></td>
-    <td align="center"><img src="resources/ui/12.%20graph.png" alt="Dependency graph focused on a single operation" width="100%"><br><sub>Dependency graph</sub></td>
-    <td align="center"><img src="resources/ui/14.1%20test%20result.png" alt="Test run report with coverage and status codes" width="100%"><br><sub>Test results</sub></td>
-  </tr>
-</table>
-
 <details>
-<summary><strong>Full gallery: authentication and dashboard</strong></summary>
+<summary><strong>Authentication & Dashboard</strong></summary>
 
 | Landing Page | Register | Login |
 |:---:|:---:|:---:|
@@ -91,7 +87,7 @@ You upload a spec (or generate one), point the engine at a live API with a time 
 </details>
 
 <details>
-<summary><strong>Full gallery: API setup and graph</strong></summary>
+<summary><strong>API setup and Graph</strong></summary>
 
 | API Spec | Generate Spec (AI) | Dependency Graph |
 |:---:|:---:|:---:|
@@ -102,7 +98,7 @@ You upload a spec (or generate one), point the engine at a live API with a time 
 </details>
 
 <details>
-<summary><strong>Full gallery: testing and results</strong></summary>
+<summary><strong>Testing and Results</strong></summary>
 
 | Create Test Suite | Test Results | Request Logs |
 |:---:|:---:|:---:|
@@ -111,7 +107,7 @@ You upload a spec (or generate one), point the engine at a live API with a time 
 </details>
 
 <details>
-<summary><strong>Full gallery: team and settings</strong></summary>
+<summary><strong>Team & Settings</strong></summary>
 
 | Team Management | Invite Member | My Invitations |
 |:---:|:---:|:---:|
@@ -131,7 +127,7 @@ The engine (`autoresttest-core`) runs in two phases.
 2. **Testing execution.** Until the time budget is spent, the agents pick an operation, a parameter combination, values and dependency sources. The request generator builds the call, and a mutator perturbs a share of requests (`mutation_rate`, default 0.2). The target API's response updates the Q-tables and refines the SPDG, and 5xx errors are recorded for the report.
 
 <p align="center">
-  <img src="resources/autoresttest%20workflow.png" alt="AutoRestTest workflow: initialization phase, iterative testing execution phase and final report" width="100%">
+  <img src="resources/SRS/ai_pipeline.png" alt="AutoRestTest workflow: initialization phase, iterative testing execution phase and final report" width="100%">
 </p>
 
 The seven agents are Operation, Parameter, Value, Body-object, Data-source and Dependency, plus an opt-in Header agent.
@@ -141,7 +137,7 @@ The seven agents are Operation, Parameter, Value, Body-object, Data-source and D
 The OOPS pipeline (`OOPS-final`) reads a zipped codebase with an LLM and produces an OpenAPI document. Generation runs as a background job and the result is staged for your review. You decide whether to apply it.
 
 <p align="center">
-  <img src="resources/SRS/ai_pipeline.png" alt="AI pipeline for generating an OpenAPI specification from source code" width="100%">
+  <img width="1347" height="662" alt="Screenshot 2026-10-09 165309" src="https://github.com/user-attachments/assets/032df54c-8bc0-4398-bb6c-ecf2e398e4e9" />
 </p>
 
 ### Research background
