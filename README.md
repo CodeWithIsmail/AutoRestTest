@@ -1,20 +1,20 @@
-# AutoRestTest
+# AutoRestTest: An AI-Powered Platform for Automated REST API Testing
 
-**AI-powered automated REST API testing.**
+AutoRestTest bridges the gap in REST API testing by transforming manual, fragmented
+test creation into an intelligent, fully automated process. By integrating Multi-Agent
+Reinforcement Learning, a Semantic Property Dependency Graph, and Large Language
+Models, the platform efficiently navigates complex, interdependent API operations.
+Beyond simple test execution, the system actively accelerates debugging by providing
+plain-language, AI-generated explanations whenever it uncovers hidden server-side
+faults. Built as a collaborative SaaS platform, it allows teams to securely manage
+specifications, run customized test suites, and track historical results.
+Ultimately, AutoRestTest empowers developers to maximize fault detection with minimal
+manual effort, ensuring highly reliable web services
 
-Give AutoRestTest your API's OpenAPI spec — or just upload your source code
-and let it write one for you — and it does the rest: it learns how your
-endpoints depend on each other, then uses reinforcement-learning agents
-backed by an LLM to actually exercise your API. Not random fuzzing — it
-chains calls the way a real client would (register, then log in, then use the
-ID it just got back), while mutating values to probe edge cases, and reports
-back exactly what broke and why.
+# 🔗 Live app: https://autoresttest.vercel.app
 
-**🔗 Live app:** https://autoresttest.vercel.app
-
-![How AutoRestTest works](resources/autoresttest%20workflow.png)
-
----
+## Demo
+https://github.com/user-attachments/assets/5994a914-5f1f-4b07-8415-3331acd74687
 
 ## What it does
 
@@ -123,9 +123,7 @@ Step-by-step walkthroughs of every screen are in the
 | **[Test Report](docs/TEST_REPORT.md)** | 87 test cases across 16 functional modules |
 | **[OpenAPI spec](docs/openapi/)** | Machine-readable description of all 58 routes, in YAML and JSON |
 | **[RUNNING.md](RUNNING.md)** | Local setup, mock vs. real engine modes, production deployment |
-| **[CLAUDE.md](CLAUDE.md)** | Architecture and conventions across the monorepo |
 | [backend/README](backend/README.md) · [frontend/README](frontend/README.md) | Per-subproject setup and conventions |
-| [autoresttest-core/CLAUDE.md](autoresttest-core/CLAUDE.md) · [OOPS-final/CLAUDE.md](OOPS-final/CLAUDE.md) | Internals of the two Python research tools |
 
 ## How it fits together
 
@@ -144,39 +142,6 @@ workspace tool: `cd` into a subproject to run anything.
 The two Python tools run on different Python versions, which is why
 `engine-service` invokes each through its own virtual environment rather than
 importing them.
-
-### A test run, end to end
-
-```
-Browser ──▶ backend (NestJS) ──▶ engine-service (Flask) ──▶ autoresttest-core
-                  │                       │                        │
-                  │                       │   1. parse the OpenAPI spec
-                  │                       │   2. build the dependency graph
-                  │                       │   3. initialise Q-tables (LLM)
-                  │                       │   4. generate + send requests ──▶ your API
-                  │                       │
-                  │              ◀─────────  results + captured traffic
-                  ▼
-            PostgreSQL  ──▶  report, graph, every request/response
-```
-
-The backend returns immediately and polls the job in the background; the
-browser polls the backend every three seconds. Nothing blocks on a run that
-may take an hour.
-
-> **A run takes far longer than its time budget, by design.** The budget
-> bounds only phase 4. Building the graph and initialising the Q-tables cost
-> two LLM calls per operation and are deliberately not time-bounded — see
-> [CLAUDE.md](CLAUDE.md) for how caching and parallelism keep that in hand.
-
-### Generating a spec from source code
-
-![The spec-generation pipeline](resources/SRS/ai_pipeline.png)
-
-Spec generation has its own queue, its own worker thread and its own LLM
-credentials, separate from test runs — a multi-hour generation must not block
-them. The generated document is parked for review and only becomes the
-project's spec when the user explicitly applies it.
 
 ## Self-Hosting (Docker)
 
@@ -218,8 +183,11 @@ Set **`ENGINE_MODE=mock`** in `engine-service/.env` to exercise both job types
 offline in seconds — no LLM key, no engine run, no spec generation. This is
 the fast loop for anything touching the backend or frontend.
 
+**How AutoRestTest generates OAS from source code**
 ---
+<img width="100%" height="100%" alt="Screenshot 2026-10-09 at 15-55-37 OOPS Automated generation of REST API specification via LLMs - Automated generation of REST API specification via LLMs pdf" src="https://github.com/user-attachments/assets/dec3c23a-beca-42ef-b10d-88c2ff0c3902" />
 
-Research basis: *AutoRestTest* (ICSE 2025) — see `resources/paper/`.
-`autoresttest-core/` and `OOPS-final/` are research tools vendored into this
-repository; the backend and frontend wrap them into a collaborative product.
+**How AutoRestTest testing engine works**
+---
+<img width="100%" height="100%" alt="Screenshot 2026-10-09 at 15-55-37 OOPS Automated generation of REST API specification via LLMs - Automated generation of REST API specification via LLMs pdf" src="resources/SRS/ai_pipeline.png" />
+
