@@ -8,7 +8,8 @@
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)
 ![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Prisma%207-4169E1?logo=postgresql&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-000000?logo=postgresql&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/Prisma-3776AB?logo=Prisma&logoColor=white)
 ![Docker](https://img.shields.io/badge/self--host-Docker-2496ED?logo=docker&logoColor=white)
 
 [Live app](https://autoresttest.vercel.app) · [Demo](#demo) · [Quick start](#quick-start) · [Self-host](#self-hosting-with-docker) · [Documentation](#documentation)
@@ -190,7 +191,7 @@ The two Python tools need incompatible interpreters (3.10 and 3.12+), which is w
 3. Create a run with your API's live base URL and a time budget, then start it.
 4. Watch results arrive. Open the dependency graph, inspect captured requests, and ask for an explanation of any failure.
 
-Step-by-step walkthroughs of every screen are in the **[User Guide](docs/USER_GUIDE.md)**.
+Step-by-step walkthroughs of every screen are in the **[User Guide](documentation/USER_GUIDE.md)**.
 
 ## Self-hosting with Docker
 
@@ -353,19 +354,19 @@ AutoRestTest/
 
 | Document | What's in it |
 |---|---|
-| **[User Guide](docs/USER_GUIDE.md)** | Every page and feature, in the order a new user meets them |
-| **[API Reference](docs/API.md)** | All 58 backend routes: payloads, responses, roles, error codes |
-| **[OpenAPI spec](docs/openapi/)** | Machine-readable description of those routes, in YAML and JSON |
-| **[Test Report](docs/TEST_REPORT.md)** | 87 black-box test cases across 16 functional modules |
+| **[User Guide](documentation/USER_GUIDE.md)** | Every page and feature, in the order a new user meets them |
+| **[API Reference](documentation/API.md)** | All 58 backend routes: payloads, responses, roles, error codes |
+| **[OpenAPI spec](documentation/openapi/)** | Machine-readable description of those routes, in YAML and JSON |
+| **[Test Report](documentation/TEST_REPORT.md)** | 87 black-box test cases across 16 functional modules |
 | **[RUNNING.md](RUNNING.md)** | Local setup, mock vs. real engine modes, production deployment |
-| **[Technical Report](resources/SRS/SPL3%20Technical%20Report%20-%20BSSE%201433.pdf)** ([DOCX](resources/SRS/SPL3%20Technical%20Report%20-%20BSSE%201433.docx), [Markdown](resources/SRS/SPL3%20Technical%20Report%20-%20BSSE%201433.md)) | Requirements, database and component design, testing, evaluation and user manual |
+| **[Technical Report](resources/report)** | Requirements, database and component design, testing, evaluation and user manual |
 | **[CLAUDE.md](CLAUDE.md)** | Architecture and conventions across the monorepo |
 | Subproject READMEs | [backend](backend/README.md) · [frontend](frontend/README.md) · [engine-service](engine-service/README.md) · [autoresttest-core](autoresttest-core/README.md) · [OOPS-final](OOPS-final/readme.md) |
 
 ## Testing and quality
 
 - **257 backend unit tests** in 21 Jest suites, covering business logic, role checks, graph merging, report export and the engine client. External services are mocked.
-- **87 black-box test cases** across 16 modules, all passing (see the [Test Report](docs/TEST_REPORT.md)).
+- **87 black-box test cases** across 16 modules, all passing (see the [Test Report](documentation/TEST_REPORT.md)).
 
 ```bash
 cd backend && npm test                                  # unit tests
